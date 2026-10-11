@@ -3581,6 +3581,20 @@ export const tr: Messages = {
       dropped: "%{{share}} kaybı",
       completion: "İlk adımı yapan {{n}} oturumun {{share}} kadarı {{window}} içinde sonuncuya ulaştı.",
     },
+    facets: {
+      device: "Cihaz",
+      browser: "Tarayıcı",
+      allDevices: "Tüm cihazlar",
+      allBrowsers: "Tüm tarayıcılar",
+      devices: { desktop: "Masaüstü", mobile: "Telefon", tablet: "Tablet" },
+      vitalsNoBrowser: "Vitals değerleri tarayıcıya göre ayrılamıyor: bu özet rota ve cihaz kırılımıyla saklanıyor. Aşağıdaki değerler seçili cihazın tüm tarayıcılarını kapsıyor.",
+    },
+    user: {
+      sessions: "Bu kullanıcının oturumları",
+      back: "Tüm oturumlar",
+      filtered: "{{id}} kimliğinin oturumları",
+      none: "Bu aralıkta bu kimliğe ait oturum yok.",
+    },
     sessions: {
       note: "Bir oturum bir ziyaret, bir kişi değil: kimliği rastgele, sekmeye özel ve sekmeyle birlikte sona eriyor.",
       empty: "Bu aralıkta oturum yok.",
@@ -3588,6 +3602,8 @@ export const tr: Messages = {
       columns: { session: "Oturum", started: "Başlangıç", duration: "Süre", pageViews: "Sayfa görüntüleme", errors: "Hatalar", entry: "Giriş rotası", browser: "Tarayıcı" },
     },
     session: {
+      user: "Kullanıcı",
+      country: "Ülke",
       title: "Oturum",
       back: "Tüm oturumlar",
       app: "Uygulama",

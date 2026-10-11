@@ -50,29 +50,45 @@ export const rumOverviewQuery = (range: RangeSpec, app: string, environment?: st
     refetchInterval: live(range),
   });
 
-export const rumPagesQuery = (range: RangeSpec, app: string, sort: RumPageSort, environment?: string) =>
+/**
+ * Which kind of visitor a read is about: a device, a browser, or both.
+ *
+ * "Is the site slow" and "is it slow on phones" are different questions with different answers, and the
+ * second is the one a front-end developer asks next. Vitals take the device alone — their rollup is keyed
+ * by route and device, not by browser (rum.md §7) — so the UI applies `browser` where it is answerable
+ * and says so where it is not.
+ */
+export interface RumFacets {
+  device_type?: string;
+  browser?: string;
+}
+
+export const rumPagesQuery = (range: RangeSpec, app: string, sort: RumPageSort, environment?: string, facets: RumFacets = {}) =>
   queryOptions({
-    queryKey: ["rum", "pages", app, environment ?? "", sort, ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/pages", { params: { query: { app, environment, sort, ...window(range) } }, signal })).pages,
+    queryKey: ["rum", "pages", app, environment ?? "", sort, facets.device_type ?? "", facets.browser ?? "", ...rangeKey(range)],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/rum/pages", { params: { query: { app, environment, sort, ...facets, ...window(range) } }, signal })).pages,
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
 
 /** The five vitals of the application, or of one route when `route` is given. */
-export const rumVitalsQuery = (range: RangeSpec, app: string, route?: string, environment?: string) =>
+export const rumVitalsQuery = (range: RangeSpec, app: string, route?: string, environment?: string, deviceType?: string) =>
   queryOptions({
-    queryKey: ["rum", "vitals", app, environment ?? "", route ?? "", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/vitals", { params: { query: { app, environment, route, ...window(range) } }, signal })),
+    queryKey: ["rum", "vitals", app, environment ?? "", route ?? "", deviceType ?? "", ...rangeKey(range)],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/rum/vitals", { params: { query: { app, environment, route, device_type: deviceType, ...window(range) } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
 
-export const rumSessionsQuery = (range: RangeSpec, app: string, environment?: string) =>
+export const rumSessionsQuery = (range: RangeSpec, app: string, environment?: string, facets: RumFacets = {}, userId?: string) =>
   queryOptions({
-    queryKey: ["rum", "sessions", app, environment ?? "", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/sessions", { params: { query: { app, environment, ...window(range) } }, signal })).sessions,
+    queryKey: ["rum", "sessions", app, environment ?? "", facets.device_type ?? "", facets.browser ?? "", userId ?? "", ...rangeKey(range)],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/rum/sessions", { params: { query: { app, environment, user_id: userId, ...facets, ...window(range) } }, signal })).sessions,
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),

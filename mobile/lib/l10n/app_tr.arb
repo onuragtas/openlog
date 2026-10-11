@@ -2884,5 +2884,24 @@
         "type": "String"
       }
     }
+  },
+  "rumFacetDevice": "Cihaz",
+  "rumFacetBrowser": "Tarayıcı",
+  "rumFacetAllDevices": "Tüm cihazlar",
+  "rumFacetAllBrowsers": "Tüm tarayıcılar",
+  "rumDeviceDesktop": "Masaüstü",
+  "rumDeviceMobile": "Telefon",
+  "rumDeviceTablet": "Tablet",
+  "rumVitalsNoBrowser": "Vitals değerleri tarayıcıya göre ayrılamıyor: bu özet rota ve cihaz kırılımıyla saklanıyor. Aşağıdakiler seçili cihazın tüm tarayıcılarını kapsıyor.",
+  "rumUserSessions": "Bu kullanıcının oturumları",
+  "rumUserFiltered": "{id} kimliğinin oturumları",
+  "rumUserNone": "Bu aralıkta bu kimliğe ait oturum yok.",
+  "rumUserClear": "Tüm oturumlar",
+  "@rumUserFiltered": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
   }
 }

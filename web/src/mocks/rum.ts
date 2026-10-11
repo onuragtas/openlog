@@ -174,6 +174,11 @@ export const rumHandlers = [
   http.get(`${API}/rum/pages`, authed(({ request }) => {
     const url = new URL(request.url);
     const sort = url.searchParams.get("sort") ?? "views";
+    // One kind of visitor: the mock shop is slower on phones, which is the
+    // whole reason the facet exists.
+    if (url.searchParams.get("device_type") === "mobile") {
+      return HttpResponse.json({ pages: PAGES.map((p) => ({ ...p, views: Math.round(p.views / 3), avg_ms: (p.avg_ms ?? 0) * 2 })) });
+    }
     const pages = [...PAGES].sort((a, b) =>
       sort === "avg" ? (b.avg_ms ?? 0) - (a.avg_ms ?? 0) : sort === "slowest" ? b.views * (b.avg_ms ?? 0) - a.views * (a.avg_ms ?? 0) : b.views - a.views,
     );
@@ -183,6 +188,10 @@ export const rumHandlers = [
   http.get(`${API}/rum/vitals`, authed(({ request }) => {
     const url = new URL(request.url);
     const { from, to } = range(url);
+    // The server refuses it: the rollup is keyed by route and device only.
+    if (url.searchParams.get("browser")) {
+      return HttpResponse.json({ error: { code: "invalid_argument", message: "browser is not available for vitals" } }, { status: 400 });
+    }
     return HttpResponse.json({ from: formatTs(from), to: formatTs(to), vitals: vitalsOf(url.searchParams.get("route") ?? "") });
   })),
 
@@ -212,7 +221,19 @@ export const rumHandlers = [
     return HttpResponse.json({ steps, window_seconds: 1800 });
   })),
 
-  http.get(`${API}/rum/sessions`, authed(() => HttpResponse.json({ sessions: sessions(Date.now()) }))),
+  http.get(
+    `${API}/rum/sessions`,
+    authed(({ request }) => {
+      const url = new URL(request.url);
+      const all = sessions(Date.now());
+      const user = url.searchParams.get("user_id");
+      // The identity is on the spans, so the server resolves it to session
+      // ids; the mock stands in for that with the one session that has one.
+      const rows = user ? all.filter((s) => s.session_id === MOCK_RUM_SESSION_ID) : all;
+      const device = url.searchParams.get("device_type");
+      return HttpResponse.json({ sessions: device ? rows.filter((s) => s.device_type === device) : rows });
+    }),
+  ),
 
   http.get(`${API}/rum/sessions/:sessionId`, authed(({ params }) => {
     const now = Date.now();

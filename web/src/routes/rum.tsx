@@ -80,7 +80,15 @@ export function RumAppPage() {
         <TabsContent value="overview">{tab === "overview" && <RumOverviewTab range={range} app={app} environment={search.env} />}</TabsContent>
         <TabsContent value="pages">
           {tab === "pages" && (
-            <RumPagesTab range={range} app={app} environment={search.env} sort={search.sort ?? "views"} onSort={(sort: RumPageSort) => setSearch({ sort })} />
+            <RumPagesTab
+              range={range}
+              app={app}
+              environment={search.env}
+              sort={search.sort ?? "views"}
+              onSort={(sort: RumPageSort) => setSearch({ sort })}
+              facets={{ device_type: search.device, browser: search.browser }}
+              onFacets={(f) => setSearch({ device: f.device_type, browser: f.browser })}
+            />
           )}
         </TabsContent>
         <TabsContent value="sessions">
@@ -89,6 +97,10 @@ export function RumAppPage() {
               range={range}
               app={app}
               environment={search.env}
+              facets={{ device_type: search.device, browser: search.browser }}
+              onFacets={(f) => setSearch({ device: f.device_type, browser: f.browser })}
+              userId={search.user}
+              onUser={(user) => setSearch({ user })}
               onOpen={(s) =>
                 void navigate({
                   to: "/rum/$app/sessions/$sessionId",

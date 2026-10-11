@@ -8322,6 +8322,78 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Changed in the browser: a setting of the whole organization is not a thing to toggle by accident on a phone.'**
   String get dashboardSharingWeb;
+
+  /// No description provided for @rumFacetDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get rumFacetDevice;
+
+  /// No description provided for @rumFacetBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get rumFacetBrowser;
+
+  /// No description provided for @rumFacetAllDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'All devices'**
+  String get rumFacetAllDevices;
+
+  /// No description provided for @rumFacetAllBrowsers.
+  ///
+  /// In en, this message translates to:
+  /// **'All browsers'**
+  String get rumFacetAllBrowsers;
+
+  /// No description provided for @rumDeviceDesktop.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop'**
+  String get rumDeviceDesktop;
+
+  /// No description provided for @rumDeviceMobile.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get rumDeviceMobile;
+
+  /// No description provided for @rumDeviceTablet.
+  ///
+  /// In en, this message translates to:
+  /// **'Tablet'**
+  String get rumDeviceTablet;
+
+  /// No description provided for @rumVitalsNoBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Vitals cannot be split by browser: this summary is kept by route and device. The numbers below cover every browser of the selected device.'**
+  String get rumVitalsNoBrowser;
+
+  /// No description provided for @rumUserSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions of this user'**
+  String get rumUserSessions;
+
+  /// No description provided for @rumUserFiltered.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions of {id}'**
+  String rumUserFiltered(String id);
+
+  /// No description provided for @rumUserNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No session of this identity in this range.'**
+  String get rumUserNone;
+
+  /// No description provided for @rumUserClear.
+  ///
+  /// In en, this message translates to:
+  /// **'All sessions'**
+  String get rumUserClear;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

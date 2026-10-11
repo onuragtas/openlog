@@ -4672,4 +4672,43 @@ class LTr extends L {
   @override
   String get dashboardSharingWeb =>
       'Tarayıcıdan değiştiriliyor: bütün organizasyonu ilgilendiren bir ayar telefonda yanlışlıkla açılacak bir şey değil.';
+
+  @override
+  String get rumFacetDevice => 'Cihaz';
+
+  @override
+  String get rumFacetBrowser => 'Tarayıcı';
+
+  @override
+  String get rumFacetAllDevices => 'Tüm cihazlar';
+
+  @override
+  String get rumFacetAllBrowsers => 'Tüm tarayıcılar';
+
+  @override
+  String get rumDeviceDesktop => 'Masaüstü';
+
+  @override
+  String get rumDeviceMobile => 'Telefon';
+
+  @override
+  String get rumDeviceTablet => 'Tablet';
+
+  @override
+  String get rumVitalsNoBrowser =>
+      'Vitals değerleri tarayıcıya göre ayrılamıyor: bu özet rota ve cihaz kırılımıyla saklanıyor. Aşağıdakiler seçili cihazın tüm tarayıcılarını kapsıyor.';
+
+  @override
+  String get rumUserSessions => 'Bu kullanıcının oturumları';
+
+  @override
+  String rumUserFiltered(String id) {
+    return '$id kimliğinin oturumları';
+  }
+
+  @override
+  String get rumUserNone => 'Bu aralıkta bu kimliğe ait oturum yok.';
+
+  @override
+  String get rumUserClear => 'Tüm oturumlar';
 }

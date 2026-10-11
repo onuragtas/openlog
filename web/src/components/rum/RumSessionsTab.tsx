@@ -3,7 +3,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { rumSessionsQuery, type RumSession } from "@/api/rum";
+import { rumSessionsQuery, type RumFacets, type RumSession } from "@/api/rum";
+import { RumFacetPicker } from "@/components/rum/RumFacetPicker";
+import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, formatNumber } from "@/lib/format";
@@ -15,18 +17,47 @@ export function RumSessionsTab({
   app,
   environment,
   onOpen,
+  facets,
+  onFacets,
+  userId,
+  onUser,
 }: {
   range: RangeSpec;
   app: string;
   environment?: string;
   onOpen: (session: RumSession) => void;
+  facets: RumFacets;
+  onFacets: (facets: RumFacets) => void;
+  /** One identity's visits, as the application declared it through identify() (rum.md §3.7). */
+  userId?: string;
+  onUser: (userId?: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const sessions = useQuery(rumSessionsQuery(range, app, environment));
+  const sessions = useQuery(rumSessionsQuery(range, app, environment, facets, userId));
 
-  if (sessions.isPending) return <LoadingState />;
-  if (sessions.isError) return <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />;
-  if (sessions.data.length === 0) return <EmptyState icon={<Users className="size-5" aria-hidden="true" />}>{t("rum.sessions.empty")}</EmptyState>;
+  const controls = (
+    <div className="flex flex-wrap items-end gap-3">
+      <RumFacetPicker id="rum-sessions" facets={facets} onChange={onFacets} />
+      {/* Not a search box: an identity is something you arrive at from a session, not something you
+          remember how to spell. */}
+      {userId && (
+        <Button type="button" variant="outline" size="sm" onClick={() => onUser(undefined)}>
+          {t("rum.user.back")}
+        </Button>
+      )}
+    </div>
+  );
+
+  if (sessions.isPending) return <>{controls}<LoadingState /></>;
+  if (sessions.isError) return <>{controls}<ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} /></>;
+  if (sessions.data.length === 0) {
+    return (
+      <>
+        {controls}
+        <EmptyState icon={<Users className="size-5" aria-hidden="true" />}>{userId ? t("rum.user.none") : t("rum.sessions.empty")}</EmptyState>
+      </>
+    );
+  }
 
   const started = (s: RumSession) => {
     const ms = apiTimeMs(s.started_at);
@@ -35,9 +66,10 @@ export function RumSessionsTab({
 
   return (
     <div className="flex flex-col gap-2">
+      {controls}
       {/* Said on the screen, not only in this file's header: the table looks like a list of people and is
           not one -- the same person in two tabs is two rows. */}
-      <p className="text-xs text-muted-foreground">{t("rum.sessions.note")}</p>
+      <p className="text-xs text-muted-foreground">{userId ? t("rum.user.filtered", { id: userId }) : t("rum.sessions.note")}</p>
       <Table mobile="stack" data-testid="rum-sessions">
         <TableHeader>
           <TableRow>

@@ -8,7 +8,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { rumVitalsQuery, type RumPage } from "@/api/rum";
+import { rumVitalsQuery, type RumFacets, type RumPage } from "@/api/rum";
 import { VitalCard } from "@/components/rum/VitalCard";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -31,22 +31,24 @@ export interface RumPageDetailProps {
   range: RangeSpec;
   app: string;
   environment?: string;
+  /** The kind of visitor the list is narrowed to; the vitals follow the device part of it. */
+  facets?: RumFacets;
 }
 
-export function RumPageDetail({ page, onClose, range, app, environment }: RumPageDetailProps) {
+export function RumPageDetail({ page, onClose, range, app, environment, facets = {} }: RumPageDetailProps) {
   const { t } = useTranslation();
   return (
     <Sheet open={!!page} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" title={t("rum.page.title")} closeLabel={t("common.close")} className="w-full max-w-full sm:w-[42rem] sm:max-w-[92vw]">
-        {page && <Body key={page.route} page={page} range={range} app={app} environment={environment} />}
+        {page && <Body key={`${page.route}|${facets.device_type ?? ""}`} page={page} range={range} app={app} environment={environment} facets={facets} />}
       </SheetContent>
     </Sheet>
   );
 }
 
-function Body({ page, range, app, environment }: { page: RumPage; range: RangeSpec; app: string; environment?: string }) {
+function Body({ page, range, app, environment, facets }: { page: RumPage; range: RangeSpec; app: string; environment?: string; facets: RumFacets }) {
   const { t, i18n } = useTranslation();
-  const vitals = useQuery(rumVitalsQuery(range, app, page.route, environment));
+  const vitals = useQuery(rumVitalsQuery(range, app, page.route, environment, facets.device_type));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -73,6 +75,9 @@ function Body({ page, range, app, environment }: { page: RumPage; range: RangeSp
 
       <section className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">{t("rum.page.vitals")}</h3>
+        {/* The rollup behind these is keyed by route and device, not by browser: saying so beats showing
+            every browser's numbers under one browser's name. */}
+        {facets.browser && <p className="text-xs text-muted-foreground">{t("rum.facets.vitalsNoBrowser")}</p>}
         {vitals.isPending ? (
           <LoadingState />
         ) : vitals.isError ? (

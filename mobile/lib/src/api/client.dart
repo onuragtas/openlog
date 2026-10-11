@@ -1230,13 +1230,17 @@ class OpenlogClient {
   );
 
   /// The routes of one application, with their load times.
+  /// [deviceType] and [browser] narrow it to one kind of visitor: "is the
+  /// site slow" and "is it slow on phones" are different questions.
   Future<RumPageList> rumPages(
     String app, {
     String sort = 'views',
+    String deviceType = '',
+    String browser = '',
   }) async => RumPageList.fromJson(
     await _send(
       'GET',
-      '/api/v1/rum/pages?${Uri(queryParameters: {'app': app, 'sort': sort}).query}',
+      '/api/v1/rum/pages?${Uri(queryParameters: {'app': app, 'sort': sort, if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser}).query}',
     ),
   );
 
@@ -1244,24 +1248,35 @@ class OpenlogClient {
   ///
   /// A route's p75 is not derivable from the application's, which is why
   /// this takes a route at all rather than the screen slicing what it has.
+  /// No browser here, by the contract: the vitals rollup is keyed by route
+  /// and device, and the server answers 400 rather than quietly showing
+  /// every browser's numbers under one browser's name.
   Future<RumVitalList> rumVitals(
     String app, {
     String route = '',
+    String deviceType = '',
   }) async => RumVitalList.fromJson(
     await _send(
       'GET',
-      '/api/v1/rum/vitals?${Uri(queryParameters: {'app': app, if (route.isNotEmpty) 'route': route}).query}',
+      '/api/v1/rum/vitals?${Uri(queryParameters: {'app': app, if (route.isNotEmpty) 'route': route, if (deviceType.isNotEmpty) 'device_type': deviceType}).query}',
     ),
   );
 
   /// Visits of one application, newest first.
-  Future<RumSessionPage> rumSessions(String app) async =>
-      RumSessionPage.fromJson(
-        await _send(
-          'GET',
-          '/api/v1/rum/sessions?${Uri(queryParameters: {'app': app}).query}',
-        ),
-      );
+  /// [userId] is one identity's visits, as the application declared it
+  /// through `identify()`; reached from a session rather than typed,
+  /// because an id is something somebody arrives at.
+  Future<RumSessionPage> rumSessions(
+    String app, {
+    String deviceType = '',
+    String browser = '',
+    String userId = '',
+  }) async => RumSessionPage.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/sessions?${Uri(queryParameters: {'app': app, if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser, if (userId.isNotEmpty) 'user_id': userId}).query}',
+    ),
+  );
 
   /// One visit and what it did. The timeline comes from the stored spans, so
   /// an older session still has its summary but no events.

@@ -4679,4 +4679,43 @@ class LEn extends L {
   @override
   String get dashboardSharingWeb =>
       'Changed in the browser: a setting of the whole organization is not a thing to toggle by accident on a phone.';
+
+  @override
+  String get rumFacetDevice => 'Device';
+
+  @override
+  String get rumFacetBrowser => 'Browser';
+
+  @override
+  String get rumFacetAllDevices => 'All devices';
+
+  @override
+  String get rumFacetAllBrowsers => 'All browsers';
+
+  @override
+  String get rumDeviceDesktop => 'Desktop';
+
+  @override
+  String get rumDeviceMobile => 'Phone';
+
+  @override
+  String get rumDeviceTablet => 'Tablet';
+
+  @override
+  String get rumVitalsNoBrowser =>
+      'Vitals cannot be split by browser: this summary is kept by route and device. The numbers below cover every browser of the selected device.';
+
+  @override
+  String get rumUserSessions => 'Sessions of this user';
+
+  @override
+  String rumUserFiltered(String id) {
+    return 'Sessions of $id';
+  }
+
+  @override
+  String get rumUserNone => 'No session of this identity in this range.';
+
+  @override
+  String get rumUserClear => 'All sessions';
 }

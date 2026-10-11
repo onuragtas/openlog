@@ -12,6 +12,7 @@ import { RumOverviewTab } from "./RumOverviewTab";
 import { RumFunnelTab } from "./RumFunnelTab";
 import { RumPagesTab } from "./RumPagesTab";
 import { RumReleasesTab } from "./RumReleasesTab";
+import { RumSessionDetail } from "./RumSessionDetail";
 import { RumSessionsTab } from "./RumSessionsTab";
 
 // uPlot needs matchMedia/canvas; the chart itself is covered by TimeSeriesChart.test.tsx.
@@ -65,7 +66,7 @@ describe("RUM", () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
     const onSort = vi.fn();
-    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={onSort} />);
+    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={onSort} facets={{}} onFacets={vi.fn()} />);
 
     const table = await screen.findByTestId("rum-pages");
     const routes = within(table).getAllByTestId("rum-page-row");
@@ -95,7 +96,7 @@ describe("RUM", () => {
   it("opens a page and asks for the vitals of that route alone", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
-    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} />);
+    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={vi.fn()} />);
 
     const table = await screen.findByTestId("rum-pages");
     await user.click(within(table).getByRole("button", { name: "Details of /checkout" }));
@@ -157,11 +158,69 @@ describe("RUM", () => {
     expect(within(steps[1]!).getByText(/25% lost/)).toBeInTheDocument();
   });
 
+  it("narrows the pages to one kind of visitor", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onFacets = vi.fn();
+    const { rerender } = renderWithClient(
+      <RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={onFacets} />,
+    );
+    await screen.findByTestId("rum-pages");
+
+    await user.selectOptions(screen.getByLabelText("Device"), "mobile");
+    expect(onFacets).toHaveBeenCalledWith({ device_type: "mobile" });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    rerender(
+      <QueryClientProvider client={client}>
+        <RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{ device_type: "mobile" }} onFacets={onFacets} />
+      </QueryClientProvider>,
+    );
+
+    // The mock shop is slower on phones: the numbers are the device's, not the application's.
+    const rows = within(await screen.findByTestId("rum-pages")).getAllByTestId("rum-page-row");
+    expect(within(rows[0]!).getByText("2.36 s")).toBeInTheDocument();
+  });
+
+  it("follows one identity from the session it was seen on", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<RumSessionDetail range={range} sessionId={MOCK_RUM_SESSION_ID} />);
+
+    // The identity is the detail's answer alone -- the list reads a rollup that does not carry it --
+    // and the link to the rest of that person's visits starts here rather than from a search box.
+    expect(await screen.findByText("acct_8f3a2b")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sessions of this user" })).toBeInTheDocument();
+  });
+
+  it("lists the sessions of one identity, and says whose they are", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onUser = vi.fn();
+    renderWithClient(
+      <RumSessionsTab
+        range={range}
+        app={MOCK_RUM_APP}
+        onOpen={vi.fn()}
+        facets={{}}
+        onFacets={vi.fn()}
+        userId="acct_8f3a2b"
+        onUser={onUser}
+      />,
+    );
+
+    const table = await screen.findByTestId("rum-sessions");
+    expect(within(table).getAllByTestId("rum-session-row")).toHaveLength(1);
+    expect(screen.getByText("Sessions of acct_8f3a2b")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "All sessions" }));
+    expect(onUser).toHaveBeenCalledWith(undefined);
+  });
+
   it("lists sessions and opens one", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
     const onOpen = vi.fn();
-    renderWithClient(<RumSessionsTab range={range} app={MOCK_RUM_APP} onOpen={onOpen} />);
+    renderWithClient(<RumSessionsTab range={range} app={MOCK_RUM_APP} onOpen={onOpen} facets={{}} onFacets={vi.fn()} onUser={vi.fn()} />);
 
     const table = await screen.findByTestId("rum-sessions");
     expect(within(table).getAllByTestId("rum-session-row")).toHaveLength(2);

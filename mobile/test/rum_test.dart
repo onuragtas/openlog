@@ -111,6 +111,75 @@ void main() {
     expect(c.value!.vitals.single.rating, 'poor');
   });
 
+  test('a kind of visitor travels with the request', () async {
+    final queries = <String>[];
+    final server = await FakeServer.start((req, seen) {
+      queries.add('${seen.path}?${seen.query}');
+      if (seen.path.endsWith('/pages')) {
+        writeJson(req, 200, {
+          'pages': [page('/')],
+        });
+      } else if (seen.path.endsWith('/vitals')) {
+        writeJson(req, 200, {
+          'from': '2026-10-12T08:00:00.000000000Z',
+          'to': '2026-10-12T09:00:00.000000000Z',
+          'vitals': [vital('lcp')],
+        });
+      } else {
+        writeJson(req, 200, {'sessions': <Object>[]});
+      }
+    });
+    addTearDown(server.stop);
+    final client = OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x';
+
+    final pages = RumPagesController(client, 'shop-web')
+      ..deviceType = 'mobile'
+      ..browser = 'Safari';
+    await pages.refresh();
+
+    // The page-view rollup is keyed by device and browser, so both go.
+    expect(queries.last, contains('device_type=mobile'));
+    expect(queries.last, contains('browser=Safari'));
+
+    // The vitals rollup has no browser column; only the device travels, and
+    // the client does not invent a parameter the server would refuse.
+    final vitals = RumRouteVitalsController(
+      client,
+      'shop-web',
+      '/checkout',
+      deviceType: 'mobile',
+    );
+    await vitals.refresh();
+    expect(queries.last, contains('device_type=mobile'));
+    expect(queries.last, isNot(contains('browser=')));
+
+    final sessions = RumSessionsController(client, 'shop-web')
+      ..deviceType = 'desktop'
+      ..userId = 'user-42';
+    await sessions.refresh();
+    expect(queries.last, contains('device_type=desktop'));
+    expect(queries.last, contains('user_id=user-42'));
+  });
+
+  test('no facet, no parameter', () async {
+    final server = await FakeServer.start(
+      (req, seen) => writeJson(req, 200, {'sessions': <Object>[]}),
+    );
+    addTearDown(server.stop);
+    final c = RumSessionsController(
+      OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      'shop-web',
+    );
+
+    await c.refresh();
+
+    // An empty facet is not "" on the wire: the server would read it as a
+    // device whose name is the empty string and answer nothing.
+    expect(Uri.splitQueryString(server.requests.single.query), {
+      'app': 'shop-web',
+    });
+  });
+
   test('the visits of an application, and one of them in full', () async {
     final server = await FakeServer.start((req, seen) {
       if (seen.path.endsWith('/sessions')) {

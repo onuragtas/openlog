@@ -496,6 +496,17 @@ Base `/api/v1/rum`, tenant-scoped like every telemetry read (viewer role, API ke
 | `GET /rum/pages?app=&sort=views\|slowest\|avg` | routes with views and p50/p75/p95 load time |
 | `GET /rum/vitals?app=&route=` | the vital distribution, optionally for one route |
 | `GET /rum/sessions?app=` | sessions, newest first |
+
+**Narrowing a read to one kind of visitor.** `device_type` (`desktop`, `mobile`, `tablet`) and `browser`
+are accepted by `/rum/pages` and `/rum/sessions`; `/rum/vitals` takes `device_type` alone and answers 400
+for `browser`. That asymmetry is the storage's, not a choice of the API: the page-view rollup is keyed by
+device **and** browser, while the vitals rollup is keyed by route and device only (§5). Ignoring the
+parameter there would show every browser's numbers under one browser's name, which is worse than refusing.
+
+`/rum/sessions?user_id=` lists the visits of one identity (§3.7). The id is on the spans rather than on
+the session rollup, so this narrows the rollup by the session ids those spans carry — bounded by the same
+window and by the trace retention, and costing nothing when it is not asked for. It answers nothing for an
+application that never calls `identify()`, which is most of them.
 | `GET /rum/sessions/{session_id}` | one session with its event timeline and trace links |
 
 Key management is `/api/v1/browser-keys` ([api.md](api.md#browser-keys)).

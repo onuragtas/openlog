@@ -1679,7 +1679,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Sessions of the application, newest first. */
+        /** @description Sessions of the application, newest first. A session is a visit, not a person (§1.1): the same person in two tabs is two sessions here. */
         get: operations["listRumSessions"];
         put?: never;
         post?: never;
@@ -14194,6 +14194,10 @@ export interface operations {
             query: {
                 app: string;
                 environment?: string;
+                /** @description One device kind (`desktop`, `mobile`, `tablet`), as the SDK derived it from the user agent. */
+                device_type?: string;
+                /** @description One browser name (`Chrome`, `Safari`, …). Page views keep it; vitals do not. */
+                browser?: string;
                 sort?: "views" | "slowest" | "avg";
                 limit?: number;
                 from?: string;
@@ -14227,6 +14231,8 @@ export interface operations {
                 app: string;
                 environment?: string;
                 route?: string;
+                /** @description One device kind (`desktop`, `mobile`, `tablet`). `browser` is **not** accepted here and answers 400: the vitals rollup is keyed by route and device only (schema 0094), and quietly ignoring it would show every browser's numbers under one browser's name. */
+                device_type?: string;
                 from?: string;
                 to?: string;
             };
@@ -14259,6 +14265,12 @@ export interface operations {
             query: {
                 app: string;
                 environment?: string;
+                /** @description The visits of one identity, as the application declared it through `identify()` (§3.7). The id lives on the spans rather than on the session rollup, so this narrows the rollup by the session ids those spans carry: it is bounded by the same window and by the trace retention, and costs nothing when it is not asked for. Empty for every session of an application that never identifies anyone. */
+                user_id?: string;
+                /** @description One device kind (`desktop`, `mobile`, `tablet`). */
+                device_type?: string;
+                /** @description One browser name (`Chrome`, `Safari`, …). */
+                browser?: string;
                 limit?: number;
                 from?: string;
                 to?: string;

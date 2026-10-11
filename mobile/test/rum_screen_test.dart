@@ -73,7 +73,7 @@ Sections sectionsFor() => Sections(
   rumOverview: (_) => ScriptedOverview(),
   rumPages: (_) => ScriptedPages(),
   rumSessions: (_) => ScriptedSessions(),
-  rumRouteVitals: (_, route) => ScriptedRouteVitals(route),
+  rumRouteVitals: (_, route, _) => ScriptedRouteVitals(route),
 );
 
 Future<Sections> pump(WidgetTester tester) async {

@@ -780,6 +780,11 @@ export interface RumSearch {
   env?: string;
   tab?: (typeof RUM_TABS)[number];
   sort?: (typeof RUM_SORTS)[number];
+  /** Which kind of visitor the screen is about. */
+  device?: string;
+  browser?: string;
+  /** One identity's visits (rum.md §3.7), reached from a session rather than typed. */
+  user?: string;
   /** Funnel steps, in order: custom event names the application sends itself. */
   steps?: string[];
   /** How long a session has to get from the first funnel step to the last. */
@@ -795,6 +800,9 @@ const rumAppRoute = createRoute({
     env: str(s.env),
     tab: oneOf(RUM_TABS, s.tab),
     sort: oneOf(RUM_SORTS, s.sort),
+    device: str(s.device),
+    browser: str(s.browser),
+    user: str(s.user),
     // At most six, as the endpoint takes; a longer URL is somebody else's and is cut rather than refused.
     steps: Array.isArray(s.steps) ? s.steps.filter((v): v is string => typeof v === "string" && v !== "").slice(0, 6) : undefined,
     fwin: str(s.fwin),

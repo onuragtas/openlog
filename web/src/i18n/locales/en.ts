@@ -3580,6 +3580,20 @@ export const en = {
       dropped: "{{share}} lost",
       completion: "{{share}} of the {{n}} sessions that did the first step reached the last one within {{window}}.",
     },
+    facets: {
+      device: "Device",
+      browser: "Browser",
+      allDevices: "All devices",
+      allBrowsers: "All browsers",
+      devices: { desktop: "Desktop", mobile: "Phone", tablet: "Tablet" },
+      vitalsNoBrowser: "Vitals cannot be split by browser: this summary is kept by route and device. The numbers below cover every browser of the selected device.",
+    },
+    user: {
+      sessions: "Sessions of this user",
+      back: "All sessions",
+      filtered: "Sessions of {{id}}",
+      none: "No session of this identity in this range.",
+    },
     sessions: {
       note: "A session is a visit, not a person: the id is random, per tab, and expires with it.",
       empty: "No sessions in this range.",
@@ -3587,6 +3601,8 @@ export const en = {
       columns: { session: "Session", started: "Started", duration: "Duration", pageViews: "Page views", errors: "Errors", entry: "Entry route", browser: "Browser" },
     },
     session: {
+      user: "User",
+      country: "Country",
       title: "Session",
       back: "All sessions",
       app: "Application",

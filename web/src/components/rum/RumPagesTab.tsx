@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { rumPagesQuery, type RumPage, type RumPageSort } from "@/api/rum";
+import { rumPagesQuery, type RumFacets, type RumPage, type RumPageSort } from "@/api/rum";
+import { RumFacetPicker } from "@/components/rum/RumFacetPicker";
 import { RumPageDetail } from "@/components/rum/RumPageDetail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Label } from "@/components/ui/label";
@@ -24,22 +25,26 @@ export function RumPagesTab({
   environment,
   sort,
   onSort,
+  facets,
+  onFacets,
 }: {
   range: RangeSpec;
   app: string;
   environment?: string;
   sort: RumPageSort;
   onSort: (sort: RumPageSort) => void;
+  facets: RumFacets;
+  onFacets: (facets: RumFacets) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const pages = useQuery(rumPagesQuery(range, app, sort, environment));
+  const pages = useQuery(rumPagesQuery(range, app, sort, environment, facets));
   // Which route's panel is open, by value: the row already holds every number the panel shows apart from
   // the vitals, so opening one costs a single query rather than six.
   const [open, setOpen] = useState<RumPage | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-end gap-3">
         <Label htmlFor="rum-pages-sort" className="text-xs text-muted-foreground">
           {t("rum.pages.sortLabel")}
         </Label>
@@ -50,6 +55,7 @@ export function RumPagesTab({
             </option>
           ))}
         </NativeSelect>
+        <RumFacetPicker id="rum-pages" facets={facets} onChange={onFacets} />
       </div>
 
       {pages.isPending ? (
@@ -106,7 +112,7 @@ export function RumPagesTab({
           </TableBody>
         </Table>
       )}
-      <RumPageDetail page={open ?? undefined} onClose={() => setOpen(null)} range={range} app={app} environment={environment} />
+      <RumPageDetail page={open ?? undefined} onClose={() => setOpen(null)} range={range} app={app} environment={environment} facets={facets} />
     </div>
   );
 }

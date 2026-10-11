@@ -41,11 +41,26 @@ type rumFilter struct {
 	app   string
 	env   *string
 	route string
+	// device and browser narrow a read to one kind of visitor: "is the site
+	// slow, or is it slow on phones" is a different question with a different
+	// answer, and the one a front-end developer asks second.
+	device  string
+	browser string
 }
+
+// maxRUMFacetBytes bounds the device and browser values. They are
+// LowCardinality columns written by the SDK from the user agent, so anything
+// longer than this is not one of them.
+const maxRUMFacetBytes = 64
 
 func parseRUMFilter(r *http.Request, requireApp bool) (rumFilter, error) {
 	q := r.URL.Query()
-	f := rumFilter{app: strings.TrimSpace(q.Get("app")), route: strings.TrimSpace(q.Get("route"))}
+	f := rumFilter{
+		app:     strings.TrimSpace(q.Get("app")),
+		route:   strings.TrimSpace(q.Get("route")),
+		device:  strings.TrimSpace(q.Get("device_type")),
+		browser: strings.TrimSpace(q.Get("browser")),
+	}
 	if requireApp && f.app == "" {
 		return f, badRequest("app is required")
 	}
@@ -54,6 +69,9 @@ func parseRUMFilter(r *http.Request, requireApp bool) (rumFilter, error) {
 	}
 	if len(f.route) > rum.MaxRouteBytes {
 		return f, badRequest("route must be at most %d bytes", rum.MaxRouteBytes)
+	}
+	if len(f.device) > maxRUMFacetBytes || len(f.browser) > maxRUMFacetBytes {
+		return f, badRequest("device_type and browser must be at most %d bytes", maxRUMFacetBytes)
 	}
 	f.env = optionalParam(q, "environment")
 	return f, nil
@@ -69,6 +87,25 @@ func (f rumFilter) apply(q *query.Select) *query.Select {
 	}
 	if f.route != "" {
 		q.Where("route = {r_route:String}").Param("r_route", f.route)
+	}
+	return q
+}
+
+// applyDevice narrows to one device type. Every RUM rollup carries it.
+func (f rumFilter) applyDevice(q *query.Select) *query.Select {
+	if f.device != "" {
+		q.Where("device_type = {r_device:String}").Param("r_device", f.device)
+	}
+	return q
+}
+
+// applyBrowser narrows to one browser. Only the page-view rollup carries the
+// name: the vitals rollup is keyed by route and device alone (schema 0094),
+// so a browser cannot be answered there without re-reading the raw spans —
+// the handler says that rather than silently answering a wider question.
+func (f rumFilter) applyBrowser(q *query.Select) *query.Select {
+	if f.browser != "" {
+		q.Where("browser_name = {r_browser:String}").Param("r_browser", f.browser)
 	}
 	return q
 }
@@ -299,7 +336,7 @@ func (s *Server) rumSessionTotals(r *http.Request, sc *query.Scope, f rumFilter,
 
 // rumVitalSummary reads every vital of the filter in one query and computes the percentiles in Go.
 func (s *Server) rumVitalSummary(r *http.Request, sc *query.Scope, f rumFilter, from, to time.Time) ([]rumVitalJSON, error) {
-	q := rumRange(f.apply(sc.From(query.RumVitals1m).Columns(
+	q := rumRange(f.applyDevice(f.apply(sc.From(query.RumVitals1m).Columns(
 		"vital",
 		"sum(count) AS v_count",
 		"sum(value_sum) AS v_sum",
@@ -308,7 +345,7 @@ func (s *Server) rumVitalSummary(r *http.Request, sc *query.Scope, f rumFilter, 
 		"sum(poor) AS v_poor",
 		"tupleElement(sumMap(value_hist), 1) AS v_hk",
 		"tupleElement(sumMap(value_hist), 2) AS v_hv",
-	)), from, to).GroupBy("vital").Limit(s.cfg.MaxRows)
+	))), from, to).GroupBy("vital").Limit(s.cfg.MaxRows)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return nil, err
@@ -366,6 +403,12 @@ func (s *Server) rumVitals(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
+	// The vitals rollup is keyed by route and device, not by browser (schema 0094). Refusing is the
+	// honest answer: quietly ignoring the parameter would show every browser's numbers under one
+	// browser's name.
+	if f.browser != "" {
+		return badRequest("browser is not available for vitals; the rollup keeps device_type only")
+	}
 	from, to, err := s.timeRange(r)
 	if err != nil {
 		return err
@@ -406,7 +449,7 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		return badRequest("sort must be one of views, slowest, avg")
 	}
 
-	q := rumRange(f.apply(sc.From(query.RumPageViews1m).Columns(
+	q := rumRange(f.applyBrowser(f.applyDevice(f.apply(sc.From(query.RumPageViews1m).Columns(
 		"route",
 		"sum(views) AS p_views",
 		"sum(duration_sum_ms) AS p_dsum",
@@ -414,7 +457,7 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		"sum(ttfb_sum_ms) AS p_ttfb",
 		"tupleElement(sumMap(duration_hist), 1) AS p_hk",
 		"tupleElement(sumMap(duration_hist), 2) AS p_hv",
-	)), from, to).GroupBy("route").OrderBy(order).Limit(limit)
+	)))), from, to).GroupBy("route").OrderBy(order).Limit(limit)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -496,6 +539,26 @@ func (s *Server) rumSessions(w http.ResponseWriter, r *http.Request, sc *query.S
 		Where("first_seen < fromUnixTimestamp64Nano({t_to:Int64})").Param("t_to", to.UnixNano()).
 		OrderBy("s_last DESC").Limit(limit)
 	rumFilter{app: f.app, env: f.env}.apply(q)
+	// The visits of one person, where the application declared one (rum.md §3.7). The identity lives on
+	// the spans and not on the session rollup, so the rollup is narrowed by the session ids those spans
+	// carry rather than by a column it does not have. Only when asked for: without the parameter this
+	// costs nothing, and with it the subquery is bounded by the same window and the trace retention.
+	if user := strings.TrimSpace(r.URL.Query().Get("user_id")); user != "" {
+		if len(user) > rum.MaxUserIDBytes {
+			return badRequest("user_id must be at most %d bytes", rum.MaxUserIDBytes)
+		}
+		ids, err := s.rumSessionIDsOfUser(r, sc, user, from, to, limit)
+		if err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{"sessions": []rumSessionJSON{}})
+			return nil
+		}
+		q.Where("session_id IN ({s_ids:Array(String)})").Param("s_ids", ids)
+	}
+	f.applyDevice(q)
+	f.applyBrowser(q)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -507,6 +570,47 @@ func (s *Server) rumSessions(w http.ResponseWriter, r *http.Request, sc *query.S
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
 	return nil
+}
+
+// rumSessionIDsOfUser answers `user_id`: which sessions declared that identity in this window.
+//
+// Two queries rather than a subquery, and not because two are nicer: the identity lives on the spans, a
+// subquery would have to name the spans table inside a WHERE fragment, and the query layer refuses the
+// token "openlog" anywhere in a fragment — it is the database name, and that guard is what stops a
+// tenant's scope from being written around. The same guard is why the attribute keys travel as bound
+// parameters (see TestRUMTimelineQueryBuilds, which exists because this was learned the hard way).
+func (s *Server) rumSessionIDsOfUser(
+	r *http.Request, sc *query.Scope, user string, from, to time.Time, limit int,
+) ([]string, error) {
+	rows, err := sc.Query(r.Context(), rumSessionIDsSelect(sc, user, from, to, limit))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		if id != "" {
+			out = append(out, id)
+		}
+	}
+	return out, rows.Err()
+}
+
+// rumSessionIDsSelect is that query on its own, so a test can build it without rows in the database.
+func rumSessionIDsSelect(sc *query.Scope, user string, from, to time.Time, limit int) *query.Select {
+	return sc.From(query.Spans).
+		Columns("DISTINCT attributes[{a_session:String}] AS s_id").
+		Param("a_session", rum.AttrSessionID).
+		Where("attributes[{a_user:String}] = {u_id:String}").
+		Param("a_user", rum.AttrUserID).Param("u_id", user).
+		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64})").
+		Where("timestamp < fromUnixTimestamp64Nano({t_to:Int64})").
+		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
+		Limit(limit)
 }
 
 // rumSessionSelect is the shared session projection (the rollup is aggregating, so everything re-aggregates).

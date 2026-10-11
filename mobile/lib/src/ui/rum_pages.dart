@@ -15,6 +15,7 @@ import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart' show formatNumber;
+import 'rum_facets.dart';
 import 'rum_vitals.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -69,22 +70,38 @@ class _RumPagesTabState extends State<RumPagesTab> {
         controller: _c,
         baseUrl: widget.session.baseUrl ?? '',
         emptyTitle: l.rumPagesEmpty,
-        search: Align(
-          alignment: Alignment.centerLeft,
-          child: DropdownButton<String>(
-            key: const Key('rum-page-sort'),
-            value: _c.sort,
-            underline: const SizedBox.shrink(),
-            items: [
-              for (final s in rumPageSorts)
-                DropdownMenuItem(value: s, child: Text(_sortLabel(l, s))),
-            ],
-            onChanged: (v) {
-              if (v == null) return;
-              _c.sort = v;
-              _c.refresh();
-            },
-          ),
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RumFacetPicker(
+              deviceType: _c.deviceType,
+              browser: _c.browser,
+              onChanged: (device, browser) {
+                _c
+                  ..deviceType = device
+                  ..browser = browser;
+                _c.refresh();
+              },
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: DropdownButton<String>(
+                key: const Key('rum-page-sort'),
+                value: _c.sort,
+                underline: const SizedBox.shrink(),
+                items: [
+                  for (final s in rumPageSorts)
+                    DropdownMenuItem(value: s, child: Text(_sortLabel(l, s))),
+                ],
+                onChanged: (v) {
+                  if (v == null) return;
+                  _c.sort = v;
+                  _c.refresh();
+                },
+              ),
+            ),
+          ],
         ),
         itemBuilder: (context, i) => _PageCard(
           page: _c.items[i],
@@ -95,6 +112,11 @@ class _RumPagesTabState extends State<RumPagesTab> {
                 sections: widget.sections,
                 app: widget.app,
                 page: _c.items[i],
+                // The route's own vitals follow the device the list was
+                // narrowed to; the browser cannot follow, and the screen
+                // says so rather than answering a wider question.
+                deviceType: _c.deviceType,
+                browser: _c.browser,
               ),
             ),
           ),
@@ -148,12 +170,18 @@ class RumPageScreen extends StatefulWidget {
     required this.sections,
     required this.app,
     required this.page,
+    this.deviceType = '',
+    this.browser = '',
   });
 
   final SessionController session;
   final Sections sections;
   final String app;
   final RumPage page;
+
+  /// What the list was narrowed to when this route was opened.
+  final String deviceType;
+  final String browser;
 
   @override
   State<RumPageScreen> createState() => _RumPageScreenState();
@@ -163,6 +191,7 @@ class _RumPageScreenState extends State<RumPageScreen> {
   late final RumRouteVitalsController _c = widget.sections.rumRouteVitals(
     widget.app,
     widget.page.route,
+    widget.deviceType,
   );
 
   @override
@@ -219,6 +248,19 @@ class _RumPageScreenState extends State<RumPageScreen> {
           DetailSection(
             title: l.rumPageVitals,
             children: [
+              // The rollup behind these is keyed by route and device, not by
+              // browser: saying so beats showing every browser's numbers
+              // under one browser's name.
+              if (widget.browser.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    l.rumVitalsNoBrowser,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               for (final vital in v.vitals)
                 VitalTile(
                   vital: vital,

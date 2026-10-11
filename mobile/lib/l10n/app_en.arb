@@ -2981,5 +2981,24 @@
         "type": "String"
       }
     }
+  },
+  "rumFacetDevice": "Device",
+  "rumFacetBrowser": "Browser",
+  "rumFacetAllDevices": "All devices",
+  "rumFacetAllBrowsers": "All browsers",
+  "rumDeviceDesktop": "Desktop",
+  "rumDeviceMobile": "Phone",
+  "rumDeviceTablet": "Tablet",
+  "rumVitalsNoBrowser": "Vitals cannot be split by browser: this summary is kept by route and device. The numbers below cover every browser of the selected device.",
+  "rumUserSessions": "Sessions of this user",
+  "rumUserFiltered": "Sessions of {id}",
+  "rumUserNone": "No session of this identity in this range.",
+  "rumUserClear": "All sessions",
+  "@rumUserFiltered": {
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -60,12 +60,34 @@ export function RumSessionDetail({ range, sessionId }: { range: RangeSpec; sessi
           <Field label={t("rum.session.exit")}>
             <span className="font-mono text-xs">{session.exit_route || "–"}</span>
           </Field>
+          {/* Only where the application declared one (rum.md §3.7). It is the detail's answer alone: the
+              list reads a rollup that does not carry it. */}
+          {session.user_id !== "" && (
+            <Field label={t("rum.session.user")}>
+              <span className="font-mono text-xs">{session.user_id}</span>
+            </Field>
+          )}
+          {session.country !== "" && <Field label={t("rum.session.country")}>{session.country}</Field>}
         </div>
-        {session.trace_id !== "" && (
-          <Link to="/traces/$traceId" params={{ traceId: session.trace_id }} className="mt-3 inline-block text-sm text-primary hover:underline">
-            {t("rum.session.openNewestTrace")}
-          </Link>
-        )}
+        <div className="mt-3 flex flex-wrap gap-4">
+          {session.trace_id !== "" && (
+            <Link to="/traces/$traceId" params={{ traceId: session.trace_id }} className="text-sm text-primary hover:underline">
+              {t("rum.session.openNewestTrace")}
+            </Link>
+          )}
+          {/* The other visits of the same identity. Reached from here rather than typed into a box: an
+              id is something you arrive at from a session, not something you remember how to spell. */}
+          {session.user_id !== "" && (
+            <Link
+              to="/rum/$app"
+              params={{ app: session.app }}
+              search={(prev) => ({ ...(prev as Record<string, unknown>), tab: "sessions", user: session.user_id }) as never}
+              className="text-sm text-primary hover:underline"
+            >
+              {t("rum.user.sessions")}
+            </Link>
+          )}
+        </div>
       </div>
 
       <section className="flex flex-col gap-2">

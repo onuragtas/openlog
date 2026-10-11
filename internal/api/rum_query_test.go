@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/rum"
 )
 
@@ -37,5 +38,65 @@ func TestRUMTimelineQueryBuilds(t *testing.T) {
 	// The keys must reach ClickHouse as parameters, not as text in the statement.
 	if strings.Contains(sql, rum.AttrEvent) || strings.Contains(sql, rum.AttrRoute) {
 		t.Errorf("attribute key embedded in the statement: %s", sql)
+	}
+}
+
+// TestRUMSessionIDsQueryBuilds is the same guard, one query later: `GET /rum/sessions?user_id=` reads the
+// identity from the spans, and every RUM attribute key starts with "openlog." — the token the query layer
+// refuses inside a fragment. A subquery naming the spans table would have been refused for the same
+// reason, which is why the handler runs two queries instead.
+func TestRUMSessionIDsQueryBuilds(t *testing.T) {
+	s, _ := newTestServer(t)
+	sc, err := s.db.Scope("tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	sql, params, err := rumSessionIDsSelect(sc, "user-42", now.Add(-time.Hour), now, 500).Build()
+	if err != nil {
+		t.Fatalf("session id query does not build: %v", err)
+	}
+	if params["a_user"] != rum.AttrUserID || params["a_session"] != rum.AttrSessionID {
+		t.Errorf("attribute keys are not bound as parameters: %v", params)
+	}
+	if params["u_id"] != "user-42" {
+		t.Errorf("the identity is not a parameter: %v", params)
+	}
+	if strings.Contains(sql, rum.AttrUserID) {
+		t.Errorf("attribute key embedded in the statement: %s", sql)
+	}
+}
+
+// The facets narrow a read to one kind of visitor. They are plain columns of the rollups, so what is
+// pinned here is which rollup has which: the page-view one is keyed by device and browser, the vitals one
+// by device alone (schema 0094). The handler refuses `browser` for vitals rather than answering a wider
+// question under a narrower name, and that refusal is only right while this stays true.
+func TestRUMFilterFacets(t *testing.T) {
+	s, _ := newTestServer(t)
+	sc, err := s.db.Scope("tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := rumFilter{app: "shop-web", device: "mobile", browser: "Safari"}
+
+	pages := f.applyBrowser(f.applyDevice(f.apply(sc.From(query.RumPageViews1m).Columns("route"))))
+	sql, params, err := pages.Build()
+	if err != nil {
+		t.Fatalf("page views query does not build: %v", err)
+	}
+	if params["r_device"] != "mobile" || params["r_browser"] != "Safari" {
+		t.Errorf("facets are not bound as parameters: %v", params)
+	}
+	if !strings.Contains(sql, "device_type = ") || !strings.Contains(sql, "browser_name = ") {
+		t.Errorf("page views query does not filter on both facets: %s", sql)
+	}
+
+	vitals := f.applyDevice(f.apply(sc.From(query.RumVitals1m).Columns("vital")))
+	sql, _, err = vitals.Build()
+	if err != nil {
+		t.Fatalf("vitals query does not build: %v", err)
+	}
+	if strings.Contains(sql, "browser_name") {
+		t.Errorf("the vitals rollup has no browser column: %s", sql)
 	}
 }

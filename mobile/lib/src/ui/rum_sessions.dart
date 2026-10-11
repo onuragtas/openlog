@@ -13,6 +13,7 @@ import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart' show formatNumber;
+import 'rum_facets.dart';
 import 'rum_vitals.dart' show formatVital;
 import 'sections_screen.dart';
 import 'severity.dart';
@@ -58,17 +59,52 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
       builder: (context, _) => ListScreen<RumSession>(
         controller: _c,
         baseUrl: widget.session.baseUrl ?? '',
-        emptyTitle: l.rumSessionsEmpty,
-        // Said on the screen: the list looks like a list of people and is
-        // not one -- the same person in two tabs is two rows here.
-        search: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            l.rumSessionsNote,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+        emptyTitle: _c.userId.isEmpty ? l.rumSessionsEmpty : l.rumUserNone,
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: RumFacetPicker(
+                    deviceType: _c.deviceType,
+                    browser: _c.browser,
+                    onChanged: (device, browser) {
+                      _c
+                        ..deviceType = device
+                        ..browser = browser;
+                      _c.refresh();
+                    },
+                  ),
+                ),
+                // Only while one identity is being followed: an empty
+                // button for a filter nobody set is noise.
+                if (_c.userId.isNotEmpty)
+                  TextButton(
+                    key: const Key('rum-user-clear'),
+                    onPressed: () {
+                      _c.userId = '';
+                      _c.refresh();
+                    },
+                    child: Text(l.rumUserClear),
+                  ),
+              ],
             ),
-          ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                // Said on the screen: the list looks like a list of people
+                // and is not one -- the same person in two tabs is two rows.
+                _c.userId.isEmpty
+                    ? l.rumSessionsNote
+                    : l.rumUserFiltered(_c.userId),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ),
         itemBuilder: (context, i) => _SessionCard(
           visit: _c.items[i],
@@ -78,6 +114,12 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
                 session: widget.session,
                 sections: widget.sections,
                 sessionId: _c.items[i].sessionId,
+                // Following one identity starts from a session, because an
+                // id is something somebody arrives at rather than types.
+                onFollowUser: (userId) {
+                  _c.userId = userId;
+                  _c.refresh();
+                },
               ),
             ),
           ),
@@ -147,11 +189,16 @@ class RumSessionScreen extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.sessionId,
+    this.onFollowUser,
   });
 
   final SessionController session;
   final Sections sections;
   final String sessionId;
+
+  /// Told the identity this visit declared, so the list behind can show the
+  /// rest of that person's visits. Absent where there is no list behind.
+  final void Function(String userId)? onFollowUser;
 
   @override
   State<RumSessionScreen> createState() => _RumSessionScreenState();
@@ -231,8 +278,21 @@ class _RumSessionScreenState extends State<RumSessionScreen> {
           ),
           // Only when the application declared one: an empty line here would
           // suggest the visit was anonymous by choice rather than by default.
-          if (s.userId.isNotEmpty)
+          if (s.userId.isNotEmpty) ...[
             KeyValue(name: l.rumSessionUser, value: s.userId),
+            if (widget.onFollowUser != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const Key('rum-user-sessions'),
+                  onPressed: () {
+                    widget.onFollowUser!(s.userId);
+                    Navigator.of(context).pop();
+                  },
+                  child: Text(l.rumUserSessions),
+                ),
+              ),
+          ],
           if (s.country.isNotEmpty)
             KeyValue(name: l.rumSessionCountry, value: s.country),
           if (s.traceId.isNotEmpty)

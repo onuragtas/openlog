@@ -149,7 +149,12 @@ class Sections {
     RumSessionsController Function(String app)? rumSessions,
     RumReleasesController Function(String app)? rumReleases,
     RumFunnelController Function(String app)? rumFunnel,
-    RumRouteVitalsController Function(String app, String route)? rumRouteVitals,
+    RumRouteVitalsController Function(
+      String app,
+      String route,
+      String deviceType,
+    )?
+    rumRouteVitals,
     RumSessionController Function(String sessionId)? rumSession,
     HostController Function(String hostId)? host,
     ContainerController Function(String containerId)? container,
@@ -200,7 +205,12 @@ class Sections {
        rumFunnel = rumFunnel ?? ((app) => RumFunnelController(client, app)),
        rumRouteVitals =
            rumRouteVitals ??
-           ((app, route) => RumRouteVitalsController(client, app, route)),
+           ((app, route, device) => RumRouteVitalsController(
+             client,
+             app,
+             route,
+             deviceType: device,
+           )),
        rumSession = rumSession ?? ((id) => RumSessionController(client, id)),
        host = host ?? ((id) => HostController(client, id)),
        container = container ?? ((id) => ContainerController(client, id)),
@@ -533,7 +543,11 @@ class Sections {
   final RumSessionsController Function(String app) rumSessions;
   final RumReleasesController Function(String app) rumReleases;
   final RumFunnelController Function(String app) rumFunnel;
-  final RumRouteVitalsController Function(String app, String route)
+  final RumRouteVitalsController Function(
+    String app,
+    String route,
+    String deviceType,
+  )
   rumRouteVitals;
   final RumSessionController Function(String sessionId) rumSession;
   final HostController Function(String hostId) host;

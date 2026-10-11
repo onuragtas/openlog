@@ -23,29 +23,47 @@ class RumPagesController extends ListController<RumPage> {
   /// `views`, `slowest` (total time consumed) or `avg`, as the web offers.
   String sort = 'views';
 
+  /// Which kind of visitor the list is about: a device, a browser, or all.
+  String deviceType = '';
+  String browser = '';
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<RumPage>> fetch() async =>
-      (await _client.rumPages(app, sort: sort)).pages;
+  Future<List<RumPage>> fetch() async => (await _client.rumPages(
+    app,
+    sort: sort,
+    deviceType: deviceType,
+    browser: browser,
+  )).pages;
 }
 
 /// The five vitals of one route. Its own controller because it is its own
 /// query: the page list carries only LCP, and a route's other four vitals
 /// are not in it at all.
 class RumRouteVitalsController extends DetailController<RumVitalList> {
-  RumRouteVitalsController(this._client, this.app, this.route);
+  RumRouteVitalsController(
+    this._client,
+    this.app,
+    this.route, {
+    this.deviceType = '',
+  });
 
   final OpenlogClient _client;
   final String app;
   final String route;
 
+  /// The device the list was narrowed to, carried into this route's own
+  /// vitals. No browser: the rollup behind them keeps no such column.
+  final String deviceType;
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<RumVitalList> fetch() => _client.rumVitals(app, route: route);
+  Future<RumVitalList> fetch() =>
+      _client.rumVitals(app, route: route, deviceType: deviceType);
 }
 
 /// Visits of one application, newest first.
@@ -55,12 +73,24 @@ class RumSessionsController extends ListController<RumSession> {
   final OpenlogClient _client;
   final String app;
 
+  /// Which kind of visitor, and whose visits.
+  String deviceType = '';
+  String browser = '';
+
+  /// One identity (rum.md §3.7), set by opening a session and asking for
+  /// the rest of that person's visits.
+  String userId = '';
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<RumSession>> fetch() async =>
-      (await _client.rumSessions(app)).sessions;
+  Future<List<RumSession>> fetch() async => (await _client.rumSessions(
+    app,
+    deviceType: deviceType,
+    browser: browser,
+    userId: userId,
+  )).sessions;
 }
 
 /// One visit: its summary and the events it produced.
