@@ -284,9 +284,11 @@ volumes:
 	if st.ComposeChanges == nil || len(st.Notices) != 1 || st.Notices[0].Code != updatemsg.ComposeChangesPending || st.Notices[0].Params["services"] != "openlog" {
 		t.Fatalf("pending %+v notices %+v", st.ComposeChanges, st.Notices)
 	}
-	// docker compose up -d recreated it (new config hash): the notice disappears.
+	// docker compose up -d recreated it from the new file -- the volume is attached and the config hash is
+	// another one: the notice disappears.
 	cur := f.docker.byName("proj-openlog-1")
 	cur.c.Config["Labels"].(map[string]any)["com.docker.compose.config-hash"] = "def"
+	cur.c.Mounts = []Mount{{Type: "volume", Name: "proj_data-exports", Destination: "/var/lib/openlog/exports"}}
 	f.source.channels["stable"] = []string{"0.9.0", "0.9.1"}
 	if err := f.runner.RunOnce(ctx); err != nil {
 		t.Fatal(err)

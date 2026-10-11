@@ -63,7 +63,10 @@ type Container struct {
 	NetworkSettings struct {
 		Networks map[string]map[string]any `json:"Networks"`
 	} `json:"NetworkSettings"`
-	State struct {
+	// Mounts is what the container actually has attached, binds and named volumes alike, which is how a
+	// pending compose change can be checked against reality rather than against a config hash.
+	Mounts []Mount `json:"Mounts"`
+	State  struct {
 		Status    string `json:"Status"`
 		Running   bool   `json:"Running"`
 		ExitCode  int    `json:"ExitCode"`
@@ -72,6 +75,14 @@ type Container struct {
 			Status string `json:"Status"`
 		} `json:"Health"`
 	} `json:"State"`
+}
+
+// Mount is one entry of a container's Mounts: a bind (Source is a host path) or a volume (Name is its name).
+type Mount struct {
+	Type        string `json:"Type"`
+	Name        string `json:"Name"`
+	Source      string `json:"Source"`
+	Destination string `json:"Destination"`
 }
 
 // Image is GET /images/{name}/json.
