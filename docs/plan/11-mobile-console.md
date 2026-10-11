@@ -712,7 +712,24 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       form telefonda doğru doldurulacak şey değil — ekran nerede yapıldığını söylüyor.
 
 ### 9.6 RUM
-- [ ] Sayfalar, vitals ayrıntısı, oturumlar, sürümler, huni (`rum/pages|vitals|sessions|releases|funnel`)
+- [x] Sayfalar, vitals ayrıntısı, oturumlar, sürümler, huni
+      (`rum/pages|vitals|sessions|releases|funnel`): tarayıcı uygulaması ekranı artık
+      webin beş sekmesi. **Oturumlar hiç yoktu** -- sahibin fark ettiği eksik buydu.
+      Sayfalar listesinden bir rotaya dokununca o rotanın kendi ekranı açılıyor:
+      yükleme süresinin p50/p75/p95'i, en yavaş tek yüklemesi, TTFB, hataları ve
+      **o rotanın beş vitali** (`rum/vitals?route=`, ayrı bir sorgu çünkü bir rotanın
+      p75'i uygulamanınkinden türetilemiyor).
+      Oturum ekranı: özet, cihaz/tarayıcı, giriş/çıkış rotası, identify() çağrıldıysa
+      kullanıcı ve ülke, en yeni trace'e düğme, ve olay zaman çizelgesi -- olaylar
+      span'lerden geldiği için eski bir oturumda özet durup çizelge gidiyor, ekran
+      hangisinin hangisi olduğunu söylüyor. Bir olaya dokunmak izi o span'de açıyor.
+      Sürümler: hatasız oturum oranı, oturum/hatalı oturum, dağıtımlar geri alma
+      rozetiyle, ve iki yarının farklı mesafe gördüğü notu.
+      Huni: adımlar virgülle yazılıyor, pencere seçiliyor, her adım bir önceki adıma
+      göre kaybıyla gösteriliyor; iki adımdan azken hiç sorulmuyor (uç 400 verir).
+      Vital kartı webinkiyle aynı derinlikte ortak bir parça oldu (`rum_vitals.dart`):
+      p50/p75/p95, bantlar, yayımlanmış eşikler ve p75'in eşiğe uzaklığı.
+      Bu sırada düzeltilen: `formatNumber` tam sayıları "4.0" diye yazıyordu.
 - [ ] Kaynak haritaları (`source-maps`)
 
 ### 9.7 Kullanım, sürüm, panolar

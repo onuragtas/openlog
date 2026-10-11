@@ -7218,6 +7218,342 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Next record'**
   String get logDetailNext;
+
+  /// No description provided for @rumTabOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get rumTabOverview;
+
+  /// No description provided for @rumTabPages.
+  ///
+  /// In en, this message translates to:
+  /// **'Pages'**
+  String get rumTabPages;
+
+  /// No description provided for @rumTabSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get rumTabSessions;
+
+  /// No description provided for @rumTabReleases.
+  ///
+  /// In en, this message translates to:
+  /// **'Releases'**
+  String get rumTabReleases;
+
+  /// No description provided for @rumTabFunnel.
+  ///
+  /// In en, this message translates to:
+  /// **'Funnel'**
+  String get rumTabFunnel;
+
+  /// No description provided for @rumPagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No page views in this range.'**
+  String get rumPagesEmpty;
+
+  /// No description provided for @rumPageViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Views'**
+  String get rumPageViews;
+
+  /// No description provided for @rumPageMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest'**
+  String get rumPageMax;
+
+  /// No description provided for @rumPageTtfb.
+  ///
+  /// In en, this message translates to:
+  /// **'TTFB'**
+  String get rumPageTtfb;
+
+  /// No description provided for @rumPageSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get rumPageSort;
+
+  /// No description provided for @rumPageSortViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Most viewed'**
+  String get rumPageSortViews;
+
+  /// No description provided for @rumPageSortSlowest.
+  ///
+  /// In en, this message translates to:
+  /// **'Most time consuming'**
+  String get rumPageSortSlowest;
+
+  /// No description provided for @rumPageSortAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest on average'**
+  String get rumPageSortAvg;
+
+  /// No description provided for @rumPageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Page'**
+  String get rumPageTitle;
+
+  /// No description provided for @rumPageLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Load time'**
+  String get rumPageLoad;
+
+  /// No description provided for @rumPageVitals.
+  ///
+  /// In en, this message translates to:
+  /// **'Core Web Vitals of this page'**
+  String get rumPageVitals;
+
+  /// No description provided for @rumVitalThresholds.
+  ///
+  /// In en, this message translates to:
+  /// **'Good ≤ {good} · poor > {poor}'**
+  String rumVitalThresholds(String good, String poor);
+
+  /// No description provided for @rumVitalHeadroom.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} of headroom'**
+  String rumVitalHeadroom(String amount);
+
+  /// No description provided for @rumVitalOver.
+  ///
+  /// In en, this message translates to:
+  /// **'{amount} over the threshold'**
+  String rumVitalOver(String amount);
+
+  /// No description provided for @rumVitalCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} measurements'**
+  String rumVitalCount(int count);
+
+  /// No description provided for @rumSessionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No sessions in this range.'**
+  String get rumSessionsEmpty;
+
+  /// No description provided for @rumSessionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Session'**
+  String get rumSessionTitle;
+
+  /// No description provided for @rumSessionStarted.
+  ///
+  /// In en, this message translates to:
+  /// **'Started'**
+  String get rumSessionStarted;
+
+  /// No description provided for @rumSessionDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get rumSessionDuration;
+
+  /// No description provided for @rumSessionPageViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Page views'**
+  String get rumSessionPageViews;
+
+  /// No description provided for @rumSessionEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Entry route'**
+  String get rumSessionEntry;
+
+  /// No description provided for @rumSessionExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit route'**
+  String get rumSessionExit;
+
+  /// No description provided for @rumSessionDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device'**
+  String get rumSessionDevice;
+
+  /// No description provided for @rumSessionUser.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get rumSessionUser;
+
+  /// No description provided for @rumSessionCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get rumSessionCountry;
+
+  /// No description provided for @rumSessionTimeline.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeline'**
+  String get rumSessionTimeline;
+
+  /// No description provided for @rumSessionTimelineEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'The events of this session went with the 7-day trace retention; its summary and trace link remain.'**
+  String get rumSessionTimelineEmpty;
+
+  /// No description provided for @rumSessionOpenTrace.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the session\'s newest trace'**
+  String get rumSessionOpenTrace;
+
+  /// No description provided for @rumEventPageView.
+  ///
+  /// In en, this message translates to:
+  /// **'page view'**
+  String get rumEventPageView;
+
+  /// No description provided for @rumEventVital.
+  ///
+  /// In en, this message translates to:
+  /// **'vital'**
+  String get rumEventVital;
+
+  /// No description provided for @rumEventError.
+  ///
+  /// In en, this message translates to:
+  /// **'error'**
+  String get rumEventError;
+
+  /// No description provided for @rumEventResource.
+  ///
+  /// In en, this message translates to:
+  /// **'resource'**
+  String get rumEventResource;
+
+  /// No description provided for @rumReleasesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No versions or deployments in this range.'**
+  String get rumReleasesEmpty;
+
+  /// No description provided for @rumReleaseVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get rumReleaseVersions;
+
+  /// No description provided for @rumReleaseDeployments.
+  ///
+  /// In en, this message translates to:
+  /// **'Deployments'**
+  String get rumReleaseDeployments;
+
+  /// No description provided for @rumReleaseCrashFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Crash-free'**
+  String get rumReleaseCrashFree;
+
+  /// No description provided for @rumReleaseSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get rumReleaseSessions;
+
+  /// No description provided for @rumReleaseErrorSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'With errors'**
+  String get rumReleaseErrorSessions;
+
+  /// No description provided for @rumReleaseNoSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'no sessions'**
+  String get rumReleaseNoSessions;
+
+  /// No description provided for @rumReleaseNoVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'(no version)'**
+  String get rumReleaseNoVersion;
+
+  /// No description provided for @rumReleaseInitial.
+  ///
+  /// In en, this message translates to:
+  /// **'initial'**
+  String get rumReleaseInitial;
+
+  /// No description provided for @rumReleaseRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'rollback'**
+  String get rumReleaseRollback;
+
+  /// No description provided for @rumReleaseRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Deployments reach back 30 days while sessions stop at the 7-day trace retention: an older version is listed with no sessions.'**
+  String get rumReleaseRetention;
+
+  /// No description provided for @rumFunnelSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'Steps (in order, comma separated)'**
+  String get rumFunnelSteps;
+
+  /// No description provided for @rumFunnelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Steps are custom events your application sends itself. Between two and six, in the order you expect them.'**
+  String get rumFunnelHint;
+
+  /// No description provided for @rumFunnelWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Within'**
+  String get rumFunnelWindow;
+
+  /// No description provided for @rumFunnelApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get rumFunnelApply;
+
+  /// No description provided for @rumFunnelNeedSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter at least two steps to see the funnel.'**
+  String get rumFunnelNeedSteps;
+
+  /// No description provided for @rumFunnelSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sessions'**
+  String rumFunnelSessions(String count);
+
+  /// No description provided for @rumFunnelDropped.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}% lost'**
+  String rumFunnelDropped(int share);
+
+  /// No description provided for @rumFunnelCompletion.
+  ///
+  /// In en, this message translates to:
+  /// **'{share}% of the {count} sessions that did the first step reached the last one within {window}.'**
+  String rumFunnelCompletion(int share, String count, String window);
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

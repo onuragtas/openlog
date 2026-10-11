@@ -2937,6 +2937,33 @@ enum SSORoleMappingRole {
   }
 }
 
+/// RumEventEvent of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum RumEventEvent {
+  pageView('page_view'),
+  vital('vital'),
+  error('error'),
+  resource('resource'),
+  unknown('');
+
+  const RumEventEvent(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static RumEventEvent fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// FleetHostStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -15979,6 +16006,182 @@ class RumAppPage {
   final List<RumApp> apps;
 }
 
+/// `RumPageList` of the openlog API contract.
+class RumPageList {
+  const RumPageList({required this.pages});
+
+  factory RumPageList.fromJson(Object? json, [String path = 'RumPageList']) {
+    final m = _obj(json, path);
+    return RumPageList(
+      pages: _req(
+        m,
+        'pages',
+        path,
+        (v, p) => _list<RumPage>(v, p, (v, p) => RumPage.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'pages': [for (final e in pages) e.toJson()],
+  };
+
+  final List<RumPage> pages;
+}
+
+/// `RumVitalList` of the openlog API contract.
+class RumVitalList {
+  const RumVitalList({
+    required this.from,
+    required this.to,
+    required this.vitals,
+  });
+
+  factory RumVitalList.fromJson(Object? json, [String path = 'RumVitalList']) {
+    final m = _obj(json, path);
+    return RumVitalList(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      vitals: _req(
+        m,
+        'vitals',
+        path,
+        (v, p) => _list<RumVital>(v, p, (v, p) => RumVital.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'vitals': [for (final e in vitals) e.toJson()],
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final List<RumVital> vitals;
+}
+
+/// `RumSessionPage` of the openlog API contract.
+class RumSessionPage {
+  const RumSessionPage({required this.sessions});
+
+  factory RumSessionPage.fromJson(
+    Object? json, [
+    String path = 'RumSessionPage',
+  ]) {
+    final m = _obj(json, path);
+    return RumSessionPage(
+      sessions: _req(
+        m,
+        'sessions',
+        path,
+        (v, p) => _list<RumSession>(v, p, (v, p) => RumSession.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'sessions': [for (final e in sessions) e.toJson()],
+  };
+
+  final List<RumSession> sessions;
+}
+
+/// `RumSessionDetail` of the openlog API contract.
+class RumSessionDetail {
+  const RumSessionDetail({required this.session, required this.events});
+
+  factory RumSessionDetail.fromJson(
+    Object? json, [
+    String path = 'RumSessionDetail',
+  ]) {
+    final m = _obj(json, path);
+    return RumSessionDetail(
+      session: _req(m, 'session', path, (v, p) => RumSession.fromJson(v, p)),
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<RumEvent>(v, p, (v, p) => RumEvent.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'session': session.toJson(),
+    'events': [for (final e in events) e.toJson()],
+  };
+
+  final RumSession session;
+  final List<RumEvent> events;
+}
+
+/// `RumReleaseList` of the openlog API contract.
+class RumReleaseList {
+  const RumReleaseList({required this.releases, required this.deployments});
+
+  factory RumReleaseList.fromJson(
+    Object? json, [
+    String path = 'RumReleaseList',
+  ]) {
+    final m = _obj(json, path);
+    return RumReleaseList(
+      releases: _req(
+        m,
+        'releases',
+        path,
+        (v, p) => _list<RumRelease>(v, p, (v, p) => RumRelease.fromJson(v, p)),
+      ),
+      deployments: _req(
+        m,
+        'deployments',
+        path,
+        (v, p) =>
+            _list<ApmDeployment>(v, p, (v, p) => ApmDeployment.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'releases': [for (final e in releases) e.toJson()],
+    'deployments': [for (final e in deployments) e.toJson()],
+  };
+
+  final List<RumRelease> releases;
+  final List<ApmDeployment> deployments;
+}
+
+/// `RumFunnelResponse` of the openlog API contract.
+class RumFunnelResponse {
+  const RumFunnelResponse({required this.steps, required this.windowSeconds});
+
+  factory RumFunnelResponse.fromJson(
+    Object? json, [
+    String path = 'RumFunnelResponse',
+  ]) {
+    final m = _obj(json, path);
+    return RumFunnelResponse(
+      steps: _req(
+        m,
+        'steps',
+        path,
+        (v, p) =>
+            _list<RumFunnelStep>(v, p, (v, p) => RumFunnelStep.fromJson(v, p)),
+      ),
+      windowSeconds: _req(m, 'window_seconds', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'steps': [for (final e in steps) e.toJson()],
+    'window_seconds': windowSeconds,
+  };
+
+  final List<RumFunnelStep> steps;
+  final int windowSeconds;
+}
+
 /// `CostHostPage` of the openlog API contract.
 class CostHostPage {
   const CostHostPage({
@@ -17912,6 +18115,269 @@ class RumApp {
   final int sessions;
   final double errors;
   final DateTime lastSeen;
+}
+
+/// `RumPage` of the openlog API contract.
+class RumPage {
+  const RumPage({
+    required this.route,
+    required this.views,
+    this.avgMs,
+    this.p50Ms,
+    this.p75Ms,
+    this.p95Ms,
+    required this.maxMs,
+    this.ttfbAvgMs,
+    this.lcpP75,
+    required this.errors,
+  });
+
+  factory RumPage.fromJson(Object? json, [String path = 'RumPage']) {
+    final m = _obj(json, path);
+    return RumPage(
+      route: _req(m, 'route', path, _str),
+      views: _req(m, 'views', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p75Ms: _opt(m, 'p75_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      maxMs: _req(m, 'max_ms', path, _num),
+      ttfbAvgMs: _opt(m, 'ttfb_avg_ms', path, _num),
+      lcpP75: _opt(m, 'lcp_p75', path, _num),
+      errors: _req(m, 'errors', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'route': route,
+    'views': views,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p75_ms': ?p75Ms,
+    'p95_ms': ?p95Ms,
+    'max_ms': maxMs,
+    'ttfb_avg_ms': ?ttfbAvgMs,
+    'lcp_p75': ?lcpP75,
+    'errors': errors,
+  };
+
+  final String route;
+  final double views;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p75Ms;
+  final double? p95Ms;
+  final double maxMs;
+  final double? ttfbAvgMs;
+  final double? lcpP75;
+  final double errors;
+}
+
+/// A visit, not a person; the id is random, per tab and expiring (rum.md §1.1).
+class RumSession {
+  const RumSession({
+    required this.sessionId,
+    required this.app,
+    required this.environment,
+    required this.startedAt,
+    required this.endedAt,
+    required this.durationMs,
+    required this.pageViews,
+    required this.errors,
+    required this.entryRoute,
+    required this.exitRoute,
+    required this.deviceType,
+    required this.browserName,
+    required this.browserVersion,
+    required this.osName,
+    required this.traceId,
+    required this.userId,
+    required this.country,
+  });
+
+  factory RumSession.fromJson(Object? json, [String path = 'RumSession']) {
+    final m = _obj(json, path);
+    return RumSession(
+      sessionId: _req(m, 'session_id', path, _str),
+      app: _req(m, 'app', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      startedAt: _req(m, 'started_at', path, _time),
+      endedAt: _req(m, 'ended_at', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      pageViews: _req(m, 'page_views', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      entryRoute: _req(m, 'entry_route', path, _str),
+      exitRoute: _req(m, 'exit_route', path, _str),
+      deviceType: _req(m, 'device_type', path, _str),
+      browserName: _req(m, 'browser_name', path, _str),
+      browserVersion: _req(m, 'browser_version', path, _str),
+      osName: _req(m, 'os_name', path, _str),
+      traceId: _req(m, 'trace_id', path, _str),
+      userId: _req(m, 'user_id', path, _str),
+      country: _req(m, 'country', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'session_id': sessionId,
+    'app': app,
+    'environment': environment,
+    'started_at': startedAt.toUtc().toIso8601String(),
+    'ended_at': endedAt.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'page_views': pageViews,
+    'errors': errors,
+    'entry_route': entryRoute,
+    'exit_route': exitRoute,
+    'device_type': deviceType,
+    'browser_name': browserName,
+    'browser_version': browserVersion,
+    'os_name': osName,
+    'trace_id': traceId,
+    'user_id': userId,
+    'country': country,
+  };
+
+  final String sessionId;
+  final String app;
+  final String environment;
+  final DateTime startedAt;
+  final DateTime endedAt;
+  final double durationMs;
+  final double pageViews;
+  final double errors;
+  final String entryRoute;
+  final String exitRoute;
+  final String deviceType;
+  final String browserName;
+  final String browserVersion;
+  final String osName;
+  final String traceId;
+  final String userId;
+  final String country;
+}
+
+/// `RumEvent` of the openlog API contract.
+class RumEvent {
+  const RumEvent({
+    required this.timestamp,
+    required this.event,
+    required this.name,
+    required this.route,
+    required this.durationMs,
+    required this.traceId,
+    required this.spanId,
+    required this.errorGroupId,
+    required this.statusCode,
+  });
+
+  factory RumEvent.fromJson(Object? json, [String path = 'RumEvent']) {
+    final m = _obj(json, path);
+    return RumEvent(
+      timestamp: _req(m, 'timestamp', path, _time),
+      event: _req(m, 'event', path, RumEventEvent.fromJson),
+      name: _req(m, 'name', path, _str),
+      route: _req(m, 'route', path, _str),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      errorGroupId: _req(m, 'error_group_id', path, _str),
+      statusCode: _req(m, 'status_code', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'event': event.wire,
+    'name': name,
+    'route': route,
+    'duration_ms': durationMs,
+    'trace_id': traceId,
+    'span_id': spanId,
+    'error_group_id': errorGroupId,
+    'status_code': statusCode,
+  };
+
+  final DateTime timestamp;
+  final RumEventEvent event;
+  final String name;
+  final String route;
+  final double durationMs;
+  final String traceId;
+  final String spanId;
+  final String errorGroupId;
+  final int statusCode;
+}
+
+/// One version of the application over the requested range. Counted from the spans, so bounded by the trace retention rather than by the 30 days the release list reaches.
+class RumRelease {
+  const RumRelease({
+    required this.version,
+    required this.sessions,
+    required this.errorSessions,
+    required this.crashFreeRate,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory RumRelease.fromJson(Object? json, [String path = 'RumRelease']) {
+    final m = _obj(json, path);
+    return RumRelease(
+      version: _req(m, 'version', path, _str),
+      sessions: _req(m, 'sessions', path, _int),
+      errorSessions: _req(m, 'error_sessions', path, _int),
+      crashFreeRate: _req(m, 'crash_free_rate', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'sessions': sessions,
+    'error_sessions': errorSessions,
+    'crash_free_rate': crashFreeRate,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
+  final String version;
+  final int sessions;
+  final int errorSessions;
+  final double crashFreeRate;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+}
+
+/// `RumFunnelStep` of the openlog API contract.
+class RumFunnelStep {
+  const RumFunnelStep({
+    required this.step,
+    required this.sessions,
+    required this.rate,
+  });
+
+  factory RumFunnelStep.fromJson(
+    Object? json, [
+    String path = 'RumFunnelStep',
+  ]) {
+    final m = _obj(json, path);
+    return RumFunnelStep(
+      step: _req(m, 'step', path, _str),
+      sessions: _req(m, 'sessions', path, _int),
+      rate: _req(m, 'rate', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'sessions': sessions,
+    'rate': rate,
+  };
+
+  final String step;
+  final int sessions;
+  final double rate;
 }
 
 /// `CostHost` of the openlog API contract.

@@ -4056,4 +4056,189 @@ class LTr extends L {
 
   @override
   String get logDetailNext => 'Sonraki kayıt';
+
+  @override
+  String get rumTabOverview => 'Genel bakış';
+
+  @override
+  String get rumTabPages => 'Sayfalar';
+
+  @override
+  String get rumTabSessions => 'Oturumlar';
+
+  @override
+  String get rumTabReleases => 'Sürümler';
+
+  @override
+  String get rumTabFunnel => 'Huni';
+
+  @override
+  String get rumPagesEmpty => 'Bu aralıkta sayfa görüntüleme yok.';
+
+  @override
+  String get rumPageViews => 'Görüntüleme';
+
+  @override
+  String get rumPageMax => 'En yavaş';
+
+  @override
+  String get rumPageTtfb => 'TTFB';
+
+  @override
+  String get rumPageSort => 'Sıralama';
+
+  @override
+  String get rumPageSortViews => 'En çok görüntülenen';
+
+  @override
+  String get rumPageSortSlowest => 'En çok süre harcayan';
+
+  @override
+  String get rumPageSortAvg => 'Ortalamada en yavaş';
+
+  @override
+  String get rumPageTitle => 'Sayfa';
+
+  @override
+  String get rumPageLoad => 'Yükleme süresi';
+
+  @override
+  String get rumPageVitals => 'Bu sayfanın Core Web Vitals değerleri';
+
+  @override
+  String rumVitalThresholds(String good, String poor) {
+    return 'İyi ≤ $good · kötü > $poor';
+  }
+
+  @override
+  String rumVitalHeadroom(String amount) {
+    return 'Eşiğe $amount var';
+  }
+
+  @override
+  String rumVitalOver(String amount) {
+    return 'Eşiği $amount aşıyor';
+  }
+
+  @override
+  String rumVitalCount(int count) {
+    return '$count ölçüm';
+  }
+
+  @override
+  String get rumSessionsEmpty => 'Bu aralıkta oturum yok.';
+
+  @override
+  String get rumSessionTitle => 'Oturum';
+
+  @override
+  String get rumSessionStarted => 'Başlangıç';
+
+  @override
+  String get rumSessionDuration => 'Süre';
+
+  @override
+  String get rumSessionPageViews => 'Sayfa görüntüleme';
+
+  @override
+  String get rumSessionEntry => 'Giriş rotası';
+
+  @override
+  String get rumSessionExit => 'Çıkış rotası';
+
+  @override
+  String get rumSessionDevice => 'Cihaz';
+
+  @override
+  String get rumSessionUser => 'Kullanıcı';
+
+  @override
+  String get rumSessionCountry => 'Ülke';
+
+  @override
+  String get rumSessionTimeline => 'Zaman çizelgesi';
+
+  @override
+  String get rumSessionTimelineEmpty =>
+      'Bu oturumun olayları 7 günlük trace saklama süresiyle birlikte silindi; özeti ve trace bağlantısı duruyor.';
+
+  @override
+  String get rumSessionOpenTrace => 'Oturumun en yeni trace\'ini aç';
+
+  @override
+  String get rumEventPageView => 'sayfa';
+
+  @override
+  String get rumEventVital => 'vital';
+
+  @override
+  String get rumEventError => 'hata';
+
+  @override
+  String get rumEventResource => 'kaynak';
+
+  @override
+  String get rumReleasesEmpty => 'Bu aralıkta sürüm ya da dağıtım yok.';
+
+  @override
+  String get rumReleaseVersions => 'Sürümler';
+
+  @override
+  String get rumReleaseDeployments => 'Dağıtımlar';
+
+  @override
+  String get rumReleaseCrashFree => 'Hatasız';
+
+  @override
+  String get rumReleaseSessions => 'Oturum';
+
+  @override
+  String get rumReleaseErrorSessions => 'Hatalı';
+
+  @override
+  String get rumReleaseNoSessions => 'oturum yok';
+
+  @override
+  String get rumReleaseNoVersion => '(sürümsüz)';
+
+  @override
+  String get rumReleaseInitial => 'ilk';
+
+  @override
+  String get rumReleaseRollback => 'geri alma';
+
+  @override
+  String get rumReleaseRetention =>
+      'Dağıtımlar 30 güne kadar geriye gider, oturumlar 7 günlük trace saklamasında durur: daha eski bir sürüm oturumsuz görünür.';
+
+  @override
+  String get rumFunnelSteps => 'Adımlar (sırayla, virgülle)';
+
+  @override
+  String get rumFunnelHint =>
+      'Adımlar uygulamanızın kendi gönderdiği özel olaylardır. 2 ile 6 arası adım, beklendikleri sırayla.';
+
+  @override
+  String get rumFunnelWindow => 'Süre';
+
+  @override
+  String get rumFunnelApply => 'Uygula';
+
+  @override
+  String get rumFunnelNeedSteps => 'Huniyi görmek için en az iki adım yazın.';
+
+  @override
+  String rumFunnelSessions(String count) {
+    return '$count oturum';
+  }
+
+  @override
+  String rumFunnelDropped(int share) {
+    return '%$share kayıp';
+  }
+
+  @override
+  String rumFunnelCompletion(int share, String count, String window) {
+    return 'İlk adımı yapan $count oturumun %$share kadarı $window içinde sonuncuya ulaştı.';
+  }
 }

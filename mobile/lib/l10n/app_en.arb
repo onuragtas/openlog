@@ -2660,5 +2660,119 @@
         "type": "int"
       }
     }
+  },
+  "rumTabOverview": "Overview",
+  "rumTabPages": "Pages",
+  "rumTabSessions": "Sessions",
+  "rumTabReleases": "Releases",
+  "rumTabFunnel": "Funnel",
+  "rumPagesEmpty": "No page views in this range.",
+  "rumPageViews": "Views",
+  "rumPageMax": "Slowest",
+  "rumPageTtfb": "TTFB",
+  "rumPageSort": "Sort",
+  "rumPageSortViews": "Most viewed",
+  "rumPageSortSlowest": "Most time consuming",
+  "rumPageSortAvg": "Slowest on average",
+  "rumPageTitle": "Page",
+  "rumPageLoad": "Load time",
+  "rumPageVitals": "Core Web Vitals of this page",
+  "rumVitalThresholds": "Good ≤ {good} · poor > {poor}",
+  "rumVitalHeadroom": "{amount} of headroom",
+  "rumVitalOver": "{amount} over the threshold",
+  "rumVitalCount": "{count} measurements",
+  "rumSessionsEmpty": "No sessions in this range.",
+  "rumSessionTitle": "Session",
+  "rumSessionStarted": "Started",
+  "rumSessionDuration": "Duration",
+  "rumSessionPageViews": "Page views",
+  "rumSessionEntry": "Entry route",
+  "rumSessionExit": "Exit route",
+  "rumSessionDevice": "Device",
+  "rumSessionUser": "User",
+  "rumSessionCountry": "Country",
+  "rumSessionTimeline": "Timeline",
+  "rumSessionTimelineEmpty": "The events of this session went with the 7-day trace retention; its summary and trace link remain.",
+  "rumSessionOpenTrace": "Open the session's newest trace",
+  "rumEventPageView": "page view",
+  "rumEventVital": "vital",
+  "rumEventError": "error",
+  "rumEventResource": "resource",
+  "rumReleasesEmpty": "No versions or deployments in this range.",
+  "rumReleaseVersions": "Versions",
+  "rumReleaseDeployments": "Deployments",
+  "rumReleaseCrashFree": "Crash-free",
+  "rumReleaseSessions": "Sessions",
+  "rumReleaseErrorSessions": "With errors",
+  "rumReleaseNoSessions": "no sessions",
+  "rumReleaseNoVersion": "(no version)",
+  "rumReleaseInitial": "initial",
+  "rumReleaseRollback": "rollback",
+  "rumReleaseRetention": "Deployments reach back 30 days while sessions stop at the 7-day trace retention: an older version is listed with no sessions.",
+  "rumFunnelSteps": "Steps (in order, comma separated)",
+  "rumFunnelHint": "Steps are custom events your application sends itself. Between two and six, in the order you expect them.",
+  "rumFunnelWindow": "Within",
+  "rumFunnelApply": "Apply",
+  "rumFunnelNeedSteps": "Enter at least two steps to see the funnel.",
+  "rumFunnelSessions": "{count} sessions",
+  "rumFunnelDropped": "{share}% lost",
+  "rumFunnelCompletion": "{share}% of the {count} sessions that did the first step reached the last one within {window}.",
+  "@rumVitalThresholds": {
+    "placeholders": {
+      "good": {
+        "type": "String"
+      },
+      "poor": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalHeadroom": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalOver": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@rumFunnelSessions": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumFunnelDropped": {
+    "placeholders": {
+      "share": {
+        "type": "int"
+      }
+    }
+  },
+  "@rumFunnelCompletion": {
+    "placeholders": {
+      "share": {
+        "type": "int"
+      },
+      "count": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
   }
 }

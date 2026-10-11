@@ -31,6 +31,7 @@ import 'sso.dart';
 import 'usage.dart';
 import 'oql.dart';
 import 'query.dart';
+import 'rum.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
 import 'templates.dart';
@@ -139,6 +140,12 @@ class Sections {
     TraceController Function(String traceId)? trace,
     MetricController Function(String name)? metric,
     RumOverviewController Function(String app)? rumOverview,
+    RumPagesController Function(String app)? rumPages,
+    RumSessionsController Function(String app)? rumSessions,
+    RumReleasesController Function(String app)? rumReleases,
+    RumFunnelController Function(String app)? rumFunnel,
+    RumRouteVitalsController Function(String app, String route)? rumRouteVitals,
+    RumSessionController Function(String sessionId)? rumSession,
     HostController Function(String hostId)? host,
     ContainerController Function(String containerId)? container,
     PodController Function(String podUid)? pod,
@@ -180,6 +187,16 @@ class Sections {
        metric = metric ?? ((name) => MetricController(client, name)),
        rumOverview =
            rumOverview ?? ((app) => RumOverviewController(client, app)),
+       rumPages = rumPages ?? ((app) => RumPagesController(client, app)),
+       rumSessions =
+           rumSessions ?? ((app) => RumSessionsController(client, app)),
+       rumReleases =
+           rumReleases ?? ((app) => RumReleasesController(client, app)),
+       rumFunnel = rumFunnel ?? ((app) => RumFunnelController(client, app)),
+       rumRouteVitals =
+           rumRouteVitals ??
+           ((app, route) => RumRouteVitalsController(client, app, route)),
+       rumSession = rumSession ?? ((id) => RumSessionController(client, id)),
        host = host ?? ((id) => HostController(client, id)),
        container = container ?? ((id) => ContainerController(client, id)),
        pod = pod ?? ((uid) => PodController(client, uid)),
@@ -492,6 +509,16 @@ class Sections {
   final TraceController Function(String traceId) trace;
   final MetricController Function(String name) metric;
   final RumOverviewController Function(String app) rumOverview;
+
+  /// The rest of one browser application, each its own endpoint: the routes,
+  /// the visits, the versions, a funnel, and the vitals of a single route.
+  final RumPagesController Function(String app) rumPages;
+  final RumSessionsController Function(String app) rumSessions;
+  final RumReleasesController Function(String app) rumReleases;
+  final RumFunnelController Function(String app) rumFunnel;
+  final RumRouteVitalsController Function(String app, String route)
+  rumRouteVitals;
+  final RumSessionController Function(String sessionId) rumSession;
   final HostController Function(String hostId) host;
   final ContainerController Function(String containerId) container;
   final PodController Function(String podUid) pod;

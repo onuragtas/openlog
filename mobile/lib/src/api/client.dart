@@ -1200,6 +1200,71 @@ class OpenlogClient {
     ),
   );
 
+  /// The routes of one application, with their load times.
+  Future<RumPageList> rumPages(
+    String app, {
+    String sort = 'views',
+  }) async => RumPageList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/pages?${Uri(queryParameters: {'app': app, 'sort': sort}).query}',
+    ),
+  );
+
+  /// The five vitals of an application, or of one of its routes.
+  ///
+  /// A route's p75 is not derivable from the application's, which is why
+  /// this takes a route at all rather than the screen slicing what it has.
+  Future<RumVitalList> rumVitals(
+    String app, {
+    String route = '',
+  }) async => RumVitalList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/vitals?${Uri(queryParameters: {'app': app, if (route.isNotEmpty) 'route': route}).query}',
+    ),
+  );
+
+  /// Visits of one application, newest first.
+  Future<RumSessionPage> rumSessions(String app) async =>
+      RumSessionPage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/rum/sessions?${Uri(queryParameters: {'app': app}).query}',
+        ),
+      );
+
+  /// One visit and what it did. The timeline comes from the stored spans, so
+  /// an older session still has its summary but no events.
+  Future<RumSessionDetail> rumSession(String sessionId) async =>
+      RumSessionDetail.fromJson(
+        await _send('GET', '/api/v1/rum/sessions/$sessionId'),
+      );
+
+  /// How each version behaved, and the deployments that introduced them.
+  Future<RumReleaseList> rumReleases(String app) async =>
+      RumReleaseList.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/rum/releases?${Uri(queryParameters: {'app': app}).query}',
+        ),
+      );
+
+  /// Of the sessions that did the first step, how many reached each of the
+  /// next ones in order. The endpoint takes between two and six steps.
+  Future<RumFunnelResponse> rumFunnel(
+    String app, {
+    required List<String> steps,
+    String funnelWindow = '30m',
+  }) async {
+    final query = Uri(
+      queryParameters: {'app': app, 'step': steps, 'window': funnelWindow},
+    ).query;
+    return RumFunnelResponse.fromJson(
+      await _send('GET', '/api/v1/rum/funnel?$query'),
+    );
+  }
+
   /// Metric names with data points in the range.
   ///
   /// `q` matches the name or any service that sent it, so typing a service

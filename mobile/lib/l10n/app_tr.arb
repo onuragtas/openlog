@@ -2563,5 +2563,119 @@
         "type": "int"
       }
     }
+  },
+  "rumTabOverview": "Genel bakış",
+  "rumTabPages": "Sayfalar",
+  "rumTabSessions": "Oturumlar",
+  "rumTabReleases": "Sürümler",
+  "rumTabFunnel": "Huni",
+  "rumPagesEmpty": "Bu aralıkta sayfa görüntüleme yok.",
+  "rumPageViews": "Görüntüleme",
+  "rumPageMax": "En yavaş",
+  "rumPageTtfb": "TTFB",
+  "rumPageSort": "Sıralama",
+  "rumPageSortViews": "En çok görüntülenen",
+  "rumPageSortSlowest": "En çok süre harcayan",
+  "rumPageSortAvg": "Ortalamada en yavaş",
+  "rumPageTitle": "Sayfa",
+  "rumPageLoad": "Yükleme süresi",
+  "rumPageVitals": "Bu sayfanın Core Web Vitals değerleri",
+  "rumVitalThresholds": "İyi ≤ {good} · kötü > {poor}",
+  "rumVitalHeadroom": "Eşiğe {amount} var",
+  "rumVitalOver": "Eşiği {amount} aşıyor",
+  "rumVitalCount": "{count} ölçüm",
+  "rumSessionsEmpty": "Bu aralıkta oturum yok.",
+  "rumSessionTitle": "Oturum",
+  "rumSessionStarted": "Başlangıç",
+  "rumSessionDuration": "Süre",
+  "rumSessionPageViews": "Sayfa görüntüleme",
+  "rumSessionEntry": "Giriş rotası",
+  "rumSessionExit": "Çıkış rotası",
+  "rumSessionDevice": "Cihaz",
+  "rumSessionUser": "Kullanıcı",
+  "rumSessionCountry": "Ülke",
+  "rumSessionTimeline": "Zaman çizelgesi",
+  "rumSessionTimelineEmpty": "Bu oturumun olayları 7 günlük trace saklama süresiyle birlikte silindi; özeti ve trace bağlantısı duruyor.",
+  "rumSessionOpenTrace": "Oturumun en yeni trace'ini aç",
+  "rumEventPageView": "sayfa",
+  "rumEventVital": "vital",
+  "rumEventError": "hata",
+  "rumEventResource": "kaynak",
+  "rumReleasesEmpty": "Bu aralıkta sürüm ya da dağıtım yok.",
+  "rumReleaseVersions": "Sürümler",
+  "rumReleaseDeployments": "Dağıtımlar",
+  "rumReleaseCrashFree": "Hatasız",
+  "rumReleaseSessions": "Oturum",
+  "rumReleaseErrorSessions": "Hatalı",
+  "rumReleaseNoSessions": "oturum yok",
+  "rumReleaseNoVersion": "(sürümsüz)",
+  "rumReleaseInitial": "ilk",
+  "rumReleaseRollback": "geri alma",
+  "rumReleaseRetention": "Dağıtımlar 30 güne kadar geriye gider, oturumlar 7 günlük trace saklamasında durur: daha eski bir sürüm oturumsuz görünür.",
+  "rumFunnelSteps": "Adımlar (sırayla, virgülle)",
+  "rumFunnelHint": "Adımlar uygulamanızın kendi gönderdiği özel olaylardır. 2 ile 6 arası adım, beklendikleri sırayla.",
+  "rumFunnelWindow": "Süre",
+  "rumFunnelApply": "Uygula",
+  "rumFunnelNeedSteps": "Huniyi görmek için en az iki adım yazın.",
+  "rumFunnelSessions": "{count} oturum",
+  "rumFunnelDropped": "%{share} kayıp",
+  "rumFunnelCompletion": "İlk adımı yapan {count} oturumun %{share} kadarı {window} içinde sonuncuya ulaştı.",
+  "@rumVitalThresholds": {
+    "placeholders": {
+      "good": {
+        "type": "String"
+      },
+      "poor": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalHeadroom": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalOver": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumVitalCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@rumFunnelSessions": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "@rumFunnelDropped": {
+    "placeholders": {
+      "share": {
+        "type": "int"
+      }
+    }
+  },
+  "@rumFunnelCompletion": {
+    "placeholders": {
+      "share": {
+        "type": "int"
+      },
+      "count": {
+        "type": "String"
+      },
+      "window": {
+        "type": "String"
+      }
+    }
   }
 }

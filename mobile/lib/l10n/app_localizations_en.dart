@@ -4060,4 +4060,190 @@ class LEn extends L {
 
   @override
   String get logDetailNext => 'Next record';
+
+  @override
+  String get rumTabOverview => 'Overview';
+
+  @override
+  String get rumTabPages => 'Pages';
+
+  @override
+  String get rumTabSessions => 'Sessions';
+
+  @override
+  String get rumTabReleases => 'Releases';
+
+  @override
+  String get rumTabFunnel => 'Funnel';
+
+  @override
+  String get rumPagesEmpty => 'No page views in this range.';
+
+  @override
+  String get rumPageViews => 'Views';
+
+  @override
+  String get rumPageMax => 'Slowest';
+
+  @override
+  String get rumPageTtfb => 'TTFB';
+
+  @override
+  String get rumPageSort => 'Sort';
+
+  @override
+  String get rumPageSortViews => 'Most viewed';
+
+  @override
+  String get rumPageSortSlowest => 'Most time consuming';
+
+  @override
+  String get rumPageSortAvg => 'Slowest on average';
+
+  @override
+  String get rumPageTitle => 'Page';
+
+  @override
+  String get rumPageLoad => 'Load time';
+
+  @override
+  String get rumPageVitals => 'Core Web Vitals of this page';
+
+  @override
+  String rumVitalThresholds(String good, String poor) {
+    return 'Good ≤ $good · poor > $poor';
+  }
+
+  @override
+  String rumVitalHeadroom(String amount) {
+    return '$amount of headroom';
+  }
+
+  @override
+  String rumVitalOver(String amount) {
+    return '$amount over the threshold';
+  }
+
+  @override
+  String rumVitalCount(int count) {
+    return '$count measurements';
+  }
+
+  @override
+  String get rumSessionsEmpty => 'No sessions in this range.';
+
+  @override
+  String get rumSessionTitle => 'Session';
+
+  @override
+  String get rumSessionStarted => 'Started';
+
+  @override
+  String get rumSessionDuration => 'Duration';
+
+  @override
+  String get rumSessionPageViews => 'Page views';
+
+  @override
+  String get rumSessionEntry => 'Entry route';
+
+  @override
+  String get rumSessionExit => 'Exit route';
+
+  @override
+  String get rumSessionDevice => 'Device';
+
+  @override
+  String get rumSessionUser => 'User';
+
+  @override
+  String get rumSessionCountry => 'Country';
+
+  @override
+  String get rumSessionTimeline => 'Timeline';
+
+  @override
+  String get rumSessionTimelineEmpty =>
+      'The events of this session went with the 7-day trace retention; its summary and trace link remain.';
+
+  @override
+  String get rumSessionOpenTrace => 'Open the session\'s newest trace';
+
+  @override
+  String get rumEventPageView => 'page view';
+
+  @override
+  String get rumEventVital => 'vital';
+
+  @override
+  String get rumEventError => 'error';
+
+  @override
+  String get rumEventResource => 'resource';
+
+  @override
+  String get rumReleasesEmpty => 'No versions or deployments in this range.';
+
+  @override
+  String get rumReleaseVersions => 'Versions';
+
+  @override
+  String get rumReleaseDeployments => 'Deployments';
+
+  @override
+  String get rumReleaseCrashFree => 'Crash-free';
+
+  @override
+  String get rumReleaseSessions => 'Sessions';
+
+  @override
+  String get rumReleaseErrorSessions => 'With errors';
+
+  @override
+  String get rumReleaseNoSessions => 'no sessions';
+
+  @override
+  String get rumReleaseNoVersion => '(no version)';
+
+  @override
+  String get rumReleaseInitial => 'initial';
+
+  @override
+  String get rumReleaseRollback => 'rollback';
+
+  @override
+  String get rumReleaseRetention =>
+      'Deployments reach back 30 days while sessions stop at the 7-day trace retention: an older version is listed with no sessions.';
+
+  @override
+  String get rumFunnelSteps => 'Steps (in order, comma separated)';
+
+  @override
+  String get rumFunnelHint =>
+      'Steps are custom events your application sends itself. Between two and six, in the order you expect them.';
+
+  @override
+  String get rumFunnelWindow => 'Within';
+
+  @override
+  String get rumFunnelApply => 'Apply';
+
+  @override
+  String get rumFunnelNeedSteps =>
+      'Enter at least two steps to see the funnel.';
+
+  @override
+  String rumFunnelSessions(String count) {
+    return '$count sessions';
+  }
+
+  @override
+  String rumFunnelDropped(int share) {
+    return '$share% lost';
+  }
+
+  @override
+  String rumFunnelCompletion(int share, String count, String window) {
+    return '$share% of the $count sessions that did the first step reached the last one within $window.';
+  }
 }

@@ -10,6 +10,10 @@ import '../session.dart';
 import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart';
+import 'rum_pages.dart';
+import 'rum_releases.dart';
+import 'rum_sessions.dart';
+import 'rum_vitals.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
 import 'sparkline.dart';
@@ -168,8 +172,10 @@ class RumAppScreen extends StatefulWidget {
   State<RumAppScreen> createState() => _RumAppScreenState();
 }
 
-class _RumAppScreenState extends State<RumAppScreen> {
+class _RumAppScreenState extends State<RumAppScreen>
+    with SingleTickerProviderStateMixin {
   late final RumOverviewController _c;
+  late final TabController _tabs = TabController(length: 5, vsync: this);
 
   @override
   void initState() {
@@ -180,6 +186,7 @@ class _RumAppScreenState extends State<RumAppScreen> {
 
   @override
   void dispose() {
+    _tabs.dispose();
     _c.dispose();
     super.dispose();
   }
@@ -188,13 +195,56 @@ class _RumAppScreenState extends State<RumAppScreen> {
   Widget build(BuildContext context) {
     final l = L.of(context);
 
-    return ListenableBuilder(
-      listenable: _c,
-      builder: (context, _) => DetailScreen<RumOverview>(
-        controller: _c,
-        baseUrl: widget.session.baseUrl ?? '',
-        title: widget.app,
-        builder: (context, o) => _body(context, l, o),
+    // The web's five tabs, in its order. Each one is its own endpoint, so
+    // each loads when it is first looked at rather than all at once.
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.app, overflow: TextOverflow.ellipsis),
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [
+            Tab(key: const Key('rum-tab-overview'), text: l.rumTabOverview),
+            Tab(key: const Key('rum-tab-pages'), text: l.rumTabPages),
+            Tab(key: const Key('rum-tab-sessions'), text: l.rumTabSessions),
+            Tab(key: const Key('rum-tab-releases'), text: l.rumTabReleases),
+            Tab(key: const Key('rum-tab-funnel'), text: l.rumTabFunnel),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        children: [
+          ListenableBuilder(
+            listenable: _c,
+            builder: (context, _) => DetailBody<RumOverview>(
+              controller: _c,
+              baseUrl: widget.session.baseUrl ?? '',
+              builder: (context, o) => _body(context, l, o),
+            ),
+          ),
+          RumPagesTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
+          RumSessionsTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
+          RumReleasesTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
+          RumFunnelTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
+        ],
       ),
     );
   }
@@ -269,76 +319,9 @@ class _RumAppScreenState extends State<RumAppScreen> {
         title: l.rumVitals,
         children: [
           for (final v in o.vitals)
-            _VitalRow(vital: v, key: Key('vital-${v.name.wire}')),
+            VitalTile(vital: v, key: Key('vital-${v.name.wire}')),
         ],
       ),
     ];
-  }
-}
-
-/// One Core Web Vital: its p75, the verdict on it, and how much of the traffic
-/// was rated good. The thresholds are published constants rather than settings
-/// of this installation, so the rating comes from the server unchanged.
-class _VitalRow extends StatelessWidget {
-  const _VitalRow({super.key, required this.vital});
-
-  final RumVital vital;
-
-  @override
-  Widget build(BuildContext context) {
-    final l = L.of(context);
-    final theme = Theme.of(context);
-    final (label, level) = switch (vital.rating) {
-      'good' => (l.rumVitalGood, SeverityLevel.good),
-      'needs_improvement' => (
-        l.rumVitalNeedsImprovement,
-        SeverityLevel.warning,
-      ),
-      'poor' => (l.rumVitalPoor, SeverityLevel.critical),
-      // "" means the server had no measurements to rate, which is not the same
-      // as a bad rating and must not look like one.
-      _ => (l.rumVitalNoData, SeverityLevel.unknown),
-    };
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Text(
-              vital.name.wire.toUpperCase(),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              vital.p75 == null
-                  ? '-'
-                  // CLS is unitless; everything else is milliseconds, and a
-                  // layout shift of 0.08 must not read as 0 ms.
-                  : vital.unit.isEmpty
-                  ? vital.p75!.toStringAsFixed(2)
-                  : '${vital.p75!.toStringAsFixed(0)} ${vital.unit}',
-              style: theme.textTheme.bodyMedium,
-            ),
-          ),
-          // Only where there was something to rate: "0% good" next to "no
-          // measurements" reads as a share that was measured and came out
-          // zero, which is the opposite of what it means.
-          if (vital.rating.isNotEmpty)
-            Text(
-              l.rumVitalShare((vital.good * 100).round()),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          const SizedBox(width: 10),
-          Tag(label: label, level: level),
-        ],
-      ),
-    );
   }
 }
