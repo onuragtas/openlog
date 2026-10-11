@@ -16,6 +16,8 @@ export type RumPage = S["RumPage"];
 export type RumOverview = S["RumOverview"];
 export type RumSession = S["RumSession"];
 export type RumEvent = S["RumEvent"];
+export type RumRelease = S["RumRelease"];
+export type RumFunnelStep = S["RumFunnelStep"];
 
 /** `slowest` orders by total time consumed, the same reasoning as APM's "most time consuming". */
 export type RumPageSort = "views" | "slowest" | "avg";
@@ -87,4 +89,37 @@ export const rumSessionQuery = (range: RangeSpec, sessionId: string) =>
       unwrap(await api.GET("/api/v1/rum/sessions/{session_id}", { params: { path: { session_id: sessionId }, query: window(range) }, signal })),
     enabled: sessionId !== "",
     placeholderData: keepPreviousData,
+  });
+
+/**
+ * How each version of the application behaved, with the deployments that introduced them.
+ *
+ * The two halves see different distances and the screen has to say so: deployments come from the 30-day
+ * version rollup, sessions are counted from the spans and so stop at the 7-day trace retention. A version
+ * older than a week is therefore listed with no sessions against it, which is a gap in the data rather
+ * than a quiet week.
+ */
+export const rumReleasesQuery = (range: RangeSpec, app: string, environment?: string) =>
+  queryOptions({
+    queryKey: ["rum", "releases", app, environment ?? "", ...rangeKey(range)],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/releases", { params: { query: { app, environment, ...window(range) } }, signal })),
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
+  });
+
+/**
+ * Of the sessions that did the first step, how many reached each of the next ones in order.
+ *
+ * Disabled until there are at least two steps: the endpoint requires them, and asking with one would be a
+ * 400 on every keystroke while somebody types the funnel.
+ */
+export const rumFunnelQuery = (range: RangeSpec, app: string, steps: string[], funnelWindow: string, environment?: string) =>
+  queryOptions({
+    queryKey: ["rum", "funnel", app, environment ?? "", steps.join(">"), funnelWindow, ...rangeKey(range)],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/rum/funnel", { params: { query: { app, environment, step: steps, window: funnelWindow, ...window(range) } }, signal })),
+    enabled: app !== "" && steps.length >= 2,
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
   });

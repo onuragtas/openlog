@@ -3,7 +3,7 @@
 // one that hit a JavaScript error. The vital thresholds here are the published Core Web Vitals boundaries,
 // because the server sends those constants rather than a setting.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
-import type { RumEvent, RumPage, RumSession, RumVital } from "@/api/rum";
+import type { RumEvent, RumFunnelStep, RumPage, RumRelease, RumSession, RumVital } from "@/api/rum";
 import { authenticate } from "./account";
 import { formatTs } from "./fixtures";
 
@@ -33,6 +33,24 @@ const PAGES: RumPage[] = [
   { route: "/", views: 940, avg_ms: 1180, p50_ms: 1040, p75_ms: 1520, p95_ms: 2400, max_ms: 5200, ttfb_avg_ms: 310, lcp_p75: 1980, errors: 3 },
   { route: "/products/:id", views: 620, avg_ms: 1640, p50_ms: 1480, p75_ms: 2180, p95_ms: 3600, max_ms: 7400, ttfb_avg_ms: 420, lcp_p75: 2460, errors: 11 },
   { route: "/checkout", views: 280, avg_ms: 2240, p50_ms: 2010, p75_ms: 2980, p95_ms: 4800, max_ms: 9100, ttfb_avg_ms: 560, lcp_p75: 3310, errors: 2 },
+];
+
+/**
+ * The same five vitals, worse on one route than on the application as a whole: /checkout is where the
+ * mock shop's LCP goes bad, which is the whole reason a route has vitals of its own.
+ */
+function vitalsOf(route: string): RumVital[] {
+  if (route !== "/checkout") return VITALS;
+  return VITALS.map((v) =>
+    v.name === "lcp" ? { ...v, p50: 2800, p75: 4300, p95: 6100, avg: 3200, good: 0.21, needs_improvement: 0.3, poor: 0.49, rating: "poor" } : v,
+  );
+}
+
+const RELEASES: RumRelease[] = [
+  { version: "1.4.2", sessions: 480, error_sessions: 6, crash_free_rate: 0.9875, first_seen: "", last_seen: "" },
+  { version: "1.4.1", sessions: 132, error_sessions: 21, crash_free_rate: 0.8409, first_seen: "", last_seen: "" },
+  // Older than the trace retention: the deployment is known, the sessions are gone.
+  { version: "1.3.9", sessions: 0, error_sessions: 0, crash_free_rate: 1, first_seen: "", last_seen: "" },
 ];
 
 /**
@@ -163,8 +181,35 @@ export const rumHandlers = [
   })),
 
   http.get(`${API}/rum/vitals`, authed(({ request }) => {
-    const { from, to } = range(new URL(request.url));
-    return HttpResponse.json({ from: formatTs(from), to: formatTs(to), vitals: VITALS });
+    const url = new URL(request.url);
+    const { from, to } = range(url);
+    return HttpResponse.json({ from: formatTs(from), to: formatTs(to), vitals: vitalsOf(url.searchParams.get("route") ?? "") });
+  })),
+
+  http.get(`${API}/rum/releases`, authed(({ request }) => {
+    const now = Date.now();
+    const url = new URL(request.url);
+    if ((url.searchParams.get("app") ?? "") === "") return HttpResponse.json({ error: { code: "invalid_argument", message: "app is required" } }, { status: 400 });
+    const releases = RELEASES.map((r, i) => ({ ...r, first_seen: formatTs(now - (i + 1) * 86_400_000), last_seen: formatTs(now - i * 3_600_000) }));
+    const deployments = [
+      { timestamp: formatTs(now - 3 * 3_600_000), t: now - 3 * 3_600_000, service_namespace: "", environment: "production", version: "1.4.2", previous_version: "1.4.1", initial: false, rollback: false },
+      // The version before it came back for a while: a rollback, which the row says out loud.
+      { timestamp: formatTs(now - 20 * 3_600_000), t: now - 20 * 3_600_000, service_namespace: "", environment: "production", version: "1.4.1", previous_version: "1.3.9", initial: false, rollback: true },
+    ];
+    return HttpResponse.json({ releases, deployments });
+  })),
+
+  http.get(`${API}/rum/funnel`, authed(({ request }) => {
+    const url = new URL(request.url);
+    const names = url.searchParams.getAll("step");
+    if (names.length < 2) return HttpResponse.json({ error: { code: "invalid_argument", message: "at least two steps" } }, { status: 400 });
+    // Each step keeps three quarters of the one before it, which is enough shape to read a funnel by.
+    const first = 400;
+    const steps: RumFunnelStep[] = names.map((step, i) => {
+      const sessions = Math.round(first * 0.75 ** i);
+      return { step, sessions, rate: sessions / first };
+    });
+    return HttpResponse.json({ steps, window_seconds: 1800 });
   })),
 
   http.get(`${API}/rum/sessions`, authed(() => HttpResponse.json({ sessions: sessions(Date.now()) }))),

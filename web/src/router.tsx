@@ -769,7 +769,7 @@ const vulnerabilityDetailRoute = createRoute({
 });
 
 // ---- Real user monitoring (routes/rum.tsx, docs/contracts/rum.md §7, D-136) ----
-const RUM_TABS = ["overview", "pages", "sessions"] as const;
+const RUM_TABS = ["overview", "pages", "sessions", "releases", "funnel"] as const;
 const RUM_SORTS = ["views", "slowest", "avg"] as const;
 
 export interface RumSearch {
@@ -780,6 +780,10 @@ export interface RumSearch {
   env?: string;
   tab?: (typeof RUM_TABS)[number];
   sort?: (typeof RUM_SORTS)[number];
+  /** Funnel steps, in order: custom event names the application sends itself. */
+  steps?: string[];
+  /** How long a session has to get from the first funnel step to the last. */
+  fwin?: string;
 }
 
 const rumRoute = createRoute({ getParentRoute: () => appRoute, path: "/rum", component: RumPage });
@@ -787,7 +791,14 @@ const rumRoute = createRoute({ getParentRoute: () => appRoute, path: "/rum", com
 const rumAppRoute = createRoute({
   getParentRoute: () => appRoute,
   path: "/rum/$app",
-  validateSearch: (s: Record<string, unknown>): RumSearch => ({ env: str(s.env), tab: oneOf(RUM_TABS, s.tab), sort: oneOf(RUM_SORTS, s.sort) }),
+  validateSearch: (s: Record<string, unknown>): RumSearch => ({
+    env: str(s.env),
+    tab: oneOf(RUM_TABS, s.tab),
+    sort: oneOf(RUM_SORTS, s.sort),
+    // At most six, as the endpoint takes; a longer URL is somebody else's and is cut rather than refused.
+    steps: Array.isArray(s.steps) ? s.steps.filter((v): v is string => typeof v === "string" && v !== "").slice(0, 6) : undefined,
+    fwin: str(s.fwin),
+  }),
   component: RumAppPage,
 });
 

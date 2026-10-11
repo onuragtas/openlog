@@ -4,8 +4,10 @@
 // same URL look alike.
 import { useQuery } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { rumPagesQuery, type RumPageSort } from "@/api/rum";
+import { rumPagesQuery, type RumPage, type RumPageSort } from "@/api/rum";
+import { RumPageDetail } from "@/components/rum/RumPageDetail";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -31,6 +33,9 @@ export function RumPagesTab({
 }) {
   const { t, i18n } = useTranslation();
   const pages = useQuery(rumPagesQuery(range, app, sort, environment));
+  // Which route's panel is open, by value: the row already holds every number the panel shows apart from
+  // the vitals, so opening one costs a single query rather than six.
+  const [open, setOpen] = useState<RumPage | null>(null);
 
   return (
     <div className="flex flex-col gap-3">
@@ -70,7 +75,11 @@ export function RumPagesTab({
           <TableBody>
             {pages.data.map((p) => (
               <TableRow key={p.route} data-testid="rum-page-row">
-                <TableCell className="font-mono text-xs break-all">{p.route}</TableCell>
+                <TableCell className="font-mono text-xs break-all">
+                  <button type="button" className="text-left text-primary hover:underline" onClick={() => setOpen(p)} aria-label={t("rum.page.open", { route: p.route })}>
+                    {p.route}
+                  </button>
+                </TableCell>
                 <TableCell label={t("rum.pages.columns.views")} className="text-right tabular-nums">
                   {formatNumber(p.views, i18n.language)}
                 </TableCell>
@@ -97,6 +106,7 @@ export function RumPagesTab({
           </TableBody>
         </Table>
       )}
+      <RumPageDetail page={open ?? undefined} onClose={() => setOpen(null)} range={range} app={app} environment={environment} />
     </div>
   );
 }

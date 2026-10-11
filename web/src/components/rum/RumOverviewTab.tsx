@@ -4,12 +4,12 @@
 // settings, so the UI never recomputes them.
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { rumOverviewQuery, type RumVital } from "@/api/rum";
+import { rumOverviewQuery } from "@/api/rum";
+import { VitalCard } from "@/components/rum/VitalCard";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
-import { Badge } from "@/components/ui/badge";
 import { formatNumber } from "@/lib/format";
-import { apiTimeMs, formatMs, formatShare, formatVital, ratingKey, ratingVariant, sortVitals } from "@/lib/rum";
+import { apiTimeMs, formatMs, sortVitals } from "@/lib/rum";
 import type { RangeSpec } from "@/lib/time";
 
 function Total({ label, value }: { label: string; value: string }) {
@@ -17,48 +17,6 @@ function Total({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border bg-card p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className="mt-1 text-xl font-semibold tabular-nums">{value}</p>
-    </div>
-  );
-}
-
-/** The three bands are shares of the same total, so they read as one bar rather than three numbers. */
-function Bands({ vital }: { vital: RumVital }) {
-  const { t } = useTranslation();
-  const bands = [
-    { key: "good", share: vital.good, className: "bg-success" },
-    { key: "needs_improvement", share: vital.needs_improvement, className: "bg-warning" },
-    { key: "poor", share: vital.poor, className: "bg-destructive" },
-  ];
-  return (
-    <div className="mt-3 flex flex-col gap-1">
-      <div className="flex h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-        {bands.map((b) => (b.share > 0 ? <div key={b.key} className={b.className} style={{ width: `${b.share * 100}%` }} /> : null))}
-      </div>
-      <p className="text-xs text-muted-foreground">
-        {t("rum.vitals.bands", {
-          good: formatShare(vital.good),
-          needsImprovement: formatShare(vital.needs_improvement),
-          poor: formatShare(vital.poor),
-        })}
-      </p>
-    </div>
-  );
-}
-
-function VitalCard({ vital }: { vital: RumVital }) {
-  const { t, i18n } = useTranslation();
-  const measured = vital.count > 0;
-  return (
-    <div className="rounded-xl border bg-card p-3" data-testid="rum-vital">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium uppercase">{t(`rum.vitals.names.${vital.name}`)}</p>
-        <Badge variant={ratingVariant(vital.rating)}>{t(ratingKey(vital.rating))}</Badge>
-      </div>
-      <p className="mt-1 text-xl font-semibold tabular-nums">{formatVital(vital.p75, vital.name, i18n.language)}</p>
-      <p className="text-xs text-muted-foreground">
-        {measured ? t("rum.vitals.count", { n: Math.round(vital.count) }) : t("rum.vitals.noData")}
-      </p>
-      {measured && <Bands vital={vital} />}
     </div>
   );
 }

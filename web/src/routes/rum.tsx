@@ -8,8 +8,10 @@ import { useTranslation } from "react-i18next";
 import type { RumPageSort } from "@/api/rum";
 import { PageHeader } from "@/components/AppShell";
 import { RumApps } from "@/components/rum/RumApps";
+import { RumFunnelTab } from "@/components/rum/RumFunnelTab";
 import { RumOverviewTab } from "@/components/rum/RumOverviewTab";
 import { RumPagesTab } from "@/components/rum/RumPagesTab";
+import { RumReleasesTab } from "@/components/rum/RumReleasesTab";
 import { RumSessionDetail } from "@/components/rum/RumSessionDetail";
 import { RumSessionsTab } from "@/components/rum/RumSessionsTab";
 import { Button } from "@/components/ui/button";
@@ -72,6 +74,8 @@ export function RumAppPage() {
           <TabsTrigger value="overview">{t("rum.tabs.overview")}</TabsTrigger>
           <TabsTrigger value="pages">{t("rum.tabs.pages")}</TabsTrigger>
           <TabsTrigger value="sessions">{t("rum.tabs.sessions")}</TabsTrigger>
+          <TabsTrigger value="releases">{t("rum.tabs.releases")}</TabsTrigger>
+          <TabsTrigger value="funnel">{t("rum.tabs.funnel")}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">{tab === "overview" && <RumOverviewTab range={range} app={app} environment={search.env} />}</TabsContent>
         <TabsContent value="pages">
@@ -90,6 +94,26 @@ export function RumAppPage() {
                   to: "/rum/$app/sessions/$sessionId",
                   params: { app, sessionId: s.session_id },
                   search: (prev: Record<string, unknown>) => ({ ...rangeOf(prev as RumSearch), env: search.env }) as never,
+                })
+              }
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="releases">{tab === "releases" && <RumReleasesTab range={range} app={app} environment={search.env} />}</TabsContent>
+        <TabsContent value="funnel">
+          {tab === "funnel" && (
+            <RumFunnelTab
+              range={range}
+              app={app}
+              environment={search.env}
+              steps={search.steps ?? []}
+              funnelWindow={search.fwin ?? "30m"}
+              // Only what changed: spreading an absent key as undefined would drop the steps from the
+              // URL every time somebody picked another window.
+              onChange={(patch) =>
+                setSearch({
+                  ...(patch.steps === undefined ? {} : { steps: patch.steps.length > 0 ? patch.steps : undefined }),
+                  ...(patch.funnelWindow === undefined ? {} : { fwin: patch.funnelWindow }),
                 })
               }
             />
