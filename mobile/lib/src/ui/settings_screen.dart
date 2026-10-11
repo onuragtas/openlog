@@ -19,6 +19,7 @@ import '../sampling.dart';
 import '../sso.dart';
 import '../session.dart';
 import '../usage.dart';
+import '../version.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
 import 'audit_tab.dart';
@@ -31,6 +32,7 @@ import 'source_maps_tab.dart';
 import 'sso_tab.dart';
 import 'storage_tab.dart';
 import 'usage_tab.dart';
+import 'version_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
 
@@ -51,6 +53,7 @@ class SettingsBody extends StatefulWidget {
     required this.sampling,
     required this.usage,
     required this.storage,
+    required this.versionInfo,
     required this.sso,
     required this.active,
   });
@@ -92,6 +95,9 @@ class SettingsBody extends StatefulWidget {
 
   /// How full the ClickHouse disks are.
   final StorageController storage;
+
+  /// The running build, the release available and the updater's state.
+  final VersionController versionInfo;
 
   /// Single sign-on.
   final SsoController sso;
@@ -182,6 +188,18 @@ final _tabs = <_Tab>[
     (l) => l.settingsUsage,
     null,
     (s) => UsageTab(session: s.widget.session, controller: s.widget.usage),
+  ),
+  // Any signed-in principal may read it; the two buttons inside are what
+  // the role decides, and the screen says so rather than hiding the state.
+  _Tab(
+    'version',
+    (l) => l.settingsTabVersion,
+    null,
+    (s) => VersionTab(
+      session: s.widget.session,
+      controller: s.widget.versionInfo,
+      active: true,
+    ),
   ),
   _Tab(
     'storage',

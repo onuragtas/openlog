@@ -2774,5 +2774,112 @@
         "type": "String"
       }
     }
-  }
+  },
+  "updateMsgModeOff": "updates are disabled (OPENLOG_UPDATER_MODE=off)",
+  "updateMsgUpdateAvailable": "%version% is available on channel %channel%",
+  "updateMsgUpdateAvailableNotify": "%version% is available on channel %channel% (notify mode: nothing is installed)",
+  "updateMsgWaitingForWindow": "waiting for the maintenance window to install %version%",
+  "updateMsgUpdated": "updated %from% → %to%",
+  "updateMsgRolledBack": "update to %to% failed and was rolled back to %from%",
+  "updateMsgRollbackFailed": "update to %to% failed and the rollback to %from% failed: manual action required",
+  "updateMsgFailedBeforeChange": "update to %to% failed before services were changed",
+  "updateMsgUpToDateNewest": "%version% is the newest release on channel %channel%",
+  "updateMsgUpToDateNoEligible": "no eligible release newer than %version%: %details%",
+  "updateMsgRequestModeOff": "updates are disabled (OPENLOG_UPDATER_MODE=off)",
+  "updateMsgRequestNotInstallable": "%version% is not installable: %reason%",
+  "updateMsgRequestTargetChanged": "the release to install is now %version%, not the requested %requested%: check again and confirm the new version",
+  "updateMsgRequestOutsideWindow": "outside the maintenance window: confirm installing outside the window to update now",
+  "updateMsgRequestInterrupted": "interrupted: openlog-updater restarted while handling the request",
+  "updateMsgRequestExpired": "not picked up by openlog-updater within 15m (is an updater with request support running?)",
+  "updateMsgComposeOutdated": "the compose files (%files_version%) are older than the running version %running_version%: settings and volumes added since then do not reach the containers",
+  "updateMsgComposeOutdatedBundle": "the compose files (%files_version%) are older than the running version %running_version%: re-run install-server.sh",
+  "updateMsgComposeChangesPending": "the compose files of %version% change %services% in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d",
+  "updateMsgUpdaterOutdated": "openlog-updater %updater_version% is older than the running version %running_version%: its improvements do not apply until its container is recreated",
+  "updateMsgUpdaterOutdatedBundle": "openlog-updater %updater_version% is older than the running version %running_version%: re-run install-server.sh to recreate it",
+  "updateMsgUpdaterOutdatedKubernetes": "the openlog-updater CronJob %updater_version% is older than the running version %running_version%: upgrade the Helm release with image.tag=%running_version%",
+  "updateMsgUpdaterSelfUpdateFailed": "openlog-updater could not replace itself with %version% and keeps running its previous version: %reason%",
+  "settingsTabVersion": "Version",
+  "versionRunning": "Running",
+  "versionBuilt": "built",
+  "versionCheck": "Update check",
+  "versionCheckEnabled": "enabled",
+  "versionCheckDisabled": "disabled",
+  "versionCheckFailed": "failed",
+  "versionLatest": "Latest release",
+  "versionUpToDate": "Up to date",
+  "versionChecked": "checked",
+  "versionUpdater": "Updater",
+  "versionNoUpdater": "No updater reports to this installation.",
+  "versionMode": "mode",
+  "versionTarget": "target",
+  "versionSteps": "Steps",
+  "versionFinished": "finished",
+  "versionFrom": "from {version}",
+  "versionWindow": "Maintenance window",
+  "versionWindowAnyTime": "any time",
+  "versionWindowOpen": "open now",
+  "versionWindowNext": "next opening",
+  "versionRequest": "Last request",
+  "versionRequestApply": "install {version}",
+  "versionRequestCheck": "check",
+  "versionRequestedBy": "by {email}",
+  "versionCheckNow": "Check now",
+  "versionUpdateNow": "Update now",
+  "versionConfirmTitle": "Install {version}?",
+  "versionConfirmBody": "The updater backs up, pulls the images and recreates the containers. The API is unavailable for a moment while it does.",
+  "versionIgnoreWindow": "Install outside the maintenance window",
+  "versionConfirm": "Install",
+  "versionQueued": "Request queued; follow it in the updater's state.",
+  "updateForbidden": "Your role may not ask for updates.",
+  "@versionFrom": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionRequestApply": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionRequestedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionConfirmTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateStateOff": "Off",
+  "updateStateError": "Error",
+  "updateStateUpToDate": "Up to date",
+  "updateStateAvailable": "Update available",
+  "updateStateWaitingForWindow": "Waiting for the window",
+  "updateStateUpdating": "Updating",
+  "updateStateSucceeded": "Succeeded",
+  "updateStateFailed": "Failed",
+  "updateStateRolledBack": "Rolled back",
+  "updateStateRollbackFailed": "Rollback failed",
+  "updateStepSelfUpdate": "Updater self-update",
+  "updateStepBackup": "Backup",
+  "updateStepPull": "Pull images",
+  "updateStepComposeBundle": "Compose files",
+  "updateStepMigrate": "Migration",
+  "updateStepRecreate": "Recreate",
+  "updateStepRollout": "Rollout",
+  "updateStepHealth": "Health check",
+  "updateStepRollback": "Rollback",
+  "updateStepCleanup": "Cleanup",
+  "updateStepContractMigrate": "Contract migration",
+  "versionRequestPending": "Queued",
+  "versionRequestExpired": "Expired"
 }

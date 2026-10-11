@@ -4246,4 +4246,273 @@ class LEn extends L {
   String rumFunnelCompletion(int share, String count, String window) {
     return '$share% of the $count sessions that did the first step reached the last one within $window.';
   }
+
+  @override
+  String get updateMsgModeOff =>
+      'updates are disabled (OPENLOG_UPDATER_MODE=off)';
+
+  @override
+  String get updateMsgUpdateAvailable =>
+      '%version% is available on channel %channel%';
+
+  @override
+  String get updateMsgUpdateAvailableNotify =>
+      '%version% is available on channel %channel% (notify mode: nothing is installed)';
+
+  @override
+  String get updateMsgWaitingForWindow =>
+      'waiting for the maintenance window to install %version%';
+
+  @override
+  String get updateMsgUpdated => 'updated %from% → %to%';
+
+  @override
+  String get updateMsgRolledBack =>
+      'update to %to% failed and was rolled back to %from%';
+
+  @override
+  String get updateMsgRollbackFailed =>
+      'update to %to% failed and the rollback to %from% failed: manual action required';
+
+  @override
+  String get updateMsgFailedBeforeChange =>
+      'update to %to% failed before services were changed';
+
+  @override
+  String get updateMsgUpToDateNewest =>
+      '%version% is the newest release on channel %channel%';
+
+  @override
+  String get updateMsgUpToDateNoEligible =>
+      'no eligible release newer than %version%: %details%';
+
+  @override
+  String get updateMsgRequestModeOff =>
+      'updates are disabled (OPENLOG_UPDATER_MODE=off)';
+
+  @override
+  String get updateMsgRequestNotInstallable =>
+      '%version% is not installable: %reason%';
+
+  @override
+  String get updateMsgRequestTargetChanged =>
+      'the release to install is now %version%, not the requested %requested%: check again and confirm the new version';
+
+  @override
+  String get updateMsgRequestOutsideWindow =>
+      'outside the maintenance window: confirm installing outside the window to update now';
+
+  @override
+  String get updateMsgRequestInterrupted =>
+      'interrupted: openlog-updater restarted while handling the request';
+
+  @override
+  String get updateMsgRequestExpired =>
+      'not picked up by openlog-updater within 15m (is an updater with request support running?)';
+
+  @override
+  String get updateMsgComposeOutdated =>
+      'the compose files (%files_version%) are older than the running version %running_version%: settings and volumes added since then do not reach the containers';
+
+  @override
+  String get updateMsgComposeOutdatedBundle =>
+      'the compose files (%files_version%) are older than the running version %running_version%: re-run install-server.sh';
+
+  @override
+  String get updateMsgComposeChangesPending =>
+      'the compose files of %version% change %services% in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d';
+
+  @override
+  String get updateMsgUpdaterOutdated =>
+      'openlog-updater %updater_version% is older than the running version %running_version%: its improvements do not apply until its container is recreated';
+
+  @override
+  String get updateMsgUpdaterOutdatedBundle =>
+      'openlog-updater %updater_version% is older than the running version %running_version%: re-run install-server.sh to recreate it';
+
+  @override
+  String get updateMsgUpdaterOutdatedKubernetes =>
+      'the openlog-updater CronJob %updater_version% is older than the running version %running_version%: upgrade the Helm release with image.tag=%running_version%';
+
+  @override
+  String get updateMsgUpdaterSelfUpdateFailed =>
+      'openlog-updater could not replace itself with %version% and keeps running its previous version: %reason%';
+
+  @override
+  String get settingsTabVersion => 'Version';
+
+  @override
+  String get versionRunning => 'Running';
+
+  @override
+  String get versionBuilt => 'built';
+
+  @override
+  String get versionCheck => 'Update check';
+
+  @override
+  String get versionCheckEnabled => 'enabled';
+
+  @override
+  String get versionCheckDisabled => 'disabled';
+
+  @override
+  String get versionCheckFailed => 'failed';
+
+  @override
+  String get versionLatest => 'Latest release';
+
+  @override
+  String get versionUpToDate => 'Up to date';
+
+  @override
+  String get versionChecked => 'checked';
+
+  @override
+  String get versionUpdater => 'Updater';
+
+  @override
+  String get versionNoUpdater => 'No updater reports to this installation.';
+
+  @override
+  String get versionMode => 'mode';
+
+  @override
+  String get versionTarget => 'target';
+
+  @override
+  String get versionSteps => 'Steps';
+
+  @override
+  String get versionFinished => 'finished';
+
+  @override
+  String versionFrom(String version) {
+    return 'from $version';
+  }
+
+  @override
+  String get versionWindow => 'Maintenance window';
+
+  @override
+  String get versionWindowAnyTime => 'any time';
+
+  @override
+  String get versionWindowOpen => 'open now';
+
+  @override
+  String get versionWindowNext => 'next opening';
+
+  @override
+  String get versionRequest => 'Last request';
+
+  @override
+  String versionRequestApply(String version) {
+    return 'install $version';
+  }
+
+  @override
+  String get versionRequestCheck => 'check';
+
+  @override
+  String versionRequestedBy(String email) {
+    return 'by $email';
+  }
+
+  @override
+  String get versionCheckNow => 'Check now';
+
+  @override
+  String get versionUpdateNow => 'Update now';
+
+  @override
+  String versionConfirmTitle(String version) {
+    return 'Install $version?';
+  }
+
+  @override
+  String get versionConfirmBody =>
+      'The updater backs up, pulls the images and recreates the containers. The API is unavailable for a moment while it does.';
+
+  @override
+  String get versionIgnoreWindow => 'Install outside the maintenance window';
+
+  @override
+  String get versionConfirm => 'Install';
+
+  @override
+  String get versionQueued =>
+      'Request queued; follow it in the updater\'s state.';
+
+  @override
+  String get updateForbidden => 'Your role may not ask for updates.';
+
+  @override
+  String get updateStateOff => 'Off';
+
+  @override
+  String get updateStateError => 'Error';
+
+  @override
+  String get updateStateUpToDate => 'Up to date';
+
+  @override
+  String get updateStateAvailable => 'Update available';
+
+  @override
+  String get updateStateWaitingForWindow => 'Waiting for the window';
+
+  @override
+  String get updateStateUpdating => 'Updating';
+
+  @override
+  String get updateStateSucceeded => 'Succeeded';
+
+  @override
+  String get updateStateFailed => 'Failed';
+
+  @override
+  String get updateStateRolledBack => 'Rolled back';
+
+  @override
+  String get updateStateRollbackFailed => 'Rollback failed';
+
+  @override
+  String get updateStepSelfUpdate => 'Updater self-update';
+
+  @override
+  String get updateStepBackup => 'Backup';
+
+  @override
+  String get updateStepPull => 'Pull images';
+
+  @override
+  String get updateStepComposeBundle => 'Compose files';
+
+  @override
+  String get updateStepMigrate => 'Migration';
+
+  @override
+  String get updateStepRecreate => 'Recreate';
+
+  @override
+  String get updateStepRollout => 'Rollout';
+
+  @override
+  String get updateStepHealth => 'Health check';
+
+  @override
+  String get updateStepRollback => 'Rollback';
+
+  @override
+  String get updateStepCleanup => 'Cleanup';
+
+  @override
+  String get updateStepContractMigrate => 'Contract migration';
+
+  @override
+  String get versionRequestPending => 'Queued';
+
+  @override
+  String get versionRequestExpired => 'Expired';
 }

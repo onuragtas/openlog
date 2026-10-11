@@ -7554,6 +7554,480 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{share}% of the {count} sessions that did the first step reached the last one within {window}.'**
   String rumFunnelCompletion(int share, String count, String window);
+
+  /// No description provided for @updateMsgModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'updates are disabled (OPENLOG_UPDATER_MODE=off)'**
+  String get updateMsgModeOff;
+
+  /// No description provided for @updateMsgUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'%version% is available on channel %channel%'**
+  String get updateMsgUpdateAvailable;
+
+  /// No description provided for @updateMsgUpdateAvailableNotify.
+  ///
+  /// In en, this message translates to:
+  /// **'%version% is available on channel %channel% (notify mode: nothing is installed)'**
+  String get updateMsgUpdateAvailableNotify;
+
+  /// No description provided for @updateMsgWaitingForWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'waiting for the maintenance window to install %version%'**
+  String get updateMsgWaitingForWindow;
+
+  /// No description provided for @updateMsgUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'updated %from% → %to%'**
+  String get updateMsgUpdated;
+
+  /// No description provided for @updateMsgRolledBack.
+  ///
+  /// In en, this message translates to:
+  /// **'update to %to% failed and was rolled back to %from%'**
+  String get updateMsgRolledBack;
+
+  /// No description provided for @updateMsgRollbackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'update to %to% failed and the rollback to %from% failed: manual action required'**
+  String get updateMsgRollbackFailed;
+
+  /// No description provided for @updateMsgFailedBeforeChange.
+  ///
+  /// In en, this message translates to:
+  /// **'update to %to% failed before services were changed'**
+  String get updateMsgFailedBeforeChange;
+
+  /// No description provided for @updateMsgUpToDateNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'%version% is the newest release on channel %channel%'**
+  String get updateMsgUpToDateNewest;
+
+  /// No description provided for @updateMsgUpToDateNoEligible.
+  ///
+  /// In en, this message translates to:
+  /// **'no eligible release newer than %version%: %details%'**
+  String get updateMsgUpToDateNoEligible;
+
+  /// No description provided for @updateMsgRequestModeOff.
+  ///
+  /// In en, this message translates to:
+  /// **'updates are disabled (OPENLOG_UPDATER_MODE=off)'**
+  String get updateMsgRequestModeOff;
+
+  /// No description provided for @updateMsgRequestNotInstallable.
+  ///
+  /// In en, this message translates to:
+  /// **'%version% is not installable: %reason%'**
+  String get updateMsgRequestNotInstallable;
+
+  /// No description provided for @updateMsgRequestTargetChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'the release to install is now %version%, not the requested %requested%: check again and confirm the new version'**
+  String get updateMsgRequestTargetChanged;
+
+  /// No description provided for @updateMsgRequestOutsideWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'outside the maintenance window: confirm installing outside the window to update now'**
+  String get updateMsgRequestOutsideWindow;
+
+  /// No description provided for @updateMsgRequestInterrupted.
+  ///
+  /// In en, this message translates to:
+  /// **'interrupted: openlog-updater restarted while handling the request'**
+  String get updateMsgRequestInterrupted;
+
+  /// No description provided for @updateMsgRequestExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'not picked up by openlog-updater within 15m (is an updater with request support running?)'**
+  String get updateMsgRequestExpired;
+
+  /// No description provided for @updateMsgComposeOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'the compose files (%files_version%) are older than the running version %running_version%: settings and volumes added since then do not reach the containers'**
+  String get updateMsgComposeOutdated;
+
+  /// No description provided for @updateMsgComposeOutdatedBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'the compose files (%files_version%) are older than the running version %running_version%: re-run install-server.sh'**
+  String get updateMsgComposeOutdatedBundle;
+
+  /// No description provided for @updateMsgComposeChangesPending.
+  ///
+  /// In en, this message translates to:
+  /// **'the compose files of %version% change %services% in ways the updater does not apply (volumes, ports, mounted files): re-run install-server.sh or docker compose up -d'**
+  String get updateMsgComposeChangesPending;
+
+  /// No description provided for @updateMsgUpdaterOutdated.
+  ///
+  /// In en, this message translates to:
+  /// **'openlog-updater %updater_version% is older than the running version %running_version%: its improvements do not apply until its container is recreated'**
+  String get updateMsgUpdaterOutdated;
+
+  /// No description provided for @updateMsgUpdaterOutdatedBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'openlog-updater %updater_version% is older than the running version %running_version%: re-run install-server.sh to recreate it'**
+  String get updateMsgUpdaterOutdatedBundle;
+
+  /// No description provided for @updateMsgUpdaterOutdatedKubernetes.
+  ///
+  /// In en, this message translates to:
+  /// **'the openlog-updater CronJob %updater_version% is older than the running version %running_version%: upgrade the Helm release with image.tag=%running_version%'**
+  String get updateMsgUpdaterOutdatedKubernetes;
+
+  /// No description provided for @updateMsgUpdaterSelfUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'openlog-updater could not replace itself with %version% and keeps running its previous version: %reason%'**
+  String get updateMsgUpdaterSelfUpdateFailed;
+
+  /// No description provided for @settingsTabVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get settingsTabVersion;
+
+  /// No description provided for @versionRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get versionRunning;
+
+  /// No description provided for @versionBuilt.
+  ///
+  /// In en, this message translates to:
+  /// **'built'**
+  String get versionBuilt;
+
+  /// No description provided for @versionCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Update check'**
+  String get versionCheck;
+
+  /// No description provided for @versionCheckEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'enabled'**
+  String get versionCheckEnabled;
+
+  /// No description provided for @versionCheckDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'disabled'**
+  String get versionCheckDisabled;
+
+  /// No description provided for @versionCheckFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'failed'**
+  String get versionCheckFailed;
+
+  /// No description provided for @versionLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest release'**
+  String get versionLatest;
+
+  /// No description provided for @versionUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get versionUpToDate;
+
+  /// No description provided for @versionChecked.
+  ///
+  /// In en, this message translates to:
+  /// **'checked'**
+  String get versionChecked;
+
+  /// No description provided for @versionUpdater.
+  ///
+  /// In en, this message translates to:
+  /// **'Updater'**
+  String get versionUpdater;
+
+  /// No description provided for @versionNoUpdater.
+  ///
+  /// In en, this message translates to:
+  /// **'No updater reports to this installation.'**
+  String get versionNoUpdater;
+
+  /// No description provided for @versionMode.
+  ///
+  /// In en, this message translates to:
+  /// **'mode'**
+  String get versionMode;
+
+  /// No description provided for @versionTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'target'**
+  String get versionTarget;
+
+  /// No description provided for @versionSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'Steps'**
+  String get versionSteps;
+
+  /// No description provided for @versionFinished.
+  ///
+  /// In en, this message translates to:
+  /// **'finished'**
+  String get versionFinished;
+
+  /// No description provided for @versionFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'from {version}'**
+  String versionFrom(String version);
+
+  /// No description provided for @versionWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance window'**
+  String get versionWindow;
+
+  /// No description provided for @versionWindowAnyTime.
+  ///
+  /// In en, this message translates to:
+  /// **'any time'**
+  String get versionWindowAnyTime;
+
+  /// No description provided for @versionWindowOpen.
+  ///
+  /// In en, this message translates to:
+  /// **'open now'**
+  String get versionWindowOpen;
+
+  /// No description provided for @versionWindowNext.
+  ///
+  /// In en, this message translates to:
+  /// **'next opening'**
+  String get versionWindowNext;
+
+  /// No description provided for @versionRequest.
+  ///
+  /// In en, this message translates to:
+  /// **'Last request'**
+  String get versionRequest;
+
+  /// No description provided for @versionRequestApply.
+  ///
+  /// In en, this message translates to:
+  /// **'install {version}'**
+  String versionRequestApply(String version);
+
+  /// No description provided for @versionRequestCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'check'**
+  String get versionRequestCheck;
+
+  /// No description provided for @versionRequestedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'by {email}'**
+  String versionRequestedBy(String email);
+
+  /// No description provided for @versionCheckNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Check now'**
+  String get versionCheckNow;
+
+  /// No description provided for @versionUpdateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Update now'**
+  String get versionUpdateNow;
+
+  /// No description provided for @versionConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install {version}?'**
+  String versionConfirmTitle(String version);
+
+  /// No description provided for @versionConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'The updater backs up, pulls the images and recreates the containers. The API is unavailable for a moment while it does.'**
+  String get versionConfirmBody;
+
+  /// No description provided for @versionIgnoreWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Install outside the maintenance window'**
+  String get versionIgnoreWindow;
+
+  /// No description provided for @versionConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get versionConfirm;
+
+  /// No description provided for @versionQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Request queued; follow it in the updater\'s state.'**
+  String get versionQueued;
+
+  /// No description provided for @updateForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role may not ask for updates.'**
+  String get updateForbidden;
+
+  /// No description provided for @updateStateOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get updateStateOff;
+
+  /// No description provided for @updateStateError.
+  ///
+  /// In en, this message translates to:
+  /// **'Error'**
+  String get updateStateError;
+
+  /// No description provided for @updateStateUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get updateStateUpToDate;
+
+  /// No description provided for @updateStateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updateStateAvailable;
+
+  /// No description provided for @updateStateWaitingForWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the window'**
+  String get updateStateWaitingForWindow;
+
+  /// No description provided for @updateStateUpdating.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating'**
+  String get updateStateUpdating;
+
+  /// No description provided for @updateStateSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeeded'**
+  String get updateStateSucceeded;
+
+  /// No description provided for @updateStateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get updateStateFailed;
+
+  /// No description provided for @updateStateRolledBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Rolled back'**
+  String get updateStateRolledBack;
+
+  /// No description provided for @updateStateRollbackFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollback failed'**
+  String get updateStateRollbackFailed;
+
+  /// No description provided for @updateStepSelfUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Updater self-update'**
+  String get updateStepSelfUpdate;
+
+  /// No description provided for @updateStepBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup'**
+  String get updateStepBackup;
+
+  /// No description provided for @updateStepPull.
+  ///
+  /// In en, this message translates to:
+  /// **'Pull images'**
+  String get updateStepPull;
+
+  /// No description provided for @updateStepComposeBundle.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose files'**
+  String get updateStepComposeBundle;
+
+  /// No description provided for @updateStepMigrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration'**
+  String get updateStepMigrate;
+
+  /// No description provided for @updateStepRecreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Recreate'**
+  String get updateStepRecreate;
+
+  /// No description provided for @updateStepRollout.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollout'**
+  String get updateStepRollout;
+
+  /// No description provided for @updateStepHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Health check'**
+  String get updateStepHealth;
+
+  /// No description provided for @updateStepRollback.
+  ///
+  /// In en, this message translates to:
+  /// **'Rollback'**
+  String get updateStepRollback;
+
+  /// No description provided for @updateStepCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleanup'**
+  String get updateStepCleanup;
+
+  /// No description provided for @updateStepContractMigrate.
+  ///
+  /// In en, this message translates to:
+  /// **'Contract migration'**
+  String get updateStepContractMigrate;
+
+  /// No description provided for @versionRequestPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get versionRequestPending;
+
+  /// No description provided for @versionRequestExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get versionRequestExpired;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

@@ -2677,5 +2677,112 @@
         "type": "String"
       }
     }
-  }
+  },
+  "updateMsgModeOff": "güncellemeler kapalı (OPENLOG_UPDATER_MODE=off)",
+  "updateMsgUpdateAvailable": "%channel% kanalında %version% sürümü var",
+  "updateMsgUpdateAvailableNotify": "%channel% kanalında %version% sürümü var (notify modu: hiçbir şey kurulmaz)",
+  "updateMsgWaitingForWindow": "%version% sürümünü kurmak için bakım penceresi bekleniyor",
+  "updateMsgUpdated": "%from% → %to% güncellendi",
+  "updateMsgRolledBack": "%to% güncellemesi başarısız oldu, %from% sürümüne geri dönüldü",
+  "updateMsgRollbackFailed": "%to% güncellemesi başarısız oldu, %from% sürümüne geri dönüş de başarısız: elle müdahale gerekiyor",
+  "updateMsgFailedBeforeChange": "%to% güncellemesi servislere dokunulmadan önce başarısız oldu",
+  "updateMsgUpToDateNewest": "%channel% kanalındaki en yeni sürüm zaten %version%",
+  "updateMsgUpToDateNoEligible": "%version% sürümünden yeni, kurulabilir bir sürüm yok: %details%",
+  "updateMsgRequestModeOff": "güncellemeler kapalı (OPENLOG_UPDATER_MODE=off)",
+  "updateMsgRequestNotInstallable": "%version% kurulamıyor: %reason%",
+  "updateMsgRequestTargetChanged": "kurulacak sürüm artık %version%, istenen %requested% değil: yeniden kontrol edip yeni sürümü onaylayın",
+  "updateMsgRequestOutsideWindow": "bakım penceresinin dışındayız: şimdi güncellemek için pencere dışında kurmayı onaylayın",
+  "updateMsgRequestInterrupted": "yarıda kaldı: openlog-updater istek işlenirken yeniden başladı",
+  "updateMsgRequestExpired": "openlog-updater 15 dakika içinde almadı (istek destekleyen bir updater çalışıyor mu?)",
+  "updateMsgComposeOutdated": "compose dosyaları (%files_version%) çalışan sürümden (%running_version%) eski: o günden beri eklenen ayarlar ve volume'lar container'lara ulaşmıyor",
+  "updateMsgComposeOutdatedBundle": "compose dosyaları (%files_version%) çalışan sürümden (%running_version%) eski: install-server.sh betiğini yeniden çalıştırın",
+  "updateMsgComposeChangesPending": "%version% compose dosyaları %services% için güncelleyicinin uygulamadığı değişiklikler içeriyor (volume, port, bağlanan dosyalar): install-server.sh betiğini yeniden çalıştırın ya da docker compose up -d kullanın",
+  "updateMsgUpdaterOutdated": "openlog-updater %updater_version% çalışan sürümden (%running_version%) eski: container'ı yeniden oluşturulmadan iyileştirmeleri geçerli olmaz",
+  "updateMsgUpdaterOutdatedBundle": "openlog-updater %updater_version% çalışan sürümden (%running_version%) eski: yeniden oluşturmak için install-server.sh betiğini çalıştırın",
+  "updateMsgUpdaterOutdatedKubernetes": "openlog-updater CronJob'ı (%updater_version%) çalışan sürümden (%running_version%) eski: Helm sürümünü image.tag=%running_version% ile yükseltin",
+  "updateMsgUpdaterSelfUpdateFailed": "openlog-updater kendini %version% ile değiştiremedi ve önceki sürümüyle çalışmaya devam ediyor: %reason%",
+  "settingsTabVersion": "Sürüm",
+  "versionRunning": "Çalışan",
+  "versionBuilt": "derleme",
+  "versionCheck": "Güncelleme kontrolü",
+  "versionCheckEnabled": "açık",
+  "versionCheckDisabled": "kapalı",
+  "versionCheckFailed": "başarısız",
+  "versionLatest": "Son sürüm",
+  "versionUpToDate": "Güncel",
+  "versionChecked": "kontrol",
+  "versionUpdater": "Güncelleyici",
+  "versionNoUpdater": "Bu kuruluma bildiren bir güncelleyici yok.",
+  "versionMode": "mod",
+  "versionTarget": "hedef",
+  "versionSteps": "Adımlar",
+  "versionFinished": "bitti",
+  "versionFrom": "{version} sürümünden",
+  "versionWindow": "Bakım penceresi",
+  "versionWindowAnyTime": "her zaman",
+  "versionWindowOpen": "şu an açık",
+  "versionWindowNext": "sıradaki açılış",
+  "versionRequest": "Son istek",
+  "versionRequestApply": "{version} kur",
+  "versionRequestCheck": "kontrol",
+  "versionRequestedBy": "{email} istedi",
+  "versionCheckNow": "Şimdi kontrol et",
+  "versionUpdateNow": "Şimdi güncelle",
+  "versionConfirmTitle": "{version} kurulsun mu?",
+  "versionConfirmBody": "Güncelleyici yedek alır, imajları çeker ve container'ları yeniden oluşturur. Bu sırada API kısa süre erişilemez.",
+  "versionIgnoreWindow": "Bakım penceresinin dışında kur",
+  "versionConfirm": "Kur",
+  "versionQueued": "İstek sıraya alındı; güncelleyicinin durumundan izleyin.",
+  "updateForbidden": "Rolünüz güncelleme istemeye izin vermiyor.",
+  "@versionFrom": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionRequestApply": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionRequestedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "@versionConfirmTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateStateOff": "Kapalı",
+  "updateStateError": "Hata",
+  "updateStateUpToDate": "Güncel",
+  "updateStateAvailable": "Güncelleme var",
+  "updateStateWaitingForWindow": "Bakım penceresi bekleniyor",
+  "updateStateUpdating": "Güncelleniyor",
+  "updateStateSucceeded": "Başarılı",
+  "updateStateFailed": "Başarısız",
+  "updateStateRolledBack": "Geri dönüldü",
+  "updateStateRollbackFailed": "Geri dönüş başarısız",
+  "updateStepSelfUpdate": "Güncelleyicinin kendini güncellemesi",
+  "updateStepBackup": "Yedekleme",
+  "updateStepPull": "İmaj indirme",
+  "updateStepComposeBundle": "Compose dosyaları",
+  "updateStepMigrate": "Migration",
+  "updateStepRecreate": "Yeniden oluşturma",
+  "updateStepRollout": "Dağıtım",
+  "updateStepHealth": "Sağlık kontrolü",
+  "updateStepRollback": "Geri dönüş",
+  "updateStepCleanup": "Temizlik",
+  "updateStepContractMigrate": "Contract migration",
+  "versionRequestPending": "Sırada",
+  "versionRequestExpired": "Süresi doldu"
 }

@@ -81,6 +81,8 @@ const schemaTargets = <String>[
   'MetricListResponse', // the metrics explorer's list
   'MetricDetail', // one metric: what it is and how it can be aggregated
   'MetricQueryResponse', // and the series to draw
+  'VersionInfo', // what is running, what is available, and what the updater is doing
+  'UpdateRequest', // a queued "check now" / "update now"
   'RumOverview', // what the browser saw: Core Web Vitals and page views
   'FleetSummary', // how far behind the agents are
   'Onboarding', // the endpoints and versions an SDK has to be pointed at

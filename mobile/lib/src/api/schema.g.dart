@@ -959,6 +959,85 @@ enum MetricAggregation {
   }
 }
 
+/// VersionInfoUpdateCheck of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum VersionInfoUpdateCheck {
+  enabled('enabled'),
+  disabled('disabled'),
+  failed('failed'),
+  unknown('');
+
+  const VersionInfoUpdateCheck(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static VersionInfoUpdateCheck fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdateRequestAction of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdateRequestAction {
+  check('check'),
+  apply('apply'),
+  unknown('');
+
+  const UpdateRequestAction(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdateRequestAction fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdateRequestState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdateRequestState {
+  pending('pending'),
+  running('running'),
+  done('done'),
+  failed('failed'),
+  expired('expired'),
+  unknown('');
+
+  const UpdateRequestState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdateRequestState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// OnboardingReleaseChannel of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2338,6 +2417,170 @@ enum SpanStatusCode {
   final String wire;
 
   static SpanStatusCode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusEngine of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusEngine {
+  compose('compose'),
+  kubernetes('kubernetes'),
+  unknown('');
+
+  const UpdaterStatusEngine(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusEngine fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusMode {
+  off('off'),
+  notify('notify'),
+  auto('auto'),
+  unknown('');
+
+  const UpdaterStatusMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusState {
+  off('off'),
+  error('error'),
+  upToDate('up_to_date'),
+  available('available'),
+  waitingForMaintenanceWindow('waiting_for_maintenance_window'),
+  updating('updating'),
+  succeeded('succeeded'),
+  failed('failed'),
+  rolledBack('rolled_back'),
+  rollbackFailed('rollback_failed'),
+  unknown('');
+
+  const UpdaterStatusState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusStepsItemStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusStepsItemStatus {
+  running('running'),
+  ok('ok'),
+  failed('failed'),
+  unknown('');
+
+  const UpdaterStatusStepsItemStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusStepsItemStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusSelfUpdateState of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusSelfUpdateState {
+  running('running'),
+  succeeded('succeeded'),
+  failed('failed'),
+  unknown('');
+
+  const UpdaterStatusSelfUpdateState(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusSelfUpdateState fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// UpdaterStatusComposeChangesServicesItemReason of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum UpdaterStatusComposeChangesServicesItemReason {
+  definition('definition'),
+  files('files'),
+  unknown('');
+
+  const UpdaterStatusComposeChangesServicesItemReason(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static UpdaterStatusComposeChangesServicesItemReason fromJson(
+    Object? v,
+    String path,
+  ) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -7603,6 +7846,143 @@ class MetricQueryResponseMetric {
   final String unit;
   final MetricTemporality temporality;
   final bool monotonic;
+}
+
+/// `VersionInfo` of the openlog API contract.
+class VersionInfo {
+  const VersionInfo({
+    this.updateRequests,
+    required this.version,
+    required this.commit,
+    required this.date,
+    this.latestAvailable,
+    required this.updateCheck,
+    this.updater,
+  });
+
+  factory VersionInfo.fromJson(Object? json, [String path = 'VersionInfo']) {
+    final m = _obj(json, path);
+    return VersionInfo(
+      updateRequests: _opt(
+        m,
+        'update_requests',
+        path,
+        (v, p) => UpdateRequests.fromJson(v, p),
+      ),
+      version: _req(m, 'version', path, _str),
+      commit: _req(m, 'commit', path, _str),
+      date: _req(m, 'date', path, _str),
+      latestAvailable: _opt(
+        m,
+        'latest_available',
+        path,
+        (v, p) => AvailableRelease.fromJson(v, p),
+      ),
+      updateCheck: _req(
+        m,
+        'update_check',
+        path,
+        VersionInfoUpdateCheck.fromJson,
+      ),
+      updater: _opt(m, 'updater', path, (v, p) => UpdaterStatus.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    if (updateRequests != null) 'update_requests': updateRequests!.toJson(),
+    'version': version,
+    'commit': commit,
+    'date': date,
+    if (latestAvailable != null) 'latest_available': latestAvailable!.toJson(),
+    'update_check': updateCheck.wire,
+    if (updater != null) 'updater': updater!.toJson(),
+  };
+
+  final UpdateRequests? updateRequests;
+  final String version;
+  final String commit;
+  final String date;
+  final AvailableRelease? latestAvailable;
+  final VersionInfoUpdateCheck updateCheck;
+  final UpdaterStatus? updater;
+}
+
+/// `UpdateRequest` of the openlog API contract.
+class UpdateRequest {
+  const UpdateRequest({
+    required this.id,
+    required this.action,
+    required this.targetVersion,
+    required this.ignoreMaintenanceWindow,
+    required this.state,
+    required this.message,
+    this.messageCode,
+    this.messageParams,
+    this.requestedByEmail,
+    required this.requestedAt,
+    this.pickedAt,
+    this.finishedAt,
+  });
+
+  factory UpdateRequest.fromJson(
+    Object? json, [
+    String path = 'UpdateRequest',
+  ]) {
+    final m = _obj(json, path);
+    return UpdateRequest(
+      id: _req(m, 'id', path, _str),
+      action: _req(m, 'action', path, UpdateRequestAction.fromJson),
+      targetVersion: _req(m, 'target_version', path, _str),
+      ignoreMaintenanceWindow: _req(
+        m,
+        'ignore_maintenance_window',
+        path,
+        _bool,
+      ),
+      state: _req(m, 'state', path, UpdateRequestState.fromJson),
+      message: _req(m, 'message', path, _str),
+      messageCode: _opt(m, 'message_code', path, _str),
+      messageParams: _opt(
+        m,
+        'message_params',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      requestedByEmail: _opt(m, 'requested_by_email', path, _str),
+      requestedAt: _req(m, 'requested_at', path, _time),
+      pickedAt: _opt(m, 'picked_at', path, _time),
+      finishedAt: _opt(m, 'finished_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'action': action.wire,
+    'target_version': targetVersion,
+    'ignore_maintenance_window': ignoreMaintenanceWindow,
+    'state': state.wire,
+    'message': message,
+    'message_code': ?messageCode,
+    'message_params': ?messageParams,
+    'requested_by_email': ?requestedByEmail,
+    'requested_at': requestedAt.toUtc().toIso8601String(),
+    if (pickedAt != null) 'picked_at': pickedAt!.toUtc().toIso8601String(),
+    if (finishedAt != null)
+      'finished_at': finishedAt!.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final UpdateRequestAction action;
+  final String targetVersion;
+  final bool ignoreMaintenanceWindow;
+  final UpdateRequestState state;
+  final String message;
+  final String? messageCode;
+  final Map<String, String>? messageParams;
+  final String? requestedByEmail;
+  final DateTime requestedAt;
+  final DateTime? pickedAt;
+  final DateTime? finishedAt;
 }
 
 /// `RumOverview` of the openlog API contract.
@@ -13381,6 +13761,513 @@ class MetricSeries {
 
   final Map<String, String> attributes;
   final List<List<double>> points;
+}
+
+/// `UpdateRequests` of the openlog API contract.
+class UpdateRequests {
+  const UpdateRequests({
+    required this.canRequest,
+    required this.updaterListening,
+    this.updaterPolledAt,
+    this.latest,
+  });
+
+  factory UpdateRequests.fromJson(
+    Object? json, [
+    String path = 'UpdateRequests',
+  ]) {
+    final m = _obj(json, path);
+    return UpdateRequests(
+      canRequest: _req(m, 'can_request', path, _bool),
+      updaterListening: _req(m, 'updater_listening', path, _bool),
+      updaterPolledAt: _opt(m, 'updater_polled_at', path, _time),
+      latest: _opt(m, 'latest', path, (v, p) => UpdateRequest.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'can_request': canRequest,
+    'updater_listening': updaterListening,
+    if (updaterPolledAt != null)
+      'updater_polled_at': updaterPolledAt!.toUtc().toIso8601String(),
+    if (latest != null) 'latest': latest!.toJson(),
+  };
+
+  final bool canRequest;
+  final bool updaterListening;
+  final DateTime? updaterPolledAt;
+  final UpdateRequest? latest;
+}
+
+/// `AvailableRelease` of the openlog API contract.
+class AvailableRelease {
+  const AvailableRelease({
+    required this.version,
+    required this.notesUrl,
+    required this.checkedAt,
+  });
+
+  factory AvailableRelease.fromJson(
+    Object? json, [
+    String path = 'AvailableRelease',
+  ]) {
+    final m = _obj(json, path);
+    return AvailableRelease(
+      version: _req(m, 'version', path, _str),
+      notesUrl: _req(m, 'notes_url', path, _str),
+      checkedAt: _req(m, 'checked_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'notes_url': notesUrl,
+    'checked_at': checkedAt.toUtc().toIso8601String(),
+  };
+
+  final String version;
+  final String notesUrl;
+  final DateTime checkedAt;
+}
+
+/// `UpdaterStatus` of the openlog API contract.
+class UpdaterStatus {
+  const UpdaterStatus({
+    required this.engine,
+    required this.mode,
+    required this.state,
+    this.message,
+    this.messageCode,
+    this.messageParams,
+    this.error,
+    this.currentVersion,
+    this.targetVersion,
+    this.previousVersion,
+    this.notesUrl,
+    required this.checkedAt,
+    this.startedAt,
+    this.finishedAt,
+    this.backupFile,
+    this.steps,
+    this.failedVersions,
+    this.history,
+    this.notices,
+    this.updaterVersion,
+    this.maintenanceWindow,
+    this.selfUpdate,
+    this.composeChanges,
+  });
+
+  factory UpdaterStatus.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatus',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatus(
+      engine: _req(m, 'engine', path, UpdaterStatusEngine.fromJson),
+      mode: _req(m, 'mode', path, UpdaterStatusMode.fromJson),
+      state: _req(m, 'state', path, UpdaterStatusState.fromJson),
+      message: _opt(m, 'message', path, _str),
+      messageCode: _opt(m, 'message_code', path, _str),
+      messageParams: _opt(
+        m,
+        'message_params',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+      error: _opt(m, 'error', path, _str),
+      currentVersion: _opt(m, 'current_version', path, _str),
+      targetVersion: _opt(m, 'target_version', path, _str),
+      previousVersion: _opt(m, 'previous_version', path, _str),
+      notesUrl: _opt(m, 'notes_url', path, _str),
+      checkedAt: _req(m, 'checked_at', path, _time),
+      startedAt: _opt(m, 'started_at', path, _time),
+      finishedAt: _opt(m, 'finished_at', path, _time),
+      backupFile: _opt(m, 'backup_file', path, _str),
+      steps: _opt(
+        m,
+        'steps',
+        path,
+        (v, p) => _list<UpdaterStatusStepsItem>(
+          v,
+          p,
+          (v, p) => UpdaterStatusStepsItem.fromJson(v, p),
+        ),
+      ),
+      failedVersions: _opt(
+        m,
+        'failed_versions',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      history: _opt(
+        m,
+        'history',
+        path,
+        (v, p) => _list<UpdaterStatusHistoryItem>(
+          v,
+          p,
+          (v, p) => UpdaterStatusHistoryItem.fromJson(v, p),
+        ),
+      ),
+      notices: _opt(
+        m,
+        'notices',
+        path,
+        (v, p) => _list<UpdaterStatusNoticesItem>(
+          v,
+          p,
+          (v, p) => UpdaterStatusNoticesItem.fromJson(v, p),
+        ),
+      ),
+      updaterVersion: _opt(m, 'updater_version', path, _str),
+      maintenanceWindow: _opt(
+        m,
+        'maintenance_window',
+        path,
+        (v, p) => UpdaterStatusMaintenanceWindow.fromJson(v, p),
+      ),
+      selfUpdate: _opt(
+        m,
+        'self_update',
+        path,
+        (v, p) => UpdaterStatusSelfUpdate.fromJson(v, p),
+      ),
+      composeChanges: _opt(
+        m,
+        'compose_changes',
+        path,
+        (v, p) => UpdaterStatusComposeChanges.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'engine': engine.wire,
+    'mode': mode.wire,
+    'state': state.wire,
+    'message': ?message,
+    'message_code': ?messageCode,
+    'message_params': ?messageParams,
+    'error': ?error,
+    'current_version': ?currentVersion,
+    'target_version': ?targetVersion,
+    'previous_version': ?previousVersion,
+    'notes_url': ?notesUrl,
+    'checked_at': checkedAt.toUtc().toIso8601String(),
+    if (startedAt != null) 'started_at': startedAt!.toUtc().toIso8601String(),
+    if (finishedAt != null)
+      'finished_at': finishedAt!.toUtc().toIso8601String(),
+    'backup_file': ?backupFile,
+    if (steps != null) 'steps': [for (final e in steps!) e.toJson()],
+    'failed_versions': ?failedVersions,
+    if (history != null) 'history': [for (final e in history!) e.toJson()],
+    if (notices != null) 'notices': [for (final e in notices!) e.toJson()],
+    'updater_version': ?updaterVersion,
+    if (maintenanceWindow != null)
+      'maintenance_window': maintenanceWindow!.toJson(),
+    if (selfUpdate != null) 'self_update': selfUpdate!.toJson(),
+    if (composeChanges != null) 'compose_changes': composeChanges!.toJson(),
+  };
+
+  final UpdaterStatusEngine engine;
+  final UpdaterStatusMode mode;
+  final UpdaterStatusState state;
+  final String? message;
+  final String? messageCode;
+  final Map<String, String>? messageParams;
+  final String? error;
+  final String? currentVersion;
+  final String? targetVersion;
+  final String? previousVersion;
+  final String? notesUrl;
+  final DateTime checkedAt;
+  final DateTime? startedAt;
+  final DateTime? finishedAt;
+  final String? backupFile;
+  final List<UpdaterStatusStepsItem>? steps;
+  final List<String>? failedVersions;
+  final List<UpdaterStatusHistoryItem>? history;
+  final List<UpdaterStatusNoticesItem>? notices;
+  final String? updaterVersion;
+  final UpdaterStatusMaintenanceWindow? maintenanceWindow;
+  final UpdaterStatusSelfUpdate? selfUpdate;
+  final UpdaterStatusComposeChanges? composeChanges;
+}
+
+/// `UpdaterStatusStepsItem` of the openlog API contract.
+class UpdaterStatusStepsItem {
+  const UpdaterStatusStepsItem({
+    required this.name,
+    required this.status,
+    this.detail,
+    required this.startedAt,
+    this.finishedAt,
+  });
+
+  factory UpdaterStatusStepsItem.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusStepsItem',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusStepsItem(
+      name: _req(m, 'name', path, _str),
+      status: _req(m, 'status', path, UpdaterStatusStepsItemStatus.fromJson),
+      detail: _opt(m, 'detail', path, _str),
+      startedAt: _req(m, 'started_at', path, _time),
+      finishedAt: _opt(m, 'finished_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'status': status.wire,
+    'detail': ?detail,
+    'started_at': startedAt.toUtc().toIso8601String(),
+    if (finishedAt != null)
+      'finished_at': finishedAt!.toUtc().toIso8601String(),
+  };
+
+  final String name;
+  final UpdaterStatusStepsItemStatus status;
+  final String? detail;
+  final DateTime startedAt;
+  final DateTime? finishedAt;
+}
+
+/// `UpdaterStatusHistoryItem` of the openlog API contract.
+class UpdaterStatusHistoryItem {
+  const UpdaterStatusHistoryItem({
+    required this.from,
+    required this.to,
+    required this.result,
+    this.error,
+    required this.at,
+  });
+
+  factory UpdaterStatusHistoryItem.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusHistoryItem',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusHistoryItem(
+      from: _req(m, 'from', path, _str),
+      to: _req(m, 'to', path, _str),
+      result: _req(m, 'result', path, _str),
+      error: _opt(m, 'error', path, _str),
+      at: _req(m, 'at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from,
+    'to': to,
+    'result': result,
+    'error': ?error,
+    'at': at.toUtc().toIso8601String(),
+  };
+
+  final String from;
+  final String to;
+  final String result;
+  final String? error;
+  final DateTime at;
+}
+
+/// `UpdaterStatusNoticesItem` of the openlog API contract.
+class UpdaterStatusNoticesItem {
+  const UpdaterStatusNoticesItem({
+    required this.code,
+    required this.message,
+    this.params,
+  });
+
+  factory UpdaterStatusNoticesItem.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusNoticesItem',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusNoticesItem(
+      code: _req(m, 'code', path, _str),
+      message: _req(m, 'message', path, _str),
+      params: _opt(m, 'params', path, (v, p) => _map<String>(v, p, _str)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'code': code,
+    'message': message,
+    'params': ?params,
+  };
+
+  final String code;
+  final String message;
+  final Map<String, String>? params;
+}
+
+/// OPENLOG_UPDATER_MAINTENANCE_WINDOW of the updater (UTC; D-121). Absent in documents of updaters before this field. The api re-evaluates open_now and next_open_at when it answers. On Kubernetes the CronJob schedule of the chart decides when the updater runs; the window only limits which runs may install.
+class UpdaterStatusMaintenanceWindow {
+  const UpdaterStatusMaintenanceWindow({
+    required this.spec,
+    required this.windows,
+    required this.openNow,
+    this.nextOpenAt,
+  });
+
+  factory UpdaterStatusMaintenanceWindow.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusMaintenanceWindow',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusMaintenanceWindow(
+      spec: _req(m, 'spec', path, _str),
+      windows: _req(
+        m,
+        'windows',
+        path,
+        (v, p) => _list<MaintenanceWindow>(
+          v,
+          p,
+          (v, p) => MaintenanceWindow.fromJson(v, p),
+        ),
+      ),
+      openNow: _req(m, 'open_now', path, _bool),
+      nextOpenAt: _opt(m, 'next_open_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'spec': spec,
+    'windows': [for (final e in windows) e.toJson()],
+    'open_now': openNow,
+    if (nextOpenAt != null)
+      'next_open_at': nextOpenAt!.toUtc().toIso8601String(),
+  };
+
+  final String spec;
+  final List<MaintenanceWindow> windows;
+  final bool openNow;
+  final DateTime? nextOpenAt;
+}
+
+/// Last attempt of the Compose updater to replace its own container with the installed release (D-120); one attempt per target version.
+class UpdaterStatusSelfUpdate {
+  const UpdaterStatusSelfUpdate({
+    required this.targetVersion,
+    required this.fromVersion,
+    required this.state,
+    this.error,
+    required this.startedAt,
+    this.finishedAt,
+  });
+
+  factory UpdaterStatusSelfUpdate.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusSelfUpdate',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusSelfUpdate(
+      targetVersion: _req(m, 'target_version', path, _str),
+      fromVersion: _req(m, 'from_version', path, _str),
+      state: _req(m, 'state', path, UpdaterStatusSelfUpdateState.fromJson),
+      error: _opt(m, 'error', path, _str),
+      startedAt: _req(m, 'started_at', path, _time),
+      finishedAt: _opt(m, 'finished_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'target_version': targetVersion,
+    'from_version': fromVersion,
+    'state': state.wire,
+    'error': ?error,
+    'started_at': startedAt.toUtc().toIso8601String(),
+    if (finishedAt != null)
+      'finished_at': finishedAt!.toUtc().toIso8601String(),
+  };
+
+  final String targetVersion;
+  final String fromVersion;
+  final UpdaterStatusSelfUpdateState state;
+  final String? error;
+  final DateTime startedAt;
+  final DateTime? finishedAt;
+}
+
+/// Compose changes of an installed bundle that wait for `docker compose up -d` or a restart (Compose).
+class UpdaterStatusComposeChanges {
+  const UpdaterStatusComposeChanges({
+    required this.version,
+    required this.installedAt,
+    required this.services,
+  });
+
+  factory UpdaterStatusComposeChanges.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusComposeChanges',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusComposeChanges(
+      version: _req(m, 'version', path, _str),
+      installedAt: _req(m, 'installed_at', path, _time),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<UpdaterStatusComposeChangesServicesItem>(
+          v,
+          p,
+          (v, p) => UpdaterStatusComposeChangesServicesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'version': version,
+    'installed_at': installedAt.toUtc().toIso8601String(),
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final String version;
+  final DateTime installedAt;
+  final List<UpdaterStatusComposeChangesServicesItem> services;
+}
+
+/// `UpdaterStatusComposeChangesServicesItem` of the openlog API contract.
+class UpdaterStatusComposeChangesServicesItem {
+  const UpdaterStatusComposeChangesServicesItem({
+    required this.service,
+    required this.reason,
+    this.configHash,
+  });
+
+  factory UpdaterStatusComposeChangesServicesItem.fromJson(
+    Object? json, [
+    String path = 'UpdaterStatusComposeChangesServicesItem',
+  ]) {
+    final m = _obj(json, path);
+    return UpdaterStatusComposeChangesServicesItem(
+      service: _req(m, 'service', path, _str),
+      reason: _req(
+        m,
+        'reason',
+        path,
+        UpdaterStatusComposeChangesServicesItemReason.fromJson,
+      ),
+      configHash: _opt(m, 'config_hash', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'service': service,
+    'reason': reason.wire,
+    'config_hash': ?configHash,
+  };
+
+  final String service;
+  final UpdaterStatusComposeChangesServicesItemReason reason;
+  final String? configHash;
 }
 
 /// One Core Web Vital over a range. Percentiles are null without measurements. The thresholds are the published Core Web Vitals boundaries and are constants, not settings (rum.md §2.1).

@@ -1200,6 +1200,35 @@ class OpenlogClient {
     ),
   );
 
+  /// What is running, what release is available, and what the updater is
+  /// doing. Any signed-in principal may read it.
+  Future<VersionInfo> version() async =>
+      VersionInfo.fromJson(await _send('GET', '/api/v1/version'));
+
+  /// Runs the release check now and queues a `check` for the updater. Admins
+  /// and owners only; 429 within 30s of the previous one.
+  Future<VersionInfo> checkForUpdate() async =>
+      VersionInfo.fromJson(await _send('POST', '/api/v1/version/check'));
+
+  /// Asks the updater to install a release now.
+  ///
+  /// [ignoreMaintenanceWindow] is what the operator confirms when the window
+  /// is closed: without it the updater waits for the next opening, which is
+  /// the right default and the wrong one at three in the morning.
+  Future<UpdateRequest> applyUpdate(
+    String targetVersion, {
+    bool ignoreMaintenanceWindow = false,
+  }) async => UpdateRequest.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/version/update',
+      body: {
+        'target_version': targetVersion,
+        if (ignoreMaintenanceWindow) 'ignore_maintenance_window': true,
+      },
+    ),
+  );
+
   /// The routes of one application, with their load times.
   Future<RumPageList> rumPages(
     String app, {

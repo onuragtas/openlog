@@ -29,6 +29,7 @@ import 'session.dart';
 import 'volume.dart';
 import 'sso.dart';
 import 'usage.dart';
+import 'version.dart';
 import 'oql.dart';
 import 'query.dart';
 import 'rum.dart';
@@ -80,6 +81,7 @@ class Sections {
     TracesController? traces,
     MetricsController? metrics,
     RumController? rum,
+    VersionController? versionInfo,
     CostsController? costs,
     InventoryController? inventory,
     FleetController? fleet,
@@ -265,6 +267,7 @@ class Sections {
        traces = traces ?? TracesController(client),
        metrics = metrics ?? MetricsController(client),
        rum = rum ?? RumController(client),
+       versionInfo = versionInfo ?? VersionController(client),
        costs = costs ?? CostsController(client),
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
@@ -388,6 +391,9 @@ class Sections {
   final TracesController traces;
   final MetricsController metrics;
   final RumController rum;
+
+  /// What this installation runs and what the updater is doing about it.
+  final VersionController versionInfo;
   final CostsController costs;
   final InventoryController inventory;
   final FleetController fleet;
@@ -571,6 +577,7 @@ class Sections {
     agents,
     errors,
     rum,
+    versionInfo,
     profiles,
     databases,
     slos,

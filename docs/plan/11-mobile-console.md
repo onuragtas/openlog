@@ -730,11 +730,25 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       Vital kartı webinkiyle aynı derinlikte ortak bir parça oldu (`rum_vitals.dart`):
       p50/p75/p95, bantlar, yayımlanmış eşikler ve p75'in eşiğe uzaklığı.
       Bu sırada düzeltilen: `formatNumber` tam sayıları "4.0" diye yazıyordu.
-- [ ] Kaynak haritaları (`source-maps`)
+- [x] Kaynak haritaları (`source-maps`): ayarlardaki sekme; liste ve silme, yükleme
+      webde (tarayıcıda dosya seçmek telefonda yapılacak iş değil).
 
 ### 9.7 Kullanım, sürüm, panolar
 - [ ] Kullanım ve kotalar (`usage`, `.../daily|top|status|query-limits|export`), planlar (`plans`)
-- [ ] Sürüm ve güncelleme (`version`, `.../check`, `.../update`), durum (`status`)
+- [x] Sürüm ve güncelleme (`version`, `.../check`, `.../update`): ayarlarda "Sürüm"
+      sekmesi. Çalışan derleme, güncelleme kontrolü, son sürüm, güncelleyicinin durumu
+      (mesajı, **uyarıları**, adımları, bitiş zamanı), bakım penceresi ve son istek;
+      altında "Şimdi kontrol et" ve onay soran "Şimdi güncelle" -- bakım penceresi
+      varsa pencere dışında kurmayı ayrıca onaylatan kutusuyla. Rol istemeye izin
+      vermiyorsa düğmeler hiç çıkmıyor, ama durum yine okunuyor.
+      Güncelleyicinin sabit mesajları (yirmi üç kod), durumları ve adımları artık
+      Türkçe: sunucu kararlı bir kod ve parametreleri yolluyor, bu yapı bilmediği bir
+      kodu gördüğünde sunucunun İngilizce cümlesini gösteriyor. Şablonlardaki yer
+      tutucular `%ad%` biçiminde -- gen_l10n `{ad}`'ı tanımlanmamış bir placeholder
+      sanardı ve yirmi üç mesaj için yirmi üç ayrı imza gerekirdi.
+      Bu ekranın varlık sebebi uyarılar: "0.1.113 compose dosyaları clickhouse için…"
+      diye bir şeyi masa başına dönünce öğrenmek geç oluyor.
+- [ ] Durum sayfası (`status`)
 - [ ] Pano içe aktarma ve ayarları (`dashboards/import`, `dashboards/settings`)
 - [ ] Güvenlik açığı kataloğu durumu (`vulnerabilities/catalog/status`)
 

@@ -4241,4 +4241,273 @@ class LTr extends L {
   String rumFunnelCompletion(int share, String count, String window) {
     return 'İlk adımı yapan $count oturumun %$share kadarı $window içinde sonuncuya ulaştı.';
   }
+
+  @override
+  String get updateMsgModeOff =>
+      'güncellemeler kapalı (OPENLOG_UPDATER_MODE=off)';
+
+  @override
+  String get updateMsgUpdateAvailable =>
+      '%channel% kanalında %version% sürümü var';
+
+  @override
+  String get updateMsgUpdateAvailableNotify =>
+      '%channel% kanalında %version% sürümü var (notify modu: hiçbir şey kurulmaz)';
+
+  @override
+  String get updateMsgWaitingForWindow =>
+      '%version% sürümünü kurmak için bakım penceresi bekleniyor';
+
+  @override
+  String get updateMsgUpdated => '%from% → %to% güncellendi';
+
+  @override
+  String get updateMsgRolledBack =>
+      '%to% güncellemesi başarısız oldu, %from% sürümüne geri dönüldü';
+
+  @override
+  String get updateMsgRollbackFailed =>
+      '%to% güncellemesi başarısız oldu, %from% sürümüne geri dönüş de başarısız: elle müdahale gerekiyor';
+
+  @override
+  String get updateMsgFailedBeforeChange =>
+      '%to% güncellemesi servislere dokunulmadan önce başarısız oldu';
+
+  @override
+  String get updateMsgUpToDateNewest =>
+      '%channel% kanalındaki en yeni sürüm zaten %version%';
+
+  @override
+  String get updateMsgUpToDateNoEligible =>
+      '%version% sürümünden yeni, kurulabilir bir sürüm yok: %details%';
+
+  @override
+  String get updateMsgRequestModeOff =>
+      'güncellemeler kapalı (OPENLOG_UPDATER_MODE=off)';
+
+  @override
+  String get updateMsgRequestNotInstallable =>
+      '%version% kurulamıyor: %reason%';
+
+  @override
+  String get updateMsgRequestTargetChanged =>
+      'kurulacak sürüm artık %version%, istenen %requested% değil: yeniden kontrol edip yeni sürümü onaylayın';
+
+  @override
+  String get updateMsgRequestOutsideWindow =>
+      'bakım penceresinin dışındayız: şimdi güncellemek için pencere dışında kurmayı onaylayın';
+
+  @override
+  String get updateMsgRequestInterrupted =>
+      'yarıda kaldı: openlog-updater istek işlenirken yeniden başladı';
+
+  @override
+  String get updateMsgRequestExpired =>
+      'openlog-updater 15 dakika içinde almadı (istek destekleyen bir updater çalışıyor mu?)';
+
+  @override
+  String get updateMsgComposeOutdated =>
+      'compose dosyaları (%files_version%) çalışan sürümden (%running_version%) eski: o günden beri eklenen ayarlar ve volume\'lar container\'lara ulaşmıyor';
+
+  @override
+  String get updateMsgComposeOutdatedBundle =>
+      'compose dosyaları (%files_version%) çalışan sürümden (%running_version%) eski: install-server.sh betiğini yeniden çalıştırın';
+
+  @override
+  String get updateMsgComposeChangesPending =>
+      '%version% compose dosyaları %services% için güncelleyicinin uygulamadığı değişiklikler içeriyor (volume, port, bağlanan dosyalar): install-server.sh betiğini yeniden çalıştırın ya da docker compose up -d kullanın';
+
+  @override
+  String get updateMsgUpdaterOutdated =>
+      'openlog-updater %updater_version% çalışan sürümden (%running_version%) eski: container\'ı yeniden oluşturulmadan iyileştirmeleri geçerli olmaz';
+
+  @override
+  String get updateMsgUpdaterOutdatedBundle =>
+      'openlog-updater %updater_version% çalışan sürümden (%running_version%) eski: yeniden oluşturmak için install-server.sh betiğini çalıştırın';
+
+  @override
+  String get updateMsgUpdaterOutdatedKubernetes =>
+      'openlog-updater CronJob\'ı (%updater_version%) çalışan sürümden (%running_version%) eski: Helm sürümünü image.tag=%running_version% ile yükseltin';
+
+  @override
+  String get updateMsgUpdaterSelfUpdateFailed =>
+      'openlog-updater kendini %version% ile değiştiremedi ve önceki sürümüyle çalışmaya devam ediyor: %reason%';
+
+  @override
+  String get settingsTabVersion => 'Sürüm';
+
+  @override
+  String get versionRunning => 'Çalışan';
+
+  @override
+  String get versionBuilt => 'derleme';
+
+  @override
+  String get versionCheck => 'Güncelleme kontrolü';
+
+  @override
+  String get versionCheckEnabled => 'açık';
+
+  @override
+  String get versionCheckDisabled => 'kapalı';
+
+  @override
+  String get versionCheckFailed => 'başarısız';
+
+  @override
+  String get versionLatest => 'Son sürüm';
+
+  @override
+  String get versionUpToDate => 'Güncel';
+
+  @override
+  String get versionChecked => 'kontrol';
+
+  @override
+  String get versionUpdater => 'Güncelleyici';
+
+  @override
+  String get versionNoUpdater => 'Bu kuruluma bildiren bir güncelleyici yok.';
+
+  @override
+  String get versionMode => 'mod';
+
+  @override
+  String get versionTarget => 'hedef';
+
+  @override
+  String get versionSteps => 'Adımlar';
+
+  @override
+  String get versionFinished => 'bitti';
+
+  @override
+  String versionFrom(String version) {
+    return '$version sürümünden';
+  }
+
+  @override
+  String get versionWindow => 'Bakım penceresi';
+
+  @override
+  String get versionWindowAnyTime => 'her zaman';
+
+  @override
+  String get versionWindowOpen => 'şu an açık';
+
+  @override
+  String get versionWindowNext => 'sıradaki açılış';
+
+  @override
+  String get versionRequest => 'Son istek';
+
+  @override
+  String versionRequestApply(String version) {
+    return '$version kur';
+  }
+
+  @override
+  String get versionRequestCheck => 'kontrol';
+
+  @override
+  String versionRequestedBy(String email) {
+    return '$email istedi';
+  }
+
+  @override
+  String get versionCheckNow => 'Şimdi kontrol et';
+
+  @override
+  String get versionUpdateNow => 'Şimdi güncelle';
+
+  @override
+  String versionConfirmTitle(String version) {
+    return '$version kurulsun mu?';
+  }
+
+  @override
+  String get versionConfirmBody =>
+      'Güncelleyici yedek alır, imajları çeker ve container\'ları yeniden oluşturur. Bu sırada API kısa süre erişilemez.';
+
+  @override
+  String get versionIgnoreWindow => 'Bakım penceresinin dışında kur';
+
+  @override
+  String get versionConfirm => 'Kur';
+
+  @override
+  String get versionQueued =>
+      'İstek sıraya alındı; güncelleyicinin durumundan izleyin.';
+
+  @override
+  String get updateForbidden => 'Rolünüz güncelleme istemeye izin vermiyor.';
+
+  @override
+  String get updateStateOff => 'Kapalı';
+
+  @override
+  String get updateStateError => 'Hata';
+
+  @override
+  String get updateStateUpToDate => 'Güncel';
+
+  @override
+  String get updateStateAvailable => 'Güncelleme var';
+
+  @override
+  String get updateStateWaitingForWindow => 'Bakım penceresi bekleniyor';
+
+  @override
+  String get updateStateUpdating => 'Güncelleniyor';
+
+  @override
+  String get updateStateSucceeded => 'Başarılı';
+
+  @override
+  String get updateStateFailed => 'Başarısız';
+
+  @override
+  String get updateStateRolledBack => 'Geri dönüldü';
+
+  @override
+  String get updateStateRollbackFailed => 'Geri dönüş başarısız';
+
+  @override
+  String get updateStepSelfUpdate => 'Güncelleyicinin kendini güncellemesi';
+
+  @override
+  String get updateStepBackup => 'Yedekleme';
+
+  @override
+  String get updateStepPull => 'İmaj indirme';
+
+  @override
+  String get updateStepComposeBundle => 'Compose dosyaları';
+
+  @override
+  String get updateStepMigrate => 'Migration';
+
+  @override
+  String get updateStepRecreate => 'Yeniden oluşturma';
+
+  @override
+  String get updateStepRollout => 'Dağıtım';
+
+  @override
+  String get updateStepHealth => 'Sağlık kontrolü';
+
+  @override
+  String get updateStepRollback => 'Geri dönüş';
+
+  @override
+  String get updateStepCleanup => 'Temizlik';
+
+  @override
+  String get updateStepContractMigrate => 'Contract migration';
+
+  @override
+  String get versionRequestPending => 'Sırada';
+
+  @override
+  String get versionRequestExpired => 'Süresi doldu';
 }
