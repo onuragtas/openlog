@@ -86,6 +86,7 @@ describe("LogDetailPanel", () => {
     renderPanel({ position: undefined, onStep: undefined });
 
     expect(screen.queryByRole("button", { name: "Next record" })).not.toBeInTheDocument();
-    expect(screen.getByText("second")).toBeInTheDocument();
+    // The body of the record, which the panel shows twice: as the message and as the `body` field.
+    expect(screen.getAllByText("second").length).toBeGreaterThan(0);
   });
 });
