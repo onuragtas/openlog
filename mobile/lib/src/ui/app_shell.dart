@@ -432,6 +432,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         usageDetail: s.usageDetail,
         storage: s.storage,
         versionInfo: s.versionInfo,
+        statusPage: s.statusPage,
         sso: s.sso,
         active: active,
       ),

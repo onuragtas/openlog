@@ -2847,5 +2847,42 @@
         "type": "String"
       }
     }
+  },
+  "settingsTabStatus": "Durum",
+  "statusOverall": "Genel",
+  "statusComponents": "Bileşenler",
+  "statusIncidents": "Olaylar",
+  "statusMaintenance": "Bakım",
+  "statusNoIncidents": "Kayıtlı geçmişte olay yok.",
+  "statusUptime": "90 günde %{value}",
+  "statusCheckedAt": "{when} kontrol edildi",
+  "statusUnavailable": "Bu kurulum durum sayfası yayımlamıyor.",
+  "statusOperational": "Çalışıyor",
+  "statusDegraded": "Yavaş",
+  "statusPartial": "Kısmi kesinti",
+  "statusMajor": "Büyük kesinti",
+  "statusUnknown": "Bilinmiyor",
+  "statusComponentIngest": "Veri alımı",
+  "statusComponentQueryApi": "Sorgu API'si",
+  "statusComponentAlerting": "Alarmlar",
+  "statusComponentProcessing": "İşleme",
+  "dashboardSharing": "Pano paylaşımı",
+  "dashboardSharingOn": "Paylaşım bağlantıları açık.",
+  "dashboardSharingOff": "Paylaşım bağlantıları kapalı.",
+  "dashboardReportDomains": "Rapor alan adları",
+  "dashboardSharingWeb": "Tarayıcıdan değiştiriliyor: bütün organizasyonu ilgilendiren bir ayar telefonda yanlışlıkla açılacak bir şey değil.",
+  "@statusUptime": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@statusCheckedAt": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
   }
 }

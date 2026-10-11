@@ -19,6 +19,7 @@ import '../sampling.dart';
 import '../sso.dart';
 import '../session.dart';
 import '../usage.dart';
+import '../status.dart';
 import '../version.dart';
 import 'failure_text.dart';
 import 'list_scaffold.dart';
@@ -32,6 +33,7 @@ import 'source_maps_tab.dart';
 import 'sso_tab.dart';
 import 'storage_tab.dart';
 import 'usage_tab.dart';
+import 'status_tab.dart';
 import 'version_tab.dart';
 import 'severity.dart';
 import 'theme.dart';
@@ -55,6 +57,7 @@ class SettingsBody extends StatefulWidget {
     required this.usageDetail,
     required this.storage,
     required this.versionInfo,
+    required this.statusPage,
     required this.sso,
     required this.active,
   });
@@ -102,6 +105,9 @@ class SettingsBody extends StatefulWidget {
 
   /// The running build, the release available and the updater's state.
   final VersionController versionInfo;
+
+  /// The public status page of this installation.
+  final StatusPageController statusPage;
 
   /// Single sign-on.
   final SsoController sso;
@@ -206,6 +212,18 @@ final _tabs = <_Tab>[
     (s) => VersionTab(
       session: s.widget.session,
       controller: s.widget.versionInfo,
+      active: true,
+    ),
+  ),
+  // No authentication and no role: the status page is public, and "is it
+  // them or is it me" is asked away from a desk more than at one.
+  _Tab(
+    'status',
+    (l) => l.settingsTabStatus,
+    null,
+    (s) => StatusTab(
+      session: s.widget.session,
+      controller: s.widget.statusPage,
       active: true,
     ),
   ),

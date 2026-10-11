@@ -4598,4 +4598,78 @@ class LTr extends L {
   String vulnCatalogSourceError(String source, String error) {
     return '$source: $error';
   }
+
+  @override
+  String get settingsTabStatus => 'Durum';
+
+  @override
+  String get statusOverall => 'Genel';
+
+  @override
+  String get statusComponents => 'Bileşenler';
+
+  @override
+  String get statusIncidents => 'Olaylar';
+
+  @override
+  String get statusMaintenance => 'Bakım';
+
+  @override
+  String get statusNoIncidents => 'Kayıtlı geçmişte olay yok.';
+
+  @override
+  String statusUptime(String value) {
+    return '90 günde %$value';
+  }
+
+  @override
+  String statusCheckedAt(String when) {
+    return '$when kontrol edildi';
+  }
+
+  @override
+  String get statusUnavailable => 'Bu kurulum durum sayfası yayımlamıyor.';
+
+  @override
+  String get statusOperational => 'Çalışıyor';
+
+  @override
+  String get statusDegraded => 'Yavaş';
+
+  @override
+  String get statusPartial => 'Kısmi kesinti';
+
+  @override
+  String get statusMajor => 'Büyük kesinti';
+
+  @override
+  String get statusUnknown => 'Bilinmiyor';
+
+  @override
+  String get statusComponentIngest => 'Veri alımı';
+
+  @override
+  String get statusComponentQueryApi => 'Sorgu API\'si';
+
+  @override
+  String get statusComponentAlerting => 'Alarmlar';
+
+  @override
+  String get statusComponentProcessing => 'İşleme';
+
+  @override
+  String get dashboardSharing => 'Pano paylaşımı';
+
+  @override
+  String get dashboardSharingOn => 'Paylaşım bağlantıları açık.';
+
+  @override
+  String get dashboardSharingOff => 'Paylaşım bağlantıları kapalı.';
+
+  @override
+  String get dashboardReportDomains => 'Rapor alan adları';
+
+  @override
+  String get dashboardSharingWeb =>
+      'Tarayıcıdan değiştiriliyor: bütün organizasyonu ilgilendiren bir ayar telefonda yanlışlıkla açılacak bir şey değil.';
 }

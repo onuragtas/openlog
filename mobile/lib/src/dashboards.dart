@@ -13,12 +13,30 @@ class DashboardsController extends ListController<DashboardSummary> {
 
   String query = '';
 
+  /// Whether this organization allows share links, read with the list.
+  ///
+  /// Read-only here: a setting of the whole organization is not a thing to
+  /// toggle by accident on a phone, so changing it stays in the browser.
+  /// Null where the caller may not read it or the installation has none.
+  DashboardSettings? settings;
+
   @override
   String get forbiddenKind => 'dashboardsForbidden';
 
   @override
-  Future<List<DashboardSummary>> fetch() async =>
-      (await _client.dashboards(q: query.trim())).dashboards;
+  Future<List<DashboardSummary>> fetch() async {
+    final page = await _client.dashboards(q: query.trim());
+    try {
+      settings = await _client.dashboardSettings();
+    } on ApiException {
+      // 403 for a viewer, 404 where there are none: either way the list is
+      // the screen and the setting is one line under it.
+      settings = null;
+    } on ApiUnreachable {
+      settings = null;
+    }
+    return page.dashboards;
+  }
 }
 
 /// One dashboard: its widgets, and what each widget's query answered.

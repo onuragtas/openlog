@@ -8184,6 +8184,144 @@ abstract class L {
   /// In en, this message translates to:
   /// **'{source}: {error}'**
   String vulnCatalogSourceError(String source, String error);
+
+  /// No description provided for @settingsTabStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get settingsTabStatus;
+
+  /// No description provided for @statusOverall.
+  ///
+  /// In en, this message translates to:
+  /// **'Overall'**
+  String get statusOverall;
+
+  /// No description provided for @statusComponents.
+  ///
+  /// In en, this message translates to:
+  /// **'Components'**
+  String get statusComponents;
+
+  /// No description provided for @statusIncidents.
+  ///
+  /// In en, this message translates to:
+  /// **'Incidents'**
+  String get statusIncidents;
+
+  /// No description provided for @statusMaintenance.
+  ///
+  /// In en, this message translates to:
+  /// **'Maintenance'**
+  String get statusMaintenance;
+
+  /// No description provided for @statusNoIncidents.
+  ///
+  /// In en, this message translates to:
+  /// **'No incidents in the recorded history.'**
+  String get statusNoIncidents;
+
+  /// No description provided for @statusUptime.
+  ///
+  /// In en, this message translates to:
+  /// **'{value}% in 90 days'**
+  String statusUptime(String value);
+
+  /// No description provided for @statusCheckedAt.
+  ///
+  /// In en, this message translates to:
+  /// **'checked {when}'**
+  String statusCheckedAt(String when);
+
+  /// No description provided for @statusUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation does not publish a status page.'**
+  String get statusUnavailable;
+
+  /// No description provided for @statusOperational.
+  ///
+  /// In en, this message translates to:
+  /// **'Operational'**
+  String get statusOperational;
+
+  /// No description provided for @statusDegraded.
+  ///
+  /// In en, this message translates to:
+  /// **'Degraded'**
+  String get statusDegraded;
+
+  /// No description provided for @statusPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Partial outage'**
+  String get statusPartial;
+
+  /// No description provided for @statusMajor.
+  ///
+  /// In en, this message translates to:
+  /// **'Major outage'**
+  String get statusMajor;
+
+  /// No description provided for @statusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get statusUnknown;
+
+  /// No description provided for @statusComponentIngest.
+  ///
+  /// In en, this message translates to:
+  /// **'Ingest'**
+  String get statusComponentIngest;
+
+  /// No description provided for @statusComponentQueryApi.
+  ///
+  /// In en, this message translates to:
+  /// **'Query API'**
+  String get statusComponentQueryApi;
+
+  /// No description provided for @statusComponentAlerting.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerting'**
+  String get statusComponentAlerting;
+
+  /// No description provided for @statusComponentProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get statusComponentProcessing;
+
+  /// No description provided for @dashboardSharing.
+  ///
+  /// In en, this message translates to:
+  /// **'Dashboard sharing'**
+  String get dashboardSharing;
+
+  /// No description provided for @dashboardSharingOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Share links are allowed.'**
+  String get dashboardSharingOn;
+
+  /// No description provided for @dashboardSharingOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Share links are turned off.'**
+  String get dashboardSharingOff;
+
+  /// No description provided for @dashboardReportDomains.
+  ///
+  /// In en, this message translates to:
+  /// **'Report domains'**
+  String get dashboardReportDomains;
+
+  /// No description provided for @dashboardSharingWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Changed in the browser: a setting of the whole organization is not a thing to toggle by accident on a phone.'**
+  String get dashboardSharingWeb;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

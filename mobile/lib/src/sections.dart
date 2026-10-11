@@ -35,6 +35,7 @@ import 'query.dart';
 import 'rum.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
+import 'status.dart';
 import 'templates.dart';
 import 'time_range.dart';
 import 'services.dart';
@@ -82,6 +83,7 @@ class Sections {
     MetricsController? metrics,
     RumController? rum,
     VersionController? versionInfo,
+    StatusPageController? statusPage,
     CostsController? costs,
     InventoryController? inventory,
     FleetController? fleet,
@@ -269,6 +271,7 @@ class Sections {
        metrics = metrics ?? MetricsController(client),
        rum = rum ?? RumController(client),
        versionInfo = versionInfo ?? VersionController(client),
+       statusPage = statusPage ?? StatusPageController(client),
        costs = costs ?? CostsController(client),
        inventory = inventory ?? InventoryController(client),
        fleet = fleet ?? FleetController(client),
@@ -396,6 +399,9 @@ class Sections {
 
   /// What this installation runs and what the updater is doing about it.
   final VersionController versionInfo;
+
+  /// The public status page, where the installation publishes one.
+  final StatusPageController statusPage;
   final CostsController costs;
   final InventoryController inventory;
   final FleetController fleet;
@@ -584,6 +590,7 @@ class Sections {
     errors,
     rum,
     versionInfo,
+    statusPage,
     profiles,
     databases,
     slos,

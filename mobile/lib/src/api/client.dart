@@ -2080,6 +2080,18 @@ class OpenlogClient {
   ///
   /// [period] is `current`, `previous` or a `YYYY-MM` month, as the server
   /// names them.
+  /// The public status page: component health, uptime, incidents and
+  /// maintenance. No authentication, and 404 where the page is turned off
+  /// (OPENLOG_STATUS_PAGE_ENABLED).
+  Future<StatusPage> statusPage() async =>
+      StatusPage.fromJson(await _send('GET', '/api/v1/status'));
+
+  /// Whether dashboards of this organization may be shared by link.
+  Future<DashboardSettings> dashboardSettings() async =>
+      DashboardSettings.fromJson(
+        await _send('GET', '/api/v1/dashboards/settings'),
+      );
+
   /// What the vulnerability catalog holds and when each feed last synced.
   ///
   /// 404 where the catalog is not enabled at all, which the screen reads as

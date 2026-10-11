@@ -2944,5 +2944,42 @@
         "type": "String"
       }
     }
+  },
+  "settingsTabStatus": "Status",
+  "statusOverall": "Overall",
+  "statusComponents": "Components",
+  "statusIncidents": "Incidents",
+  "statusMaintenance": "Maintenance",
+  "statusNoIncidents": "No incidents in the recorded history.",
+  "statusUptime": "{value}% in 90 days",
+  "statusCheckedAt": "checked {when}",
+  "statusUnavailable": "This installation does not publish a status page.",
+  "statusOperational": "Operational",
+  "statusDegraded": "Degraded",
+  "statusPartial": "Partial outage",
+  "statusMajor": "Major outage",
+  "statusUnknown": "Unknown",
+  "statusComponentIngest": "Ingest",
+  "statusComponentQueryApi": "Query API",
+  "statusComponentAlerting": "Alerting",
+  "statusComponentProcessing": "Processing",
+  "dashboardSharing": "Dashboard sharing",
+  "dashboardSharingOn": "Share links are allowed.",
+  "dashboardSharingOff": "Share links are turned off.",
+  "dashboardReportDomains": "Report domains",
+  "dashboardSharingWeb": "Changed in the browser: a setting of the whole organization is not a thing to toggle by accident on a phone.",
+  "@statusUptime": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "@statusCheckedAt": {
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
   }
 }

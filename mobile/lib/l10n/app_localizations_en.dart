@@ -4604,4 +4604,79 @@ class LEn extends L {
   String vulnCatalogSourceError(String source, String error) {
     return '$source: $error';
   }
+
+  @override
+  String get settingsTabStatus => 'Status';
+
+  @override
+  String get statusOverall => 'Overall';
+
+  @override
+  String get statusComponents => 'Components';
+
+  @override
+  String get statusIncidents => 'Incidents';
+
+  @override
+  String get statusMaintenance => 'Maintenance';
+
+  @override
+  String get statusNoIncidents => 'No incidents in the recorded history.';
+
+  @override
+  String statusUptime(String value) {
+    return '$value% in 90 days';
+  }
+
+  @override
+  String statusCheckedAt(String when) {
+    return 'checked $when';
+  }
+
+  @override
+  String get statusUnavailable =>
+      'This installation does not publish a status page.';
+
+  @override
+  String get statusOperational => 'Operational';
+
+  @override
+  String get statusDegraded => 'Degraded';
+
+  @override
+  String get statusPartial => 'Partial outage';
+
+  @override
+  String get statusMajor => 'Major outage';
+
+  @override
+  String get statusUnknown => 'Unknown';
+
+  @override
+  String get statusComponentIngest => 'Ingest';
+
+  @override
+  String get statusComponentQueryApi => 'Query API';
+
+  @override
+  String get statusComponentAlerting => 'Alerting';
+
+  @override
+  String get statusComponentProcessing => 'Processing';
+
+  @override
+  String get dashboardSharing => 'Dashboard sharing';
+
+  @override
+  String get dashboardSharingOn => 'Share links are allowed.';
+
+  @override
+  String get dashboardSharingOff => 'Share links are turned off.';
+
+  @override
+  String get dashboardReportDomains => 'Report domains';
+
+  @override
+  String get dashboardSharingWeb =>
+      'Changed in the browser: a setting of the whole organization is not a thing to toggle by accident on a phone.';
 }

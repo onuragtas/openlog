@@ -959,6 +959,92 @@ enum MetricAggregation {
   }
 }
 
+/// StatusValue of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusValue {
+  operational('operational'),
+  degraded('degraded'),
+  partialOutage('partial_outage'),
+  majorOutage('major_outage'),
+  maintenance('maintenance'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const StatusValue(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static StatusValue fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
+/// StatusPageComponentsItemId of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusPageComponentsItemId {
+  ingest('ingest'),
+  queryApi('query_api'),
+  alerting('alerting'),
+  processing('processing'),
+  unknown('');
+
+  const StatusPageComponentsItemId(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static StatusPageComponentsItemId fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// StatusPageComponentsItemDaysItemStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusPageComponentsItemDaysItemStatus {
+  operational('operational'),
+  degraded('degraded'),
+  outage('outage'),
+  noData('no_data'),
+  unknown('');
+
+  const StatusPageComponentsItemDaysItemStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static StatusPageComponentsItemDaysItemStatus fromJson(
+    Object? v,
+    String path,
+  ) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// UsageTopBy of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2469,6 +2555,88 @@ enum SpanStatusCode {
   final String wire;
 
   static SpanStatusCode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// StatusIncidentKind of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusIncidentKind {
+  incident('incident'),
+  maintenance('maintenance'),
+  unknown('');
+
+  const StatusIncidentKind(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static StatusIncidentKind fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// StatusIncidentStatus of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusIncidentStatus {
+  investigating('investigating'),
+  identified('identified'),
+  monitoring('monitoring'),
+  resolved('resolved'),
+  scheduled('scheduled'),
+  inProgress('in_progress'),
+  completed('completed'),
+  unknown('');
+
+  const StatusIncidentStatus(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static StatusIncidentStatus fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// StatusIncidentImpact of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum StatusIncidentImpact {
+  none('none'),
+  minor('minor'),
+  major('major'),
+  critical('critical'),
+  unknown('');
+
+  const StatusIncidentImpact(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static StatusIncidentImpact fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -7898,6 +8066,202 @@ class MetricQueryResponseMetric {
   final String unit;
   final MetricTemporality temporality;
   final bool monotonic;
+}
+
+/// `StatusPage` of the openlog API contract.
+class StatusPage {
+  const StatusPage({
+    required this.status,
+    this.checkedAt,
+    required this.components,
+    required this.incidents,
+    required this.maintenance,
+    required this.history,
+  });
+
+  factory StatusPage.fromJson(Object? json, [String path = 'StatusPage']) {
+    final m = _obj(json, path);
+    return StatusPage(
+      status: _req(m, 'status', path, StatusValue.fromJson),
+      checkedAt: _opt(m, 'checked_at', path, _str),
+      components: _req(
+        m,
+        'components',
+        path,
+        (v, p) => _list<StatusPageComponentsItem>(
+          v,
+          p,
+          (v, p) => StatusPageComponentsItem.fromJson(v, p),
+        ),
+      ),
+      incidents: _req(
+        m,
+        'incidents',
+        path,
+        (v, p) => _list<StatusIncident>(
+          v,
+          p,
+          (v, p) => StatusIncident.fromJson(v, p),
+        ),
+      ),
+      maintenance: _req(
+        m,
+        'maintenance',
+        path,
+        (v, p) => _list<StatusIncident>(
+          v,
+          p,
+          (v, p) => StatusIncident.fromJson(v, p),
+        ),
+      ),
+      history: _req(
+        m,
+        'history',
+        path,
+        (v, p) => _list<StatusIncident>(
+          v,
+          p,
+          (v, p) => StatusIncident.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'status': status.wire,
+    'checked_at': ?checkedAt,
+    'components': [for (final e in components) e.toJson()],
+    'incidents': [for (final e in incidents) e.toJson()],
+    'maintenance': [for (final e in maintenance) e.toJson()],
+    'history': [for (final e in history) e.toJson()],
+  };
+
+  final StatusValue status;
+  final String? checkedAt;
+  final List<StatusPageComponentsItem> components;
+  final List<StatusIncident> incidents;
+  final List<StatusIncident> maintenance;
+  final List<StatusIncident> history;
+}
+
+/// `StatusPageComponentsItem` of the openlog API contract.
+class StatusPageComponentsItem {
+  const StatusPageComponentsItem({
+    required this.id,
+    required this.status,
+    this.uptime90d,
+    required this.days,
+  });
+
+  factory StatusPageComponentsItem.fromJson(
+    Object? json, [
+    String path = 'StatusPageComponentsItem',
+  ]) {
+    final m = _obj(json, path);
+    return StatusPageComponentsItem(
+      id: _req(m, 'id', path, StatusPageComponentsItemId.fromJson),
+      status: _req(m, 'status', path, StatusValue.fromJson),
+      uptime90d: _opt(m, 'uptime_90d', path, _num),
+      days: _req(
+        m,
+        'days',
+        path,
+        (v, p) => _list<StatusPageComponentsItemDaysItem>(
+          v,
+          p,
+          (v, p) => StatusPageComponentsItemDaysItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id.wire,
+    'status': status.wire,
+    'uptime_90d': ?uptime90d,
+    'days': [for (final e in days) e.toJson()],
+  };
+
+  final StatusPageComponentsItemId id;
+  final StatusValue status;
+  final double? uptime90d;
+  final List<StatusPageComponentsItemDaysItem> days;
+}
+
+/// `StatusPageComponentsItemDaysItem` of the openlog API contract.
+class StatusPageComponentsItemDaysItem {
+  const StatusPageComponentsItemDaysItem({
+    required this.date,
+    required this.status,
+    this.uptime,
+  });
+
+  factory StatusPageComponentsItemDaysItem.fromJson(
+    Object? json, [
+    String path = 'StatusPageComponentsItemDaysItem',
+  ]) {
+    final m = _obj(json, path);
+    return StatusPageComponentsItemDaysItem(
+      date: _req(m, 'date', path, _str),
+      status: _req(
+        m,
+        'status',
+        path,
+        StatusPageComponentsItemDaysItemStatus.fromJson,
+      ),
+      uptime: _opt(m, 'uptime', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'date': date,
+    'status': status.wire,
+    'uptime': ?uptime,
+  };
+
+  final String date;
+  final StatusPageComponentsItemDaysItemStatus status;
+  final double? uptime;
+}
+
+/// `DashboardSettings` of the openlog API contract.
+class DashboardSettings {
+  const DashboardSettings({
+    required this.shareLinksEnabled,
+    required this.reportDomains,
+    this.updatedAt,
+    required this.canEdit,
+  });
+
+  factory DashboardSettings.fromJson(
+    Object? json, [
+    String path = 'DashboardSettings',
+  ]) {
+    final m = _obj(json, path);
+    return DashboardSettings(
+      shareLinksEnabled: _req(m, 'share_links_enabled', path, _bool),
+      reportDomains: _req(
+        m,
+        'report_domains',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      updatedAt: _opt(m, 'updated_at', path, _str),
+      canEdit: _req(m, 'can_edit', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'share_links_enabled': shareLinksEnabled,
+    'report_domains': reportDomains,
+    'updated_at': ?updatedAt,
+    'can_edit': canEdit,
+  };
+
+  final bool shareLinksEnabled;
+  final List<String> reportDomains;
+  final String? updatedAt;
+  final bool canEdit;
 }
 
 /// `VulnCatalogStatus` of the openlog API contract.
@@ -14173,6 +14537,118 @@ class MetricSeries {
 
   final Map<String, String> attributes;
   final List<List<double>> points;
+}
+
+/// `StatusIncident` of the openlog API contract.
+class StatusIncident {
+  const StatusIncident({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.status,
+    required this.impact,
+    required this.components,
+    required this.startsAt,
+    this.endsAt,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.updates,
+  });
+
+  factory StatusIncident.fromJson(
+    Object? json, [
+    String path = 'StatusIncident',
+  ]) {
+    final m = _obj(json, path);
+    return StatusIncident(
+      id: _req(m, 'id', path, _str),
+      kind: _req(m, 'kind', path, StatusIncidentKind.fromJson),
+      title: _req(m, 'title', path, _str),
+      status: _req(m, 'status', path, StatusIncidentStatus.fromJson),
+      impact: _req(m, 'impact', path, StatusIncidentImpact.fromJson),
+      components: _req(
+        m,
+        'components',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      startsAt: _req(m, 'starts_at', path, _str),
+      endsAt: _opt(m, 'ends_at', path, _str),
+      createdAt: _req(m, 'created_at', path, _str),
+      updatedAt: _req(m, 'updated_at', path, _str),
+      updates: _req(
+        m,
+        'updates',
+        path,
+        (v, p) => _list<StatusIncidentUpdatesItem>(
+          v,
+          p,
+          (v, p) => StatusIncidentUpdatesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'kind': kind.wire,
+    'title': title,
+    'status': status.wire,
+    'impact': impact.wire,
+    'components': components,
+    'starts_at': startsAt,
+    'ends_at': ?endsAt,
+    'created_at': createdAt,
+    'updated_at': updatedAt,
+    'updates': [for (final e in updates) e.toJson()],
+  };
+
+  final String id;
+  final StatusIncidentKind kind;
+  final String title;
+  final StatusIncidentStatus status;
+  final StatusIncidentImpact impact;
+  final List<String> components;
+  final String startsAt;
+  final String? endsAt;
+  final String createdAt;
+  final String updatedAt;
+  final List<StatusIncidentUpdatesItem> updates;
+}
+
+/// `StatusIncidentUpdatesItem` of the openlog API contract.
+class StatusIncidentUpdatesItem {
+  const StatusIncidentUpdatesItem({
+    required this.id,
+    required this.status,
+    required this.message,
+    required this.createdAt,
+  });
+
+  factory StatusIncidentUpdatesItem.fromJson(
+    Object? json, [
+    String path = 'StatusIncidentUpdatesItem',
+  ]) {
+    final m = _obj(json, path);
+    return StatusIncidentUpdatesItem(
+      id: _req(m, 'id', path, _int),
+      status: _req(m, 'status', path, _str),
+      message: _req(m, 'message', path, _str),
+      createdAt: _req(m, 'created_at', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'status': status,
+    'message': message,
+    'created_at': createdAt,
+  };
+
+  final int id;
+  final String status;
+  final String message;
+  final String createdAt;
 }
 
 /// `UsageDay` of the openlog API contract.

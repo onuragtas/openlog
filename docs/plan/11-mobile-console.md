@@ -734,7 +734,16 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       webde (tarayıcıda dosya seçmek telefonda yapılacak iş değil).
 
 ### 9.7 Kullanım, sürüm, panolar
-- [ ] Kullanım ve kotalar (`usage`, `.../daily|top|status|query-limits|export`), planlar (`plans`)
+- [x] Kullanım ve kotalar (`usage`, `.../daily|top|status|query-limits`): kullanım
+      sekmesinin altına dört bölüm. Dönemin günlük şekli (telefonda yığılmış çubuk
+      yerine sparkline: sorulan şey "düzenli mi, yoksa bir gün mü yaptı"), en çok
+      depolayan servisler ya da sunucular, kotanın şu anki seviyesi -- dolduysa "veri
+      alımı durduruldu" satırıyla -- ve sorgu limitleri, her birinin yanında onu koyan
+      katmanla ("sorgum neden 10 GB'da kesiliyor"un cevabı sayı değil katman).
+      Dördü paralel gidiyor; dört ardışık tur bir ekran için fazla. Sorgu limitleri
+      yalnız PostgreSQL kipinde var, oradaki 404/403 ekranı bozmuyor.
+      Dışarıda: `usage/export` (telefonda CSV indirmenin gideceği bir yer yok) ve
+      `plans` + plan ataması (operatör formu, webde).
 - [x] Sürüm ve güncelleme (`version`, `.../check`, `.../update`): ayarlarda "Sürüm"
       sekmesi. Çalışan derleme, güncelleme kontrolü, son sürüm, güncelleyicinin durumu
       (mesajı, **uyarıları**, adımları, bitiş zamanı), bakım penceresi ve son istek;
@@ -748,9 +757,21 @@ rolüne göre gizleniyor. Mobil Ayarlar artık aynı yapıda; sekme, içeriği h
       sanardı ve yirmi üç mesaj için yirmi üç ayrı imza gerekirdi.
       Bu ekranın varlık sebebi uyarılar: "0.1.113 compose dosyaları clickhouse için…"
       diye bir şeyi masa başına dönünce öğrenmek geç oluyor.
-- [ ] Durum sayfası (`status`)
-- [ ] Pano içe aktarma ve ayarları (`dashboards/import`, `dashboards/settings`)
-- [ ] Güvenlik açığı kataloğu durumu (`vulnerabilities/catalog/status`)
+- [x] Durum sayfası (`status`): ayarlarda sekme. Genel durum, bileşen başına 90 günlük
+      şerit, olaylar ve bakımlar. Kimlik doğrulaması istemiyor -- "onlarda mı bende mi"
+      sorusu masa başından uzakta soruluyor. Sayfa kapalıysa (404) ekran bunu bir ayar
+      olarak söylüyor, kesinti gibi göstermiyor.
+- [x] Pano ayarları (`dashboards/settings`): pano listesinin üstünde, salt okunur --
+      paylaşım bağlantıları açık mı, rapor alan adları neler. Bütün organizasyonu
+      ilgilendiren bir ayar telefonda yanlışlıkla açılacak bir şey değil, değiştirme
+      webde kalıyor. Okuyamayan rol listeyi yine görüyor.
+      `dashboards/import` dışarıda: içe aktarma bir JSON gövdesi yapıştırmak demek ve
+      telefon bunun için yanlış alet.
+- [x] Güvenlik açığı kataloğu durumu (`vulnerabilities/catalog/status`): zafiyet
+      listesinin üstünde. Boş bir bulgu listesinin üç ayrı anlamı var ve yalnız biri
+      iyi haber -- hiçbir şey zafiyetli değil, besleme hiç eşitlenmedi, ya da bu kurulum
+      katalog tutmuyor. Hiç eşitlenmemişse uyarı renginde, bir besleme hata verdiyse
+      hatasıyla.
 
 ### Yöntem notu
 

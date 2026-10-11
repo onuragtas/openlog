@@ -60,6 +60,10 @@ class _DashboardsBodyState extends State<DashboardsBody> {
           },
         ),
         emptyTitle: l.dashboardsEmpty,
+        // What the organization allows, under the search: a dashboard that
+        // cannot be shared by link looks exactly like one that can until
+        // somebody tries.
+        header: _SharingNote(settings: c.settings),
         itemBuilder: (context, i) =>
             _DashboardTile(summary: c.items[i], session: widget.session),
       ),
@@ -271,5 +275,44 @@ class _WidgetCard extends StatelessWidget {
     }
 
     return OqlResultView(result: r, id: widget.id);
+  }
+}
+
+/// Whether this organization allows share links, and the domains a report may
+/// be sent from. Read-only on a phone: an organization-wide setting is not a
+/// thing to toggle by accident, so changing it stays in the browser.
+class _SharingNote extends StatelessWidget {
+  const _SharingNote({required this.settings});
+
+  final DashboardSettings? settings;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = settings;
+    if (s == null) return const SizedBox.shrink();
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${l.dashboardSharing}: '
+            '${s.shareLinksEnabled ? l.dashboardSharingOn : l.dashboardSharingOff}',
+            style: muted,
+          ),
+          if (s.reportDomains.isNotEmpty)
+            Text(
+              '${l.dashboardReportDomains}: ${s.reportDomains.join(', ')}',
+              style: muted,
+            ),
+          if (s.canEdit) Text(l.dashboardSharingWeb, style: muted),
+        ],
+      ),
+    );
   }
 }
