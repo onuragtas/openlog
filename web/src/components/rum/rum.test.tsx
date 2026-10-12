@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
@@ -27,6 +28,19 @@ const range = { range: "1h" };
 function renderWithClient(ui: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
+
+// The two detail panels link onwards with TanStack's <Link>, which reads the router out of context and
+// throws without one. A memory router is what the rest of the suite gives such components.
+function renderWithRouter(ui: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const root = createRootRoute({ component: () => ui });
+  const router = createRouter({ routeTree: root, history: createMemoryHistory({ initialEntries: ["/"] }) });
+  return render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
 }
 
 afterEach(async () => {
@@ -58,8 +72,9 @@ describe("RUM", () => {
     expect(within(cards[0]!).getByText("Good")).toBeInTheDocument();
     expect(within(cards[1]!).getByText("Needs work")).toBeInTheDocument();
     expect(within(cards[2]!).getByText("Poor")).toBeInTheDocument();
-    // CLS is unitless, so its p75 is a score and not a duration.
-    expect(within(cards[2]!).getByText("0.31")).toBeInTheDocument();
+    // CLS is unitless, so its p75 is a score and not a duration. Twice on the card: the headline and the
+    // p75 cell of the spread.
+    expect(within(cards[2]!).getAllByText("0.31")).toHaveLength(2);
   });
 
   it("sorts pages by the measure the user picks", async () => {
@@ -96,7 +111,7 @@ describe("RUM", () => {
   it("opens a page and asks for the vitals of that route alone", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
-    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={vi.fn()} />);
+    renderWithRouter(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={vi.fn()} />);
 
     const table = await screen.findByTestId("rum-pages");
     await user.click(within(table).getByRole("button", { name: "Details of /checkout" }));
@@ -177,14 +192,15 @@ describe("RUM", () => {
       </QueryClientProvider>,
     );
 
-    // The mock shop is slower on phones: the numbers are the device's, not the application's.
-    const rows = within(await screen.findByTestId("rum-pages")).getAllByTestId("rum-page-row");
-    expect(within(rows[0]!).getByText("2.36 s")).toBeInTheDocument();
+    // The mock shop is slower on phones: the numbers are the device's, not the application's. Awaited
+    // rather than read at once, because the table keeps the previous rows while the narrowed ones load.
+    const table = await screen.findByTestId("rum-pages");
+    expect(await within(table).findByText("2.36 s")).toBeInTheDocument();
   });
 
   it("follows one identity from the session it was seen on", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
-    renderWithClient(<RumSessionDetail range={range} sessionId={MOCK_RUM_SESSION_ID} />);
+    renderWithRouter(<RumSessionDetail range={range} sessionId={MOCK_RUM_SESSION_ID} />);
 
     // The identity is the detail's answer alone -- the list reads a rollup that does not carry it --
     // and the link to the rest of that person's visits starts here rather than from a search box.
