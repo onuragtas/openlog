@@ -283,8 +283,11 @@ every product release in the same signed `manifest.json` (releases-updates.md §
   glibc/musl = 36 modules per architecture. Debug builds of PHP are not supported.
 - glibc modules are compiled on AlmaLinux 8 against headers configured from the PHP source of the official image and
   must not reference a glibc symbol version newer than 2.28 (the build fails otherwise): RHEL/Alma/Rocky 8+, Debian 10+,
-  Ubuntu 20.04+, Amazon Linux 2023. musl modules are compiled in the official Alpine images. Every module is
-  load-tested in the official PHP image of its ABI.
+  Ubuntu 20.04+, Amazon Linux 2023. musl modules are compiled in the official Alpine images, pinned to the oldest
+  PHP patch a supported distro ships (Alpine 3.20 carries PHP 8.3.15, so 8.3 musl is built against `php:8.3.15`):
+  PHP's inline `smart_str` helpers call a different exported function depending on the patch release, so a module
+  compiled against the newest 8.3 does not relocate on 8.3.15. Every module is load-tested in the official PHP
+  image of its ABI.
 - Manifest entries: `{"component": "php-agent", "os": "linux", "arch": "<arch>", "format": "tar.gz" | "deb" | "rpm" |
   "apk"}`.
 

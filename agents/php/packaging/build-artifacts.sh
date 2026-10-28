@@ -10,7 +10,8 @@
 # TARGETS: <php minor>-<nts|zts>-<glibc|musl>, default PHP 7.1–8.4 × NTS/ZTS × glibc/musl (36 modules).
 #   glibc: compiled on AlmaLinux 8 (glibc 2.28) against headers from the official image's source (Dockerfile.glibc);
 #          the module must not need a newer glibc symbol (checked) and is load-tested in the official image
-#   musl:  compiled and load-tested in the official Alpine image (php:<v>-cli-alpine / php:<v>-zts-alpine)
+#   musl:  compiled and load-tested in the official Alpine image (php:<v>-cli-alpine / php:<v>-zts-alpine),
+#          pinned to the oldest patch a supported distro ships (MUSL_FLOOR) -- see musl_tag
 # ARCH: the Docker host's architecture, or PLATFORM=linux/<arch> (QEMU; release CI uses native runners).
 # PACKAGES (deb rpm apk): nfpm packages from packaging/nfpm/php-agent.yaml. PARALLEL (4) builds at a time.
 # Module layout: modules/<ZEND_MODULE_API_NO>-<nts|zts>-<glibc|musl>/openlog.so, index modules.txt
@@ -27,6 +28,12 @@ PLATFORM=${PLATFORM:-}
 PARALLEL=${PARALLEL:-4}
 PACKAGES=${PACKAGES-"deb rpm apk"}
 MAX_GLIBC=${MAX_GLIBC:-2.28}
+# The musl module has to load on the oldest Alpine we support (packaging/test.sh: 3.20, php83 8.3.15), and
+# that is a floor on the *patch* release, not just the minor: PHP's inline smart_str helpers call a different
+# exported function depending on the patch, so a module compiled against the newest 8.3 fails to relocate on
+# 8.3.15 with "smart_str_ferealloc: symbol not found". glibc has the same floor as MAX_GLIBC; this is its musl
+# half. "<minor>=<patch>" pairs; a minor without one is built against the newest patch of its branch.
+MUSL_FLOOR=${MUSL_FLOOR:-"8.3=8.3.15"}
 NFPM_IMAGE=${NFPM_IMAGE:-goreleaser/nfpm:v2.47.0@sha256:a662cb167d7b6d3a83920c83d76b12d02b8ac5dd2c13e5c62c15270b23f6df0c}
 if [ -z "${TARGETS:-}" ]; then
   TARGETS=""
@@ -47,6 +54,15 @@ rsync -a --exclude modules --exclude '*.o' --exclude '*.lo' --exclude .libs --ex
 sed -i.orig "s/^#define PHP_OPENLOG_VERSION \".*\"$/#define PHP_OPENLOG_VERSION \"$VERSION\"/" "$WORK/src/php_openlog.h"
 rm -f "$WORK/src/php_openlog.h.orig"
 grep -q "^#define PHP_OPENLOG_VERSION \"$VERSION\"$" "$WORK/src/php_openlog.h" || { echo "cannot stamp PHP_OPENLOG_VERSION=$VERSION" >&2; exit 1; }
+
+# musl_tag <minor>: the image tag the musl module of that minor is built against (MUSL_FLOOR, else the minor).
+musl_tag() {
+  local pair
+  for pair in $MUSL_FLOOR; do
+    [ "${pair%%=*}" = "$1" ] && { echo "${pair#*=}"; return; }
+  done
+  echo "$1"
+}
 
 # pull_image <image> [--platform <p>]: a local image is enough; otherwise up to four pulls with backoff, so a transient
 # registry or network error (Docker Hub token requests time out on CI runners) does not fail the whole release.
@@ -80,7 +96,7 @@ build_one() { # build_one <minor>-<nts|zts>-<libc>
       sleep $((attempt * 15))
     done
   else
-    image="php:$minor-$([ "$zts" = zts ] && echo zts || echo cli)-alpine"
+    image="php:$(musl_tag "$minor")-$([ "$zts" = zts ] && echo zts || echo cli)-alpine"
     pull_image "$image" "${plat[@]}" || { echo "$t: pull $image failed"; return 1; }
   fi
   docker run --rm "${plat[@]}" --name "openlog-php-build-$t-$$" -v "$WORK/src":/src:ro -v "$out":/out "$image" sh -ec '
