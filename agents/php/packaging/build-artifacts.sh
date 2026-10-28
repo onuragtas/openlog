@@ -132,8 +132,8 @@ build_one() { # build_one <minor>-<nts|zts>-<libc>
   echo "$key $phpver" > "$STAGE/modules/$key/.php-version"
   echo "$t -> modules/$key (PHP $phpver$( [ "$libc" = glibc ] && echo ", needs GLIBC_$(cat "$out/glibc")"))"
 }
-export -f pull_image build_one # xargs runs build_one in new bash processes
-export WORK STAGE PLATFORM PKG_DIR MAX_GLIBC
+export -f pull_image musl_tag build_one # xargs runs build_one in new bash processes
+export WORK STAGE PLATFORM PKG_DIR MAX_GLIBC MUSL_FLOOR
 
 echo "== $NAME: $(echo $TARGETS | wc -w) modules"
 # shellcheck disable=SC2086
