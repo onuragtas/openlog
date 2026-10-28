@@ -9831,7 +9831,7 @@ export interface components {
             /** @example threshold */
             key: string;
             /** @enum {string} */
-            kind: "number" | "duration" | "host" | "instance" | "service" | "environment" | "text";
+            kind: "number" | "duration" | "host" | "instance" | "service" | "environment" | "synthetic_check" | "text";
             /**
              * @description number: ratio (0..1), seconds, count, per_second, ms, bytes, score
              * @example ratio
@@ -9848,7 +9848,7 @@ export interface components {
             /** @example redis_memory_high */
             id: string;
             /** @enum {string} */
-            category: "host" | "container" | "apm" | "integration" | "kubernetes";
+            category: "host" | "container" | "apm" | "integration" | "kubernetes" | "synthetics";
             /** @description nginx, redis, mysql, postgresql (category integration) */
             integration?: string;
             rule_type: components["schemas"]["AlertRuleType"];
@@ -9862,7 +9862,7 @@ export interface components {
             params: components["schemas"]["AlertTemplateParam"][];
         };
         AlertTemplateRenderInput: {
-            /** @description Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance) */
+            /** @description Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance); synthetics: check_id + check_name (empty = every check) */
             params?: {
                 [key: string]: unknown;
             };
@@ -18818,7 +18818,7 @@ export interface operations {
     listAlertTemplates: {
         parameters: {
             query?: {
-                category?: "host" | "container" | "apm" | "integration" | "kubernetes";
+                category?: "host" | "container" | "apm" | "integration" | "kubernetes" | "synthetics";
                 integration?: string;
             };
             header?: never;

@@ -24,6 +24,7 @@ const (
 	TemplateAPM         = "apm"
 	TemplateIntegration = "integration"
 	TemplateKubernetes  = "kubernetes" // templates_k8s.go
+	TemplateSynthetics  = "synthetics" // templates_synthetics.go
 )
 
 // TemplateText holds a text per language ("en", "tr").
@@ -31,13 +32,14 @@ type TemplateText map[string]string
 
 // Param kinds and units (the UI renders a matching input).
 const (
-	ParamNumber      = "number"      // Unit: ratio (0..1, shown as %), seconds, count, per_second, ms, bytes
-	ParamDuration    = "duration"    // seconds
-	ParamHost        = "host"        // host.id
-	ParamInstance    = "instance"    // discovered service instance of the template's integration
-	ParamService     = "service"     // APM service.name
-	ParamEnvironment = "environment" // deployment.environment
-	ParamText        = "text"
+	ParamNumber         = "number"      // Unit: ratio (0..1, shown as %), seconds, count, per_second, ms, bytes
+	ParamDuration       = "duration"    // seconds
+	ParamHost           = "host"        // host.id
+	ParamInstance       = "instance"    // discovered service instance of the template's integration
+	ParamService        = "service"     // APM service.name
+	ParamEnvironment    = "environment" // deployment.environment
+	ParamText           = "text"
+	ParamSyntheticCheck = "synthetic_check" // synthetic check id (attr.check.id)
 )
 
 // TemplateParam describes one template parameter.
@@ -445,6 +447,7 @@ func buildTemplateCatalog() []*Template {
 	}
 	list = append(list, extraTemplates(integ, fixed)...)
 	list = append(list, k8sTemplates()...)
+	list = append(list, syntheticTemplates()...)
 	for _, t := range list {
 		if t.Params == nil {
 			t.Params = []TemplateParam{}
@@ -585,6 +588,12 @@ func renderTemplate(ctx context.Context, id string, in TemplateRenderInput, reso
 		target := p.str("service_name")
 		if inst := p.str("instance"); inst != "" {
 			target = inst
+		}
+		// A synthetic check is named by its own name; its id reads as a UUID in an incident list.
+		if check := p.str("check_name"); check != "" {
+			target = check
+		} else if id := p.str("check_id"); id != "" {
+			target = id
 		}
 		if host := p.str("host_name"); host != "" {
 			if target != "" {

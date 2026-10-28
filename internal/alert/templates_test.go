@@ -27,6 +27,10 @@ func sampleParams(t *Template) map[string]any {
 			p[x.Key] = "redis"
 		case "instance":
 			p[x.Key] = "/usr/bin/redis-server"
+		case "check_id":
+			p[x.Key] = "chk-1"
+		case "check_name":
+			p[x.Key] = "checkout endpoint"
 		}
 	}
 	return p
@@ -52,7 +56,7 @@ func TestTemplateCatalog(t *testing.T) {
 			}
 		}
 		switch tpl.Category {
-		case TemplateHost, TemplateContainer, TemplateAPM, TemplateKubernetes:
+		case TemplateHost, TemplateContainer, TemplateAPM, TemplateKubernetes, TemplateSynthetics:
 		case TemplateIntegration:
 			if tpl.Integration == "" {
 				t.Errorf("%s: integration template without integration", tpl.ID)
@@ -73,7 +77,8 @@ func TestTemplateCatalog(t *testing.T) {
 			t.Errorf("%s: rendered rule invalid: %v", tpl.ID, err)
 		}
 	}
-	for _, want := range []string{"host_disk_full", "container_restarts", "apm_error_rate", "apm_apdex_low", "redis_memory_high", "mysql_replica_lag", "postgresql_connections_high"} {
+	for _, want := range []string{"host_disk_full", "container_restarts", "apm_error_rate", "apm_apdex_low", "redis_memory_high", "mysql_replica_lag", "postgresql_connections_high",
+		"synthetic_check_failing", "synthetic_certificate_expiring"} {
 		if !ids[want] {
 			t.Errorf("catalog lacks %s", want)
 		}
@@ -133,6 +138,46 @@ func TestRenderTemplateScopes(t *testing.T) {
 	}
 	if c := condition(t, r); c["threshold"].(float64)*600 != 2.5 {
 		t.Errorf("restart threshold %v", c["threshold"])
+	}
+}
+
+func TestRenderSyntheticTemplates(t *testing.T) {
+	ctx := context.Background()
+	// One check: pinned by id, named by name, and a window without a run breaches.
+	r, err := renderTemplate(ctx, "synthetic_check_failing", TemplateRenderInput{Params: map[string]any{
+		"check_id": "chk-1", "check_name": "checkout endpoint"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := condition(t, r)
+	fs, _ := json.Marshal(c["filters"])
+	g, _ := json.Marshal(c["group_by"])
+	if string(fs) != `[{"field":"attr.check.id","op":"eq","values":["chk-1"]}]` || string(g) != `["attr.check.name","attr.location"]` {
+		t.Errorf("check scope: %s %s", fs, g)
+	}
+	if c["metric"] != "synthetics.check.success" || c["operator"] != "lt" || c["threshold"] != 1.0 || c["missing_data"] != "breach" {
+		t.Errorf("failing condition %v", c)
+	}
+	if !strings.Contains(r.Rule.Name, "checkout endpoint") {
+		t.Errorf("rule name %q", r.Rule.Name)
+	}
+	// Every check: no filter at all, same grouping, so checks added later are covered.
+	r, err = renderTemplate(ctx, "synthetic_check_failing", TemplateRenderInput{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fs, _ := json.Marshal(condition(t, r)["filters"]); string(fs) != `[]` {
+		t.Errorf("fleet filters %s", fs)
+	}
+	// Certificate: days left, the soonest to expire decides, and missing data says nothing.
+	r, err = renderTemplate(ctx, "synthetic_certificate_expiring", TemplateRenderInput{Params: map[string]any{"threshold": 7}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c = condition(t, r)
+	if c["metric"] != "synthetics.certificate.expiry" || c["threshold"] != 7.0 || c["aggregation"] != "last" ||
+		c["series_aggregation"] != "min" || c["missing_data"] != "keep" {
+		t.Errorf("certificate condition %v", c)
 	}
 }
 

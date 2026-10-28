@@ -6316,7 +6316,7 @@ paths:
       operationId: listAlertTemplates
       description: Recommended alert templates (alerting.md §2.8). Any role.
       parameters:
-        - { name: category, in: query, schema: { type: string, enum: [host, container, apm, integration, kubernetes] } }
+        - { name: category, in: query, schema: { type: string, enum: [host, container, apm, integration, kubernetes, synthetics] } }
         - { name: integration, in: query, schema: { type: string, example: redis } }
       responses:
         "200":
@@ -13806,7 +13806,7 @@ components:
       required: [key, kind, required, default, label]
       properties:
         key: { type: string, example: threshold }
-        kind: { type: string, enum: [number, duration, host, instance, service, environment, text] }
+        kind: { type: string, enum: [number, duration, host, instance, service, environment, synthetic_check, text] }
         unit: { type: string, description: "number: ratio (0..1), seconds, count, per_second, ms, bytes, score", example: ratio }
         required: { type: boolean }
         default: { description: Default value (number or string) }
@@ -13819,7 +13819,7 @@ components:
       required: [id, category, rule_type, severity, name, description, params]
       properties:
         id: { type: string, example: redis_memory_high }
-        category: { type: string, enum: [host, container, apm, integration, kubernetes] }
+        category: { type: string, enum: [host, container, apm, integration, kubernetes, synthetics] }
         integration: { type: string, description: "nginx, redis, mysql, postgresql (category integration)" }
         rule_type: { $ref: "#/components/schemas/AlertRuleType" }
         severity: { $ref: "#/components/schemas/AlertSeverity" }
@@ -13837,7 +13837,7 @@ components:
         params:
           type: object
           additionalProperties: true
-          description: "Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance)"
+          description: "Values by parameter key (unknown keys → 400); integration targets: host_id, discovery_id + instance (empty = every instance); synthetics: check_id + check_name (empty = every check)"
         language: { type: string, enum: [en, tr], description: "Language of the generated name and description (default en)" }
         name: { type: string, description: Rule name (default template name – target) }
         channel_ids:

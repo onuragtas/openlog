@@ -303,8 +303,9 @@ A catalog of prebuilt rules (code: `internal/alert/templates.go`) for hosts (`ho
 `host_disk_full`, `host_not_reporting`, `service_disappeared`), containers (`container_restarts`, `container_cpu_high`,
 `container_unhealthy`), APM services (`apm_error_rate`, `apm_apdex_low`, `apm_latency_p95`, `apm_service_silent`),
 Kubernetes (`k8s_pod_crashloop`, `k8s_pod_not_ready`, `k8s_node_not_ready`, `k8s_workload_replicas_unavailable`; code
-`internal/alert/templates_k8s.go`, metrics of semantic-conventions §7.4) and integrations (nginx, Redis, MySQL, PostgreSQL; metric names of semantic-conventions §6). `GET /alerts/templates` lists
-them with `en`/`tr` names, descriptions and parameters (`kind` number/duration/host/instance/service/environment/text,
+`internal/alert/templates_k8s.go`, metrics of semantic-conventions §7.4), synthetic checks (`synthetic_check_failing`,
+`synthetic_certificate_expiring`; code `internal/alert/templates_synthetics.go`) and integrations (nginx, Redis, MySQL, PostgreSQL; metric names of semantic-conventions §6). `GET /alerts/templates` lists
+them with `en`/`tr` names, descriptions and parameters (`kind` number/duration/host/instance/service/environment/synthetic_check/text,
 `unit`, `required`, `default`, `min`/`max`). `POST /alerts/templates/{id}/render` `{"params", "language", "name",
 "channel_ids"}` returns a validated `RuleInput` (label `openlog.template=<id>`) that is previewed and created with the
 normal rule endpoints; nothing is stored by rendering.
@@ -320,6 +321,14 @@ normal rule endpoints; nothing is stored by rendering.
   resolved number (re-render after changing the server setting).
 - `container_restarts` alerts when the Docker restart count grew by at least `restarts` within the window
   (`rate` > (`restarts` − 0.5) / window).
+- Synthetics templates (category `synthetics`) take an optional `check_id` (`attr.check.id eq`; empty = every check,
+  so a rule written once covers the checks added later) and `check_name` for the rule name, and are grouped by
+  `attr.check.name` and `attr.location` — the runs carry no host or service (D-132). `synthetic_check_failing`
+  (`synthetics.check.success`, `avg`/`min` < `threshold` ratio, default 1 = any failed run) treats **missing data as
+  breaching**: a check that stopped running is not a check that is passing. `synthetic_certificate_expiring`
+  (`synthetics.certificate.expiry`, `last`/`min` < days, default 14) keeps missing data as it was — a window without a
+  run says nothing about a certificate — and covers every `https` and `tls` check, which read the certificate on the
+  handshake they already make (D-140).
 - Kubernetes templates (category `kubernetes`) take optional `cluster_name` (`resource.k8s.cluster.name eq`) and
   `namespace` (`attr.k8s.namespace.name eq`; not on `k8s_node_not_ready`) and are always grouped by
   `resource.k8s.cluster.name` plus the object: `k8s_pod_crashloop` (`openlog.k8s.pod.status` with
