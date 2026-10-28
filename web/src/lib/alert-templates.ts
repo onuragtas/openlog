@@ -1,5 +1,6 @@
 // Pure helpers for recommended alert templates (alerting.md §2.8): localized texts, parameter form values ↔ API
-// params (ratios are edited as percent), fixed targets (host, instance, service) and the editor handoff.
+// params (ratios are edited as percent), fixed targets (host, instance, service, synthetic check) and the
+// editor handoff.
 // Unit-tested in alert-templates.test.ts.
 import type { AlertTemplate, AlertTemplateParam, AlertTemplateText } from "@/api/alerts";
 
@@ -22,6 +23,8 @@ export interface TemplateTarget {
   instance?: string;
   serviceName?: string;
   environment?: string;
+  checkId?: string;
+  checkName?: string;
 }
 
 const TARGET_KEYS: Record<string, keyof TemplateTarget> = {
@@ -31,6 +34,8 @@ const TARGET_KEYS: Record<string, keyof TemplateTarget> = {
   instance: "instance",
   service_name: "serviceName",
   environment: "environment",
+  check_id: "checkId",
+  check_name: "checkName",
 };
 
 /** API params supplied by the target (only keys the template declares, non-empty values). */
@@ -44,10 +49,12 @@ export function targetParams(t: Pick<AlertTemplate, "params">, target: TemplateT
   return out;
 }
 
-/** Parameters the user edits: target parameters fixed by the page and helper keys (host_name, discovery_id) are hidden. */
+/** Parameters the user edits: target parameters fixed by the page and helper keys (host_name, check_name, discovery_id) are hidden. */
 export function editableParams(t: Pick<AlertTemplate, "params">, target: TemplateTarget): AlertTemplateParam[] {
   const fixed = targetParams(t, target);
-  return t.params.filter((p) => p.key !== "host_name" && p.key !== "discovery_id" && !(p.key in fixed) && !(p.key === "instance" && !target.instance));
+  return t.params.filter(
+    (p) => p.key !== "host_name" && p.key !== "check_name" && p.key !== "discovery_id" && !(p.key in fixed) && !(p.key === "instance" && !target.instance),
+  );
 }
 
 /** Whether a template can be used with this target (ratio templates need an instance). */
@@ -112,7 +119,7 @@ export function buildParams(
   return { params: out, errors };
 }
 
-export const TEMPLATE_CATEGORIES = ["host", "container", "apm", "integration", "kubernetes"] as const;
+export const TEMPLATE_CATEGORIES = ["host", "container", "apm", "integration", "kubernetes", "synthetics"] as const;
 export type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
 
 /** Groups templates by category (catalog order kept) and, for integrations, by integration. */

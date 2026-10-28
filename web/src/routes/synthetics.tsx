@@ -5,7 +5,7 @@ import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { atLeast } from "@/api/roles";
+import { atLeast, can } from "@/api/roles";
 import { PageHeader } from "@/components/AppShell";
 import { ReadOnlyNotice } from "@/components/ReadOnly";
 import { SyntheticDetail } from "@/components/synthetics/SyntheticDetail";
@@ -57,6 +57,7 @@ export function SyntheticDetailPage() {
   const { checkId } = detailRoute.useParams();
   const navigate = useNavigate();
   const canWrite = useCanWrite();
+  const canAlert = can(useMe().data?.role, "alerts.write");
 
   return (
     <div className="flex flex-col gap-3">
@@ -69,6 +70,12 @@ export function SyntheticDetailPage() {
       <SyntheticDetail
         id={checkId}
         canWrite={canWrite}
+        // The recommended templates, filtered to synthetics and already pointed at this check.
+        onCreateAlert={
+          canAlert
+            ? (check) => void navigate({ to: "/alerts/templates", search: { category: "synthetics", check: check.id, checkName: check.name } as never })
+            : undefined
+        }
         onDeleted={() =>
           void navigate({ to: "/synthetics", search: (prev: Record<string, unknown>) => ({ range: prev.range, from: prev.from, to: prev.to }) as never })
         }

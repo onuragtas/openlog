@@ -5,6 +5,7 @@ import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { alertPreviewQuery, alertTemplateRenderQuery, alertTemplatesQuery, createAlertRule, type AlertRule, type AlertTemplate, type AlertTemplateParam } from "@/api/alerts";
 import { hostsQuery } from "@/api/queries";
+import { syntheticChecksQuery } from "@/api/synthetics";
 import { can } from "@/api/roles";
 import { WriteGuard } from "@/components/ReadOnly";
 import { FormError } from "@/components/settings/common";
@@ -58,7 +59,10 @@ function unitSuffix(p: AlertTemplateParam, units: { seconds: string; perSecond: 
   }
 }
 
-function ParamInput({ p, value, error, onChange, hostOptions }: { p: AlertTemplateParam; value: string; error?: ParamError; onChange: (v: string) => void; hostOptions: { id: string; name: string }[] }) {
+/** Which parameter kinds pick a value out of a list the installation already has. */
+const LISTED_KINDS = ["host", "synthetic_check"];
+
+function ParamInput({ p, value, error, onChange, options }: { p: AlertTemplateParam; value: string; error?: ParamError; onChange: (v: string) => void; options: { id: string; name: string }[] }) {
   const { t, i18n } = useTranslation();
   const uid = useId();
   const suffix = unitSuffix(p, { seconds: t("alerts.templates.units.seconds"), perSecond: t("alerts.templates.units.perSecond") });
@@ -74,7 +78,7 @@ function ParamInput({ p, value, error, onChange, hostOptions }: { p: AlertTempla
       <Input
         id={uid}
         inputMode={numeric ? "decimal" : undefined}
-        list={p.kind === "host" ? `${uid}-hosts` : undefined}
+        list={LISTED_KINDS.includes(p.kind) ? `${uid}-options` : undefined}
         value={value}
         min={range.min}
         max={range.max}
@@ -82,11 +86,11 @@ function ParamInput({ p, value, error, onChange, hostOptions }: { p: AlertTempla
         aria-describedby={error ? `${uid}-error` : undefined}
         onChange={(e) => onChange(e.target.value)}
       />
-      {p.kind === "host" && (
-        <datalist id={`${uid}-hosts`}>
-          {hostOptions.map((h) => (
-            <option key={h.id} value={h.id}>
-              {h.name}
+      {LISTED_KINDS.includes(p.kind) && (
+        <datalist id={`${uid}-options`}>
+          {options.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.name}
             </option>
           ))}
         </datalist>
@@ -108,6 +112,9 @@ function TemplateSetup({ template, target, onCreated }: { template: AlertTemplat
   const [created, setCreated] = useState<AlertRule | null>(null);
   const hosts = useQuery({ ...hostsQuery(), enabled: params.some((p) => p.kind === "host") });
   const hostOptions = (hosts.data ?? []).map((h) => ({ id: h.host_id, name: h.host_name || h.host_id }));
+  // The checks are only fetched for a template that asks for one, and only where the page did not fix it.
+  const checks = useQuery({ ...syntheticChecksQuery(false), enabled: params.some((p) => p.kind === "synthetic_check") });
+  const checkOptions = (checks.data?.checks ?? []).map((c) => ({ id: c.id, name: c.name || c.id }));
   const built = buildParams(params, values);
   const valid = Object.keys(built.errors).length === 0;
   const lang = templateLanguage(i18n.resolvedLanguage);
@@ -133,7 +140,14 @@ function TemplateSetup({ template, target, onCreated }: { template: AlertTemplat
       {params.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2">
           {params.map((p) => (
-            <ParamInput key={p.key} p={p} value={values[p.key] ?? ""} error={built.errors[p.key]} hostOptions={hostOptions} onChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))} />
+            <ParamInput
+              key={p.key}
+              p={p}
+              value={values[p.key] ?? ""}
+              error={built.errors[p.key]}
+              options={p.kind === "synthetic_check" ? checkOptions : hostOptions}
+              onChange={(v) => setValues((s) => ({ ...s, [p.key]: v }))}
+            />
           ))}
         </div>
       )}

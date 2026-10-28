@@ -65,6 +65,26 @@ describe("recommended alert templates", () => {
     expect(within(cards[0]!).getByRole("link", { name: "Customize in editor" })).toBeInTheDocument();
   });
 
+  it("sets up a synthetic check template with the check fixed by the page", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderUi(<TemplateGallery category="synthetics" target={{ checkId: "chk-1", checkName: "Checkout health" }} />);
+
+    const cards = await screen.findAllByTestId("alert-template");
+    expect(cards).toHaveLength(2);
+
+    await user.click(within(cards[0]!).getByRole("button", { name: "Set up Synthetic check failing" }));
+    // The check came from the check's own page, so it is not asked again.
+    expect(within(cards[0]!).queryByLabelText(/Check/)).not.toBeInTheDocument();
+    expect(within(cards[0]!).getByLabelText("Successful runs below (%)")).toHaveValue("100");
+
+    const create = within(cards[0]!).getByRole("button", { name: "Create rule" });
+    await vi.waitFor(() => expect(create).toBeEnabled(), { timeout: 3000 });
+    await user.click(create);
+    // The rule is named after the check, not after its id.
+    expect(await within(cards[0]!).findByTestId("template-created")).toHaveTextContent("Synthetic check failing – Checkout health");
+  });
+
   it("hides ratio templates without an instance and groups the catalog by category", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     renderUi(<TemplateGallery />);

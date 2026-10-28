@@ -3794,6 +3794,7 @@ export const tr: Messages = {
     },
     detail: {
       back: "Tüm kontroller",
+      createAlert: "Alarm kur",
       edit: "Düzenle",
       delete: "Sil",
       confirmDelete: "Silmeyi onayla",
@@ -4453,7 +4454,7 @@ export const tr: Messages = {
       intro: "Hostlar, konteynerler, APM servisleri ve entegrasyonlar için hazır kurallar. Parametreleri ayarlayın, önizlemeyi kontrol edin ve kuralı tek tıkla oluşturun ya da düzenleyicide açın.",
       filter: "Şablon kategorisi",
       all: "Tümü",
-      categories: { host: "Hostlar", container: "Konteynerler", apm: "APM servisleri", integration: "Entegrasyonlar", kubernetes: "Kubernetes" },
+      categories: { host: "Hostlar", container: "Konteynerler", apm: "APM servisleri", integration: "Entegrasyonlar", kubernetes: "Kubernetes", synthetics: "Sentetik kontroller" },
       integrationGroup: "Entegrasyon: {{name}}",
       targetFor: "Şablonlar {{target}} için oluşturulur.",
       empty: "Bu hedef için kullanılabilir şablon yok.",

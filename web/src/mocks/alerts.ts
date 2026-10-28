@@ -393,6 +393,8 @@ const P = {
   instance: { key: "instance", kind: "instance", required: false, default: "", label: lbl("Instance", "Instance") },
   window: { key: "window_seconds", kind: "duration", unit: "seconds", required: true, default: 300, min: 60, max: 21600, label: lbl("Window", "Pencere") },
   service: { key: "service_name", kind: "service", required: true, default: "", label: lbl("Service", "Servis") },
+  check: { key: "check_id", kind: "synthetic_check", required: false, default: "", label: lbl("Check (empty = every check)", "Kontrol (boş = tüm kontroller)") },
+  checkName: { key: "check_name", kind: "text", required: false, default: "", label: lbl("Check name", "Kontrol adı") },
 } as const satisfies Record<string, AlertTemplate["params"][number]>;
 
 export const MOCK_TEMPLATES: AlertTemplate[] = [
@@ -432,6 +434,15 @@ export const MOCK_TEMPLATES: AlertTemplate[] = [
     ];
     return list;
   })(),
+  // Synthetic checks (internal/alert/templates_synthetics.go, category synthetics)
+  { id: "synthetic_check_failing", category: "synthetics", rule_type: "metric_threshold", severity: "critical", metric: "synthetics.check.success",
+    name: lbl("Synthetic check failing", "Sentetik kontrol başarısız"),
+    description: lbl("The share of successful runs is below the threshold.", "Başarılı koşu oranı eşiğin altında."),
+    params: [P.check, P.checkName, { key: "threshold", kind: "number", unit: "ratio", required: true, default: 1, min: 0.01, max: 1, label: lbl("Successful runs below", "Başarılı koşu oranı şunun altında") }, P.window] },
+  { id: "synthetic_certificate_expiring", category: "synthetics", rule_type: "metric_threshold", severity: "warning", metric: "synthetics.certificate.expiry",
+    name: lbl("Certificate expiring", "Sertifika bitmek üzere"),
+    description: lbl("The certificate has fewer days left than the threshold.", "Sertifikanın kalan günü eşikten az."),
+    params: [P.check, P.checkName, { key: "threshold", kind: "number", unit: "count", required: true, default: 14, min: 1, max: 365, label: lbl("Days left below", "Kalan gün şunun altında") }, P.window] },
 ];
 
 /** Simplified server rendering (internal/alert/templates.go): enough for previews and creation in the mock UI. */
@@ -453,7 +464,8 @@ function renderTemplate(t: AlertTemplate, input: Partial<AlertTemplateRenderInpu
     threshold = Math.round(reference.value * reference.ratio);
   }
   if (t.id === "container_restarts") threshold = (Number(v("restarts")) - 0.5) / Number(v("window_seconds"));
-  const target = String(v("service_name") || instance || v("host_name") || hostId || "");
+  // Same order as internal/alert/templates.go: a synthetic check names itself, then host / service / instance.
+  const target = String(v("check_name") || v("check_id") || v("service_name") || instance || v("host_name") || hostId || "");
   const condition = t.rule_type === "apm"
     ? { service_name: String(v("service_name")), metric: "error_rate", window_seconds: Number(v("window_seconds")), operator: "gt" as const, threshold }
     : { metric: t.metric!, aggregation: "avg" as const, window_seconds: Number(v("window_seconds")), filters, group_by: ["host"], operator: "gt" as const, threshold };

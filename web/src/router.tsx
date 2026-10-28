@@ -979,22 +979,27 @@ const alertsRuleNewRoute = createRoute({
 
 /** Recommended alert templates, optionally for one host or APM service (routes/alerts.tsx). */
 export interface AlertTemplatesSearch {
-  category?: "host" | "container" | "apm" | "integration" | "kubernetes";
+  category?: "host" | "container" | "apm" | "integration" | "kubernetes" | "synthetics";
   integration?: string;
   host?: string;
   hostName?: string;
   service?: string;
+  /** Synthetic check the templates are for (the "create alert" shortcut of a check). */
+  check?: string;
+  checkName?: string;
 }
 
 const alertsTemplatesRoute = createRoute({
   getParentRoute: () => alertsRoute,
   path: "/templates",
   validateSearch: (s: Record<string, unknown>): AlertTemplatesSearch => ({
-    category: oneOf(["host", "container", "apm", "integration", "kubernetes"] as const, s.category),
+    category: oneOf(["host", "container", "apm", "integration", "kubernetes", "synthetics"] as const, s.category),
     integration: str(s.integration),
     host: str(s.host),
     hostName: str(s.hostName),
     service: str(s.service),
+    check: str(s.check),
+    checkName: str(s.checkName),
   }),
   component: AlertsTemplatesPage,
 });

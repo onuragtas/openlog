@@ -154,6 +154,24 @@ describe("Synthetics", () => {
     expect(within(screen.getByTestId("synthetic-locations")).getByText("openlog server")).toBeInTheDocument();
   });
 
+  it("hands the check to the alert templates, and hides the shortcut without the role", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onCreateAlert = vi.fn();
+    const { unmount } = renderWithClient(<SyntheticDetail id={MOCK_SYNTHETIC_IDS.down} onCreateAlert={onCreateAlert} />);
+
+    await screen.findByTestId("synthetic-detail");
+    await user.click(screen.getByRole("button", { name: "Create alert" }));
+    // The id scopes the rule, the name names it: both travel to the templates page.
+    expect(onCreateAlert).toHaveBeenCalledWith({ id: MOCK_SYNTHETIC_IDS.down, name: "Catalog API" });
+    unmount();
+
+    // A role that may not write alerts gets no shortcut: the page passes no callback.
+    renderWithClient(<SyntheticDetail id={MOCK_SYNTHETIC_IDS.down} canWrite />);
+    await screen.findByTestId("synthetic-detail");
+    expect(screen.queryByRole("button", { name: "Create alert" })).not.toBeInTheDocument();
+  });
+
   it("Turkish check states and failure kinds", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     await i18n.changeLanguage("tr");

@@ -142,7 +142,7 @@ export function AlertsTemplatesPage() {
   const { t } = useTranslation();
   const search = templatesRoute.useSearch();
   const navigate = useNavigate({ from: "/alerts/templates" });
-  const target = { hostId: search.host, hostName: search.hostName, serviceName: search.service };
+  const target = { hostId: search.host, hostName: search.hostName, serviceName: search.service, checkId: search.check, checkName: search.checkName };
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">{t("alerts.templates.intro")}</p>
@@ -158,9 +158,9 @@ export function AlertsTemplatesPage() {
           </Button>
         ))}
       </div>
-      {(search.hostName || search.host || search.service) && (
+      {(search.hostName || search.host || search.service || search.check) && (
         <p className="text-sm" data-testid="template-target">
-          {t("alerts.templates.targetFor", { target: search.service ?? search.hostName ?? search.host ?? "" })}
+          {t("alerts.templates.targetFor", { target: search.checkName ?? search.service ?? search.hostName ?? search.host ?? search.check ?? "" })}
         </p>
       )}
       <TemplateGallery key={JSON.stringify(search)} category={search.category} integration={search.integration} target={target} columns="3" />

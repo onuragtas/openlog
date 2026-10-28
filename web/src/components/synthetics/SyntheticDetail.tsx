@@ -2,7 +2,7 @@
 // recent failed runs (docs/contracts/api.md "Synthetic monitoring").
 // Router-free: the page passes the callbacks.
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Trash2 } from "lucide-react";
+import { BellPlus, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { deleteSyntheticCheck, syntheticResultsQuery, type SyntheticFailure, type SyntheticLocationStatus } from "@/api/synthetics";
@@ -30,9 +30,17 @@ export interface SyntheticDetailProps {
   id: string;
   canWrite?: boolean;
   onDeleted?: () => void;
+  /**
+   * Opens the recommended alert templates for this check (the page routes it).
+   *
+   * A check writes its runs as metrics and has no rule type of its own (D-132), which is cheap on the server
+   * and invisible to whoever is looking at a failing check: without this the next step is to know three
+   * metric names. Hidden where the role may not write alerts.
+   */
+  onCreateAlert?: (check: { id: string; name: string }) => void;
 }
 
-export function SyntheticDetail({ id, canWrite = false, onDeleted }: SyntheticDetailProps) {
+export function SyntheticDetail({ id, canWrite = false, onDeleted, onCreateAlert }: SyntheticDetailProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const queryClient = useQueryClient();
@@ -73,18 +81,26 @@ export function SyntheticDetail({ id, canWrite = false, onDeleted }: SyntheticDe
         <Badge variant={stateBadgeVariant(state)}>{t(`synthetics.state.${state}`)}</Badge>
         <Badge variant="outline">{t(`synthetics.kinds.${checkKind(check.type)}`)}</Badge>
         <span className="font-mono text-xs text-muted-foreground">{checkTarget(check)}</span>
-        {canWrite && (
-          <div className="ml-auto flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <Pencil className="size-4" aria-hidden="true" />
-              {t("synthetics.detail.edit")}
+        <div className="ml-auto flex flex-wrap gap-2">
+          {onCreateAlert && (
+            <Button type="button" variant="outline" size="sm" onClick={() => onCreateAlert({ id: check.id, name: check.name })}>
+              <BellPlus className="size-4" aria-hidden="true" />
+              {t("synthetics.detail.createAlert")}
             </Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => (confirmDelete ? remove.mutate() : setConfirmDelete(true))}>
-              <Trash2 className="size-4" aria-hidden="true" />
-              {confirmDelete ? t("synthetics.detail.confirmDelete") : t("synthetics.detail.delete")}
-            </Button>
-          </div>
-        )}
+          )}
+          {canWrite && (
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <Pencil className="size-4" aria-hidden="true" />
+                {t("synthetics.detail.edit")}
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => (confirmDelete ? remove.mutate() : setConfirmDelete(true))}>
+                <Trash2 className="size-4" aria-hidden="true" />
+                {confirmDelete ? t("synthetics.detail.confirmDelete") : t("synthetics.detail.delete")}
+              </Button>
+            </>
+          )}
+        </div>
       </div>
       <FormError error={remove.error} />
 

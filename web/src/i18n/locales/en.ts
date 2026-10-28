@@ -3793,6 +3793,7 @@ export const en = {
     },
     detail: {
       back: "All checks",
+      createAlert: "Create alert",
       edit: "Edit",
       delete: "Delete",
       confirmDelete: "Confirm delete",
@@ -4452,7 +4453,7 @@ export const en = {
       intro: "Prebuilt rules for hosts, containers, APM services and integrations. Set the parameters, check the preview and create the rule in one click, or open it in the editor.",
       filter: "Template category",
       all: "All",
-      categories: { host: "Hosts", container: "Containers", apm: "APM services", integration: "Integrations", kubernetes: "Kubernetes" },
+      categories: { host: "Hosts", container: "Containers", apm: "APM services", integration: "Integrations", kubernetes: "Kubernetes", synthetics: "Synthetic checks" },
       integrationGroup: "Integration: {{name}}",
       targetFor: "Templates are created for {{target}}.",
       empty: "No templates are available for this target.",
