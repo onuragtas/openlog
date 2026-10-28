@@ -205,6 +205,27 @@ func TestSyntheticCheckCRUD(t *testing.T) {
 	}
 }
 
+// The floor is 5 s (D-132 note in 0103_synthetic_interval_floor), and the timeout still has to fit inside it.
+func TestSyntheticCheckShortestInterval(t *testing.T) {
+	e := newSyntheticsEnv(t)
+	b := validCheckBody()
+	b["interval_seconds"] = 5
+	b["timeout_ms"] = 3000
+	rec := e.owner.do(http.MethodPost, "/api/v1/synthetics/checks", b)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("5 s interval refused: %d %s", rec.Code, rec.Body)
+	}
+	if c := decode[syntheticCheckJSON](t, rec); c.IntervalSeconds != 5 || c.TimeoutMs != 3000 {
+		t.Errorf("stored: %+v", c)
+	}
+	// The default timeout does not fit in 5 s, and that is a 400 rather than a quietly shortened timeout.
+	b = validCheckBody()
+	b["interval_seconds"] = 5
+	if rec := e.owner.do(http.MethodPost, "/api/v1/synthetics/checks", b); rec.Code != http.StatusBadRequest {
+		t.Fatalf("10 s timeout in a 5 s interval accepted: %d %s", rec.Code, rec.Body)
+	}
+}
+
 func TestSyntheticCheckValidation(t *testing.T) {
 	e := newSyntheticsEnv(t)
 	cases := map[string]func(map[string]any){
@@ -215,7 +236,7 @@ func TestSyntheticCheckValidation(t *testing.T) {
 		"reserved header":  func(b map[string]any) { b["headers"] = map[string]string{"Host": "evil.example.com"} },
 		"bad status":       func(b map[string]any) { b["expected_status"] = []int{99} },
 		"timeout":          func(b map[string]any) { b["timeout_ms"] = 10 },
-		"interval":         func(b map[string]any) { b["interval_seconds"] = 5 },
+		"interval":         func(b map[string]any) { b["interval_seconds"] = 4 },
 		"timeout interval": func(b map[string]any) { b["timeout_ms"] = 60000; b["interval_seconds"] = 30 },
 		"assertion":        func(b map[string]any) { b["assertion_type"] = "contains" },
 		"location":         func(b map[string]any) { b["locations"] = []string{"eu-west"} },

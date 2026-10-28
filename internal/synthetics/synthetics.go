@@ -78,7 +78,7 @@ const (
 	MaxAssertBytes   = 1024
 	MinTimeoutMs     = 500
 	MaxTimeoutMs     = 60000
-	MinIntervalSecs  = 30
+	MinIntervalSecs  = 5
 	MaxIntervalSecs  = 86400
 	MaxLocations     = 10
 	MaxPerOrg        = 100
@@ -227,7 +227,7 @@ func (in *Input) Validate() error {
 		in.IntervalSeconds = DefaultInterval
 	}
 	if in.IntervalSeconds < MinIntervalSecs || in.IntervalSeconds > MaxIntervalSecs {
-		return invalid("interval_seconds", "must be between 30 and 86400 seconds")
+		return invalid("interval_seconds", "must be between 5 and 86400 seconds")
 	}
 	// A run must finish before the next one is due, so a slow target cannot pile up runs.
 	if in.Timeout() > in.Interval() {

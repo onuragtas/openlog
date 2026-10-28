@@ -10606,7 +10606,7 @@ components:
         assertion_path: { type: string, maxLength: 1024, description: "json_path only, e.g. data.items.0.status" }
         assertion_value: { type: string, maxLength: 1024 }
         timeout_ms: { type: integer, minimum: 500, maximum: 60000, default: 10000, description: Must not be longer than interval_seconds }
-        interval_seconds: { type: integer, minimum: 30, maximum: 86400, default: 300 }
+        interval_seconds: { type: integer, minimum: 5, maximum: 86400, default: 300 }
         locations:
           type: array
           maxItems: 10

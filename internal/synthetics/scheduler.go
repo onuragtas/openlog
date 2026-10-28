@@ -18,7 +18,11 @@ type CheckRunner interface {
 const (
 	DefaultMaxConcurrent       = 20
 	DefaultTenantMaxConcurrent = 5
-	DefaultTick                = 5 * time.Second
+	// DefaultTick is the resolution of "due": a check cannot run more often than the leader claims rows, so
+	// the tick is a second rather than five to let the 5 s minimum interval (MinIntervalSecs) mean 5 s. One
+	// indexed claim query per second on one pod is cheaper than the surprise of a check that was asked for
+	// every 5 s running every 10.
+	DefaultTick = 1 * time.Second
 )
 
 // RunnerOptions configure a Runner.

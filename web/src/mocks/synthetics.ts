@@ -203,7 +203,7 @@ function validate(body: Partial<SyntheticCheckInput>): string | null {
   const timeout = body.timeout_ms ?? 10000;
   const interval = body.interval_seconds ?? 300;
   if (timeout < 500 || timeout > 60000) return "timeout_ms: must be between 500 and 60000 milliseconds";
-  if (interval < 30 || interval > 86400) return "interval_seconds: must be between 30 and 86400 seconds";
+  if (interval < 5 || interval > 86400) return "interval_seconds: must be between 5 and 86400 seconds";
   if (timeout > interval * 1000) return "timeout_ms: must not be longer than interval_seconds";
   return null;
 }

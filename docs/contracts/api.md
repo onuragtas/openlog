@@ -2058,9 +2058,9 @@ with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (d
 rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default `[200]`, ≤ 10
 codes of 100–599), "assertion_type"?: "none"|"contains"|"not_contains"|"json_path", "assertion_path"?
 (`json_path` only: a dotted path such as `data.items.0.status`), "assertion_value"?, "timeout_ms"? (default
-10000, 500–60000, not longer than the interval), "interval_seconds"? (default 300, 30–86400), "locations"?
-(default `["local"]`)}`. `location` `local` is the openlog server itself; the response's `locations` field
-lists the ones this installation offers.
+10000, 500–60000, not longer than the interval), "interval_seconds"? (default 300, 5–86400; the scheduler
+claims due rows once a second, so 5 s is the floor), "locations"? (default `["local"]`)}`. `location` `local`
+is the openlog server itself; the response's `locations` field lists the ones this installation offers.
 
 `status` is the schedule row per location: the last outcome (the current state, straight from PostgreSQL)
 and when the next run is due. The list adds `summary` per check over the range (`from`/`to`, default the
