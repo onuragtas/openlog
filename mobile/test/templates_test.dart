@@ -123,6 +123,28 @@ void main() {
     expect(editableParams(t).map((p) => p.key), ['threshold']);
   });
 
+  test('a check the shortcut already knows is not asked for again', () async {
+    final t = AlertTemplate.fromJson(
+      template(
+        'synthetic_check_failing',
+        params: [
+          param('check_id', kind: 'synthetic_check', required: false),
+          param('check_name', kind: 'text', required: false),
+          param('threshold', unit: 'ratio', byDefault: 1.0),
+        ],
+      ),
+    );
+
+    // Opened from the check itself: the id is fixed and the name is the
+    // catalog's way of naming the rule, so the only question left is the
+    // threshold.
+    expect(editableParams(t, fixed: {'check_id'}).map((p) => p.key), [
+      'threshold',
+    ]);
+    // Opened from the catalog: the check is asked for, the name still is not.
+    expect(editableParams(t).map((p) => p.key), ['check_id', 'threshold']);
+  });
+
   test('ratio templates are not offered without an instance', () async {
     final server = await FakeServer.start((req, seen) {
       if (seen.path.endsWith('/rule-types')) {

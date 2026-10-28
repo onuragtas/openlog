@@ -1613,6 +1613,69 @@ class LEn extends L {
   String get templatesKubernetes => 'Kubernetes';
 
   @override
+  String get templatesSynthetics => 'Synthetic checks';
+
+  @override
+  String get syntheticCreateAlert => 'Create alert';
+
+  @override
+  String get syntheticSummaryTitle => 'Uptime and latency';
+
+  @override
+  String get syntheticSeriesEmpty => 'No run in this period yet.';
+
+  @override
+  String get syntheticLocationsTitle => 'Locations';
+
+  @override
+  String get syntheticFailuresTitle => 'Recent failures';
+
+  @override
+  String get syntheticFailuresEmpty => 'No failed run in this period.';
+
+  @override
+  String get syntheticLastRun => 'Last run';
+
+  @override
+  String get syntheticNextRun => 'Next run';
+
+  @override
+  String get syntheticNever => 'never';
+
+  @override
+  String get syntheticInterval => 'Interval';
+
+  @override
+  String get syntheticTimeout => 'Timeout';
+
+  @override
+  String get syntheticUptime => 'Uptime';
+
+  @override
+  String get syntheticRuns => 'Runs';
+
+  @override
+  String get syntheticFailureCount => 'Failures';
+
+  @override
+  String get syntheticAvg => 'Average';
+
+  @override
+  String get syntheticP95 => 'p95';
+
+  @override
+  String get syntheticP99 => 'p99';
+
+  @override
+  String get syntheticStateUp => 'Up';
+
+  @override
+  String get syntheticStateDown => 'Down';
+
+  @override
+  String get syntheticStateUnknown => 'Unknown';
+
+  @override
   String get templatesEmpty => 'No ready-made rules in this category.';
 
   @override

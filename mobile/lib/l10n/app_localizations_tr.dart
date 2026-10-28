@@ -1609,6 +1609,69 @@ class LTr extends L {
   String get templatesKubernetes => 'Kubernetes';
 
   @override
+  String get templatesSynthetics => 'Sentetik kontroller';
+
+  @override
+  String get syntheticCreateAlert => 'Alarm kur';
+
+  @override
+  String get syntheticSummaryTitle => 'Çalışma oranı ve gecikme';
+
+  @override
+  String get syntheticSeriesEmpty => 'Bu aralıkta henüz koşu yok.';
+
+  @override
+  String get syntheticLocationsTitle => 'Konumlar';
+
+  @override
+  String get syntheticFailuresTitle => 'Son başarısız koşular';
+
+  @override
+  String get syntheticFailuresEmpty => 'Bu aralıkta başarısız koşu yok.';
+
+  @override
+  String get syntheticLastRun => 'Son koşu';
+
+  @override
+  String get syntheticNextRun => 'Sonraki koşu';
+
+  @override
+  String get syntheticNever => 'hiç';
+
+  @override
+  String get syntheticInterval => 'Aralık';
+
+  @override
+  String get syntheticTimeout => 'Zaman aşımı';
+
+  @override
+  String get syntheticUptime => 'Çalışma oranı';
+
+  @override
+  String get syntheticRuns => 'Koşu';
+
+  @override
+  String get syntheticFailureCount => 'Başarısız';
+
+  @override
+  String get syntheticAvg => 'Ortalama';
+
+  @override
+  String get syntheticP95 => 'p95';
+
+  @override
+  String get syntheticP99 => 'p99';
+
+  @override
+  String get syntheticStateUp => 'Çalışıyor';
+
+  @override
+  String get syntheticStateDown => 'Çalışmıyor';
+
+  @override
+  String get syntheticStateUnknown => 'Bilinmiyor';
+
+  @override
   String get templatesEmpty => 'Bu kategoride hazır kural yok.';
 
   @override

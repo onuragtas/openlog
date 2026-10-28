@@ -826,6 +826,7 @@ enum AlertTemplateCategory {
   apm('apm'),
   integration('integration'),
   kubernetes('kubernetes'),
+  synthetics('synthetics'),
   unknown('');
 
   const AlertTemplateCategory(this.wire);
@@ -2411,6 +2412,7 @@ enum AlertTemplateParamKind {
   instance('instance'),
   service('service'),
   environment('environment'),
+  syntheticCheck('synthetic_check'),
   text('text'),
   unknown('');
 
@@ -2960,6 +2962,33 @@ enum OqlColumnType {
   final String wire;
 
   static OqlColumnType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SyntheticAssertionType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SyntheticAssertionType {
+  none('none'),
+  contains('contains'),
+  notContains('not_contains'),
+  jsonPath('json_path'),
+  unknown('');
+
+  const SyntheticAssertionType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SyntheticAssertionType fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3539,33 +3568,6 @@ enum SloSliType {
   final String wire;
 
   static SloSliType fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// SyntheticAssertionType of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum SyntheticAssertionType {
-  none('none'),
-  contains('contains'),
-  notContains('not_contains'),
-  jsonPath('json_path'),
-  unknown('');
-
-  const SyntheticAssertionType(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static SyntheticAssertionType fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -10645,6 +10647,51 @@ class OqlSchemaFunctionsItem {
   final String description;
 }
 
+/// `SyntheticResults` of the openlog API contract.
+class SyntheticResults {
+  const SyntheticResults({
+    required this.check,
+    required this.summary,
+    required this.failures,
+  });
+
+  factory SyntheticResults.fromJson(
+    Object? json, [
+    String path = 'SyntheticResults',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticResults(
+      check: _req(m, 'check', path, (v, p) => SyntheticCheck.fromJson(v, p)),
+      summary: _req(
+        m,
+        'summary',
+        path,
+        (v, p) => SyntheticSummary.fromJson(v, p),
+      ),
+      failures: _req(
+        m,
+        'failures',
+        path,
+        (v, p) => _list<SyntheticFailure>(
+          v,
+          p,
+          (v, p) => SyntheticFailure.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'check': check.toJson(),
+    'summary': summary.toJson(),
+    'failures': [for (final e in failures) e.toJson()],
+  };
+
+  final SyntheticCheck check;
+  final SyntheticSummary summary;
+  final List<SyntheticFailure> failures;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -15974,6 +16021,265 @@ class OqlDiagnostic {
   final int column;
 }
 
+/// `SyntheticCheck` of the openlog API contract.
+class SyntheticCheck {
+  const SyntheticCheck({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.enabled,
+    required this.url,
+    required this.method,
+    required this.headers,
+    required this.body,
+    required this.expectedStatus,
+    required this.assertionType,
+    required this.assertionPath,
+    required this.assertionValue,
+    required this.timeoutMs,
+    required this.intervalSeconds,
+    required this.locations,
+    required this.target,
+    required this.dnsRecordType,
+    required this.dnsExpected,
+    required this.tlsWarningDays,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.status,
+  });
+
+  factory SyntheticCheck.fromJson(
+    Object? json, [
+    String path = 'SyntheticCheck',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticCheck(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, _str),
+      enabled: _req(m, 'enabled', path, _bool),
+      url: _req(m, 'url', path, _str),
+      method: _req(m, 'method', path, _str),
+      headers: _req(m, 'headers', path, (v, p) => _map<String>(v, p, _str)),
+      body: _req(m, 'body', path, _str),
+      expectedStatus: _req(
+        m,
+        'expected_status',
+        path,
+        (v, p) => _list<int>(v, p, _int),
+      ),
+      assertionType: _req(
+        m,
+        'assertion_type',
+        path,
+        SyntheticAssertionType.fromJson,
+      ),
+      assertionPath: _req(m, 'assertion_path', path, _str),
+      assertionValue: _req(m, 'assertion_value', path, _str),
+      timeoutMs: _req(m, 'timeout_ms', path, _int),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+      locations: _req(
+        m,
+        'locations',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      target: _req(m, 'target', path, _str),
+      dnsRecordType: _req(m, 'dns_record_type', path, _str),
+      dnsExpected: _req(
+        m,
+        'dns_expected',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      tlsWarningDays: _req(m, 'tls_warning_days', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _req(
+        m,
+        'status',
+        path,
+        (v, p) => _list<SyntheticLocationStatus>(
+          v,
+          p,
+          (v, p) => SyntheticLocationStatus.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'type': type,
+    'enabled': enabled,
+    'url': url,
+    'method': method,
+    'headers': headers,
+    'body': body,
+    'expected_status': expectedStatus,
+    'assertion_type': assertionType.wire,
+    'assertion_path': assertionPath,
+    'assertion_value': assertionValue,
+    'timeout_ms': timeoutMs,
+    'interval_seconds': intervalSeconds,
+    'locations': locations,
+    'target': target,
+    'dns_record_type': dnsRecordType,
+    'dns_expected': dnsExpected,
+    'tls_warning_days': tlsWarningDays,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'status': [for (final e in status) e.toJson()],
+  };
+
+  final String id;
+  final String name;
+  final String type;
+  final bool enabled;
+  final String url;
+  final String method;
+  final Map<String, String> headers;
+  final String body;
+  final List<int> expectedStatus;
+  final SyntheticAssertionType assertionType;
+  final String assertionPath;
+  final String assertionValue;
+  final int timeoutMs;
+  final int intervalSeconds;
+  final List<String> locations;
+  final String target;
+  final String dnsRecordType;
+  final List<String> dnsExpected;
+  final int tlsWarningDays;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<SyntheticLocationStatus> status;
+}
+
+/// Uptime and latency over one range; ratios and percentiles are null without runs.
+class SyntheticSummary {
+  const SyntheticSummary({
+    required this.from,
+    required this.to,
+    required this.step,
+    required this.runs,
+    required this.failures,
+    this.uptime,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    required this.points,
+  });
+
+  factory SyntheticSummary.fromJson(
+    Object? json, [
+    String path = 'SyntheticSummary',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticSummary(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      step: _req(m, 'step', path, _str),
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      uptime: _opt(m, 'uptime', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<SyntheticPoint>(
+          v,
+          p,
+          (v, p) => SyntheticPoint.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step': step,
+    'runs': runs,
+    'failures': failures,
+    'uptime': ?uptime,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'points': [for (final e in points) e.toJson()],
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final String step;
+  final int runs;
+  final int failures;
+  final double? uptime;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final List<SyntheticPoint> points;
+}
+
+/// `SyntheticFailure` of the openlog API contract.
+class SyntheticFailure {
+  const SyntheticFailure({
+    required this.timestamp,
+    required this.location,
+    required this.statusCode,
+    required this.errorKind,
+    required this.error,
+    required this.durationMs,
+  });
+
+  factory SyntheticFailure.fromJson(
+    Object? json, [
+    String path = 'SyntheticFailure',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticFailure(
+      timestamp: _req(m, 'timestamp', path, _time),
+      location: _req(m, 'location', path, _str),
+      statusCode: _req(m, 'status_code', path, _int),
+      errorKind: _req(m, 'error_kind', path, _str),
+      error: _req(m, 'error', path, _str),
+      durationMs: _req(m, 'duration_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'location': location,
+    'status_code': statusCode,
+    'error_kind': errorKind,
+    'error': error,
+    'duration_ms': durationMs,
+  };
+
+  final DateTime timestamp;
+  final String location;
+  final int statusCode;
+  final String errorKind;
+  final String error;
+  final double durationMs;
+}
+
 /// 0 or absent = unlimited (retention_days absent = table default)
 class PlanLimits {
   const PlanLimits({
@@ -16702,6 +17008,96 @@ class DashboardWidget {
   final DashboardUnit unit;
   final List<DashboardThreshold> thresholds;
   final DashboardWidgetOptions options;
+}
+
+/// The schedule row of one location - the last outcome and when the next run is due.
+class SyntheticLocationStatus {
+  const SyntheticLocationStatus({
+    required this.location,
+    required this.nextRunAt,
+    this.lastRunAt,
+    this.lastSuccess,
+    required this.lastStatusCode,
+    required this.lastDurationMs,
+    required this.lastErrorKind,
+    required this.lastError,
+  });
+
+  factory SyntheticLocationStatus.fromJson(
+    Object? json, [
+    String path = 'SyntheticLocationStatus',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticLocationStatus(
+      location: _req(m, 'location', path, _str),
+      nextRunAt: _req(m, 'next_run_at', path, _time),
+      lastRunAt: _opt(m, 'last_run_at', path, _time),
+      lastSuccess: _opt(m, 'last_success', path, _bool),
+      lastStatusCode: _req(m, 'last_status_code', path, _int),
+      lastDurationMs: _req(m, 'last_duration_ms', path, _num),
+      lastErrorKind: _req(m, 'last_error_kind', path, _str),
+      lastError: _req(m, 'last_error', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'location': location,
+    'next_run_at': nextRunAt.toUtc().toIso8601String(),
+    if (lastRunAt != null) 'last_run_at': lastRunAt!.toUtc().toIso8601String(),
+    'last_success': ?lastSuccess,
+    'last_status_code': lastStatusCode,
+    'last_duration_ms': lastDurationMs,
+    'last_error_kind': lastErrorKind,
+    'last_error': lastError,
+  };
+
+  final String location;
+  final DateTime nextRunAt;
+  final DateTime? lastRunAt;
+  final bool? lastSuccess;
+  final int lastStatusCode;
+  final double lastDurationMs;
+  final String lastErrorKind;
+  final String lastError;
+}
+
+/// `SyntheticPoint` of the openlog API contract.
+class SyntheticPoint {
+  const SyntheticPoint({
+    required this.t,
+    required this.runs,
+    required this.failures,
+    this.uptime,
+    this.p95Ms,
+  });
+
+  factory SyntheticPoint.fromJson(
+    Object? json, [
+    String path = 'SyntheticPoint',
+  ]) {
+    final m = _obj(json, path);
+    return SyntheticPoint(
+      t: _req(m, 't', path, _int),
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      uptime: _opt(m, 'uptime', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    't': t,
+    'runs': runs,
+    'failures': failures,
+    'uptime': ?uptime,
+    'p95_ms': ?p95Ms,
+  };
+
+  final int t;
+  final int runs;
+  final int failures;
+  final double? uptime;
+  final double? p95Ms;
 }
 
 /// `PlanQueryLimits` of the openlog API contract.
@@ -22809,129 +23205,6 @@ class SloStatus {
   final SloBudget budget;
 }
 
-/// The schedule row of one location - the last outcome and when the next run is due.
-class SyntheticLocationStatus {
-  const SyntheticLocationStatus({
-    required this.location,
-    required this.nextRunAt,
-    this.lastRunAt,
-    this.lastSuccess,
-    required this.lastStatusCode,
-    required this.lastDurationMs,
-    required this.lastErrorKind,
-    required this.lastError,
-  });
-
-  factory SyntheticLocationStatus.fromJson(
-    Object? json, [
-    String path = 'SyntheticLocationStatus',
-  ]) {
-    final m = _obj(json, path);
-    return SyntheticLocationStatus(
-      location: _req(m, 'location', path, _str),
-      nextRunAt: _req(m, 'next_run_at', path, _time),
-      lastRunAt: _opt(m, 'last_run_at', path, _time),
-      lastSuccess: _opt(m, 'last_success', path, _bool),
-      lastStatusCode: _req(m, 'last_status_code', path, _int),
-      lastDurationMs: _req(m, 'last_duration_ms', path, _num),
-      lastErrorKind: _req(m, 'last_error_kind', path, _str),
-      lastError: _req(m, 'last_error', path, _str),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'location': location,
-    'next_run_at': nextRunAt.toUtc().toIso8601String(),
-    if (lastRunAt != null) 'last_run_at': lastRunAt!.toUtc().toIso8601String(),
-    'last_success': ?lastSuccess,
-    'last_status_code': lastStatusCode,
-    'last_duration_ms': lastDurationMs,
-    'last_error_kind': lastErrorKind,
-    'last_error': lastError,
-  };
-
-  final String location;
-  final DateTime nextRunAt;
-  final DateTime? lastRunAt;
-  final bool? lastSuccess;
-  final int lastStatusCode;
-  final double lastDurationMs;
-  final String lastErrorKind;
-  final String lastError;
-}
-
-/// Uptime and latency over one range; ratios and percentiles are null without runs.
-class SyntheticSummary {
-  const SyntheticSummary({
-    required this.from,
-    required this.to,
-    required this.step,
-    required this.runs,
-    required this.failures,
-    this.uptime,
-    this.avgMs,
-    this.p50Ms,
-    this.p95Ms,
-    this.p99Ms,
-    required this.points,
-  });
-
-  factory SyntheticSummary.fromJson(
-    Object? json, [
-    String path = 'SyntheticSummary',
-  ]) {
-    final m = _obj(json, path);
-    return SyntheticSummary(
-      from: _req(m, 'from', path, _time),
-      to: _req(m, 'to', path, _time),
-      step: _req(m, 'step', path, _str),
-      runs: _req(m, 'runs', path, _int),
-      failures: _req(m, 'failures', path, _int),
-      uptime: _opt(m, 'uptime', path, _num),
-      avgMs: _opt(m, 'avg_ms', path, _num),
-      p50Ms: _opt(m, 'p50_ms', path, _num),
-      p95Ms: _opt(m, 'p95_ms', path, _num),
-      p99Ms: _opt(m, 'p99_ms', path, _num),
-      points: _req(
-        m,
-        'points',
-        path,
-        (v, p) => _list<SyntheticPoint>(
-          v,
-          p,
-          (v, p) => SyntheticPoint.fromJson(v, p),
-        ),
-      ),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'from': from.toUtc().toIso8601String(),
-    'to': to.toUtc().toIso8601String(),
-    'step': step,
-    'runs': runs,
-    'failures': failures,
-    'uptime': ?uptime,
-    'avg_ms': ?avgMs,
-    'p50_ms': ?p50Ms,
-    'p95_ms': ?p95Ms,
-    'p99_ms': ?p99Ms,
-    'points': [for (final e in points) e.toJson()],
-  };
-
-  final DateTime from;
-  final DateTime to;
-  final String step;
-  final int runs;
-  final int failures;
-  final double? uptime;
-  final double? avgMs;
-  final double? p50Ms;
-  final double? p95Ms;
-  final double? p99Ms;
-  final List<SyntheticPoint> points;
-}
-
 /// `JobMonitorState` of the openlog API contract.
 class JobMonitorState {
   const JobMonitorState({
@@ -23479,43 +23752,4 @@ class SloBudget {
   final double? remainingRatio;
   final double? burnRate;
   final bool met;
-}
-
-/// `SyntheticPoint` of the openlog API contract.
-class SyntheticPoint {
-  const SyntheticPoint({
-    required this.t,
-    required this.runs,
-    required this.failures,
-    this.uptime,
-    this.p95Ms,
-  });
-
-  factory SyntheticPoint.fromJson(
-    Object? json, [
-    String path = 'SyntheticPoint',
-  ]) {
-    final m = _obj(json, path);
-    return SyntheticPoint(
-      t: _req(m, 't', path, _int),
-      runs: _req(m, 'runs', path, _int),
-      failures: _req(m, 'failures', path, _int),
-      uptime: _opt(m, 'uptime', path, _num),
-      p95Ms: _opt(m, 'p95_ms', path, _num),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    't': t,
-    'runs': runs,
-    'failures': failures,
-    'uptime': ?uptime,
-    'p95_ms': ?p95Ms,
-  };
-
-  final int t;
-  final int runs;
-  final int failures;
-  final double? uptime;
-  final double? p95Ms;
 }

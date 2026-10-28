@@ -106,6 +106,7 @@ const schemaTargets = <String>[
   'OqlResult', // what a widget's query answers
   'OqlValidation', // what is wrong with a query, before it is run
   'OqlSchema', // the event types, attributes and functions of the language
+  'SyntheticResults', // one check: its schedule per location, its summary and what failed
 ];
 
 /// Schema names that would collide with something Flutter already owns.

@@ -30,6 +30,7 @@ import 'traces_screen.dart';
 import 'vuln_catalog.dart';
 import 'sections_screen.dart';
 import 'services_screen.dart';
+import 'synthetic_screen.dart';
 import 'settings_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -363,7 +364,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         searchKey: 'synthetics-search',
         active: active,
         emptyTitle: (l) => l.syntheticsEmpty,
-        card: syntheticCard,
+        card: (context, c) => syntheticCard(
+          context,
+          c,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => SyntheticScreen(
+                session: session,
+                sections: s,
+                id: c.id,
+                name: c.name,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

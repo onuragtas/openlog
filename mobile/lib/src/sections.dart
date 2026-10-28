@@ -36,6 +36,7 @@ import 'rum.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
 import 'status.dart';
+import 'synthetics.dart';
 import 'templates.dart';
 import 'time_range.dart';
 import 'services.dart';
@@ -132,6 +133,8 @@ class Sections {
     OqlSchemaController? oqlSchema,
     OqlValidationController? oqlValidation,
     IncidentController Function(String id)? incident,
+    SyntheticDetailController Function(String id)? syntheticDetail,
+    TemplatesController Function(String category)? templatesFor,
     ServiceOverviewController Function(String serviceName)? serviceOverview,
     ServiceErrorsController Function(String serviceName)? serviceErrors,
     ServiceTracesController Function(String serviceName)? serviceTraces,
@@ -173,6 +176,11 @@ class Sections {
     profileFlame,
   }) : range = range ?? TimeRangeController(),
        incident = incident ?? ((id) => IncidentController(client, id)),
+       syntheticDetail =
+           syntheticDetail ?? ((id) => SyntheticDetailController(client, id)),
+       templatesFor =
+           templatesFor ??
+           ((category) => TemplatesController(client)..category = category),
        serviceOverview =
            serviceOverview ??
            ((name) => ServiceOverviewController(client, name)),
@@ -522,6 +530,13 @@ class Sections {
   /// the person moves between tabs. Functions rather than instances so a test
   /// can hand a screen a scripted one without a server.
   final IncidentController Function(String id) incident;
+
+  /// One check, for the screen a tapped row opens.
+  final SyntheticDetailController Function(String id) syntheticDetail;
+
+  /// A catalog of its own for a screen that opens the templates with a
+  /// category already chosen, so the alerts tab's filter stays where it was.
+  final TemplatesController Function(String category) templatesFor;
   final ServiceOverviewController Function(String serviceName) serviceOverview;
   final ServiceErrorsController Function(String serviceName) serviceErrors;
   final ServiceTracesController Function(String serviceName) serviceTraces;

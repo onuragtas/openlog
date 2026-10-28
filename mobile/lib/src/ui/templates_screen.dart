@@ -25,6 +25,8 @@ class TemplatesBody extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.active,
+    this.controller,
+    this.target = const {},
   });
 
   final SessionController session;
@@ -33,6 +35,15 @@ class TemplatesBody extends StatefulWidget {
   /// Whether this is the tab being looked at. The catalog is asked for the
   /// first time somebody looks, not when the alerts screen is built.
   final bool active;
+
+  /// A catalog of this screen's own, for a list opened with a category
+  /// already chosen: the tab's filter is the person's and is not moved by a
+  /// shortcut taken somewhere else. The category chips are hidden with it.
+  final TemplatesController? controller;
+
+  /// Parameters the screen behind this one already knows (`check_id`,
+  /// `check_name`), passed on to the setup form.
+  final Map<String, String> target;
 
   @override
   State<TemplatesBody> createState() => _TemplatesBodyState();
@@ -51,8 +62,11 @@ class _TemplatesBodyState extends State<TemplatesBody> {
     _loadIfVisible();
   }
 
+  TemplatesController get _templates =>
+      widget.controller ?? widget.sections.templates;
+
   void _loadIfVisible() {
-    final c = widget.sections.templates;
+    final c = _templates;
     if (!widget.active || c.loaded || c.loadingFirst) return;
     WidgetsBinding.instance.addPostFrameCallback((_) => c.refresh());
   }
@@ -63,43 +77,45 @@ class _TemplatesBodyState extends State<TemplatesBody> {
     'apm' => l.templatesApm,
     'integration' => l.templatesIntegrations,
     'kubernetes' => l.templatesKubernetes,
+    'synthetics' => l.templatesSynthetics,
     _ => l.templatesAll,
   };
 
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
-    final c = widget.sections.templates;
+    final c = _templates;
     final theme = Theme.of(context);
 
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) => Column(
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-            child: Row(
-              children: [
-                for (final key in ['', ...templateCategories])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      key: Key(
-                        'templates-category-${key.isEmpty ? 'all' : key}',
+          if (widget.controller == null)
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+              child: Row(
+                children: [
+                  for (final key in ['', ...templateCategories])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        key: Key(
+                          'templates-category-${key.isEmpty ? 'all' : key}',
+                        ),
+                        label: Text(_categoryLabel(l, key)),
+                        selected: c.category == key,
+                        onSelected: (_) {
+                          if (c.category == key) return;
+                          c.category = key;
+                          c.refresh();
+                        },
                       ),
-                      label: Text(_categoryLabel(l, key)),
-                      selected: c.category == key,
-                      onSelected: (_) {
-                        if (c.category == key) return;
-                        c.category = key;
-                        c.refresh();
-                      },
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: FailureBanner(
@@ -154,6 +170,7 @@ class _TemplatesBodyState extends State<TemplatesBody> {
                               session: widget.session,
                               sections: widget.sections,
                               template: c.items[i],
+                              target: widget.target,
                             ),
                           ),
                         ),
@@ -227,11 +244,16 @@ class TemplateSetupScreen extends StatefulWidget {
     required this.session,
     required this.sections,
     required this.template,
+    this.target = const {},
   });
 
   final SessionController session;
   final Sections sections;
   final AlertTemplate template;
+
+  /// Parameters the screen that opened this one already knows: they are sent
+  /// with the rest and are not asked for again.
+  final Map<String, String> target;
 
   @override
   State<TemplateSetupScreen> createState() => _TemplateSetupScreenState();
@@ -246,7 +268,10 @@ class _TemplateSetupScreenState extends State<TemplateSetupScreen> {
   @override
   void initState() {
     super.initState();
-    _params = editableParams(widget.template);
+    _params = editableParams(
+      widget.template,
+      fixed: widget.target.keys.toSet(),
+    );
     _values = initialValues(_params);
     _fields = {
       for (final p in _params)
@@ -354,7 +379,10 @@ class _TemplateSetupScreenState extends State<TemplateSetupScreen> {
                     key: const Key('template-check'),
                     onPressed: controller.busy || !valid
                         ? null
-                        : () => controller.check(built.params),
+                        : () => controller.check({
+                            ...widget.target,
+                            ...built.params,
+                          }),
                     icon: const Icon(Icons.visibility_outlined),
                     label: Text(l.templatesPreview),
                   ),

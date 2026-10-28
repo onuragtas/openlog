@@ -393,12 +393,17 @@ Widget sloCard(BuildContext context, SloListItem s) {
   );
 }
 
-Widget syntheticCard(BuildContext context, SyntheticCheckListItem s) {
+Widget syntheticCard(
+  BuildContext context,
+  SyntheticCheckListItem s, {
+  VoidCallback? onOpen,
+}) {
   final l = L.of(context);
   final summary = s.summary;
   final failing = (summary?.failures ?? 0) > 0;
   return SectionCard(
     cardKey: Key('synthetic-${s.id}'),
+    onOpen: onOpen,
     title: s.name,
     subtitle: s.url,
     trailing: s.type,

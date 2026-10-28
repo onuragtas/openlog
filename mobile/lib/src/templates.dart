@@ -19,6 +19,7 @@ const templateCategories = <String>[
   'apm',
   'integration',
   'kubernetes',
+  'synthetics',
 ];
 
 /// English or Turkish, which is all the contract offers.
@@ -38,9 +39,20 @@ String templateText(AlertTemplateText? text, String locale) {
 /// `host_name` and `discovery_id` are the catalog's way of carrying a target
 /// the page already knows; on a phone the list is not opened from a host, so
 /// they are left to the server and `instance` with them.
-List<AlertTemplateParam> editableParams(AlertTemplate template) => [
+///
+/// [fixed] are the keys a screen already knows -- the check behind an "alarm
+/// kur" shortcut -- and asking for them again would be asking the person to
+/// retype what they just tapped.
+List<AlertTemplateParam> editableParams(
+  AlertTemplate template, {
+  Set<String> fixed = const {},
+}) => [
   for (final p in template.params)
-    if (p.key != 'host_name' && p.key != 'discovery_id' && p.key != 'instance')
+    if (p.key != 'host_name' &&
+        p.key != 'check_name' &&
+        p.key != 'discovery_id' &&
+        p.key != 'instance' &&
+        !fixed.contains(p.key))
       p,
 ];
 

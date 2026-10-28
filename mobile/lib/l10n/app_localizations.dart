@@ -2923,6 +2923,132 @@ abstract class L {
   /// **'Kubernetes'**
   String get templatesKubernetes;
 
+  /// No description provided for @templatesSynthetics.
+  ///
+  /// In en, this message translates to:
+  /// **'Synthetic checks'**
+  String get templatesSynthetics;
+
+  /// No description provided for @syntheticCreateAlert.
+  ///
+  /// In en, this message translates to:
+  /// **'Create alert'**
+  String get syntheticCreateAlert;
+
+  /// No description provided for @syntheticSummaryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Uptime and latency'**
+  String get syntheticSummaryTitle;
+
+  /// No description provided for @syntheticSeriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No run in this period yet.'**
+  String get syntheticSeriesEmpty;
+
+  /// No description provided for @syntheticLocationsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Locations'**
+  String get syntheticLocationsTitle;
+
+  /// No description provided for @syntheticFailuresTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent failures'**
+  String get syntheticFailuresTitle;
+
+  /// No description provided for @syntheticFailuresEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No failed run in this period.'**
+  String get syntheticFailuresEmpty;
+
+  /// No description provided for @syntheticLastRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Last run'**
+  String get syntheticLastRun;
+
+  /// No description provided for @syntheticNextRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Next run'**
+  String get syntheticNextRun;
+
+  /// No description provided for @syntheticNever.
+  ///
+  /// In en, this message translates to:
+  /// **'never'**
+  String get syntheticNever;
+
+  /// No description provided for @syntheticInterval.
+  ///
+  /// In en, this message translates to:
+  /// **'Interval'**
+  String get syntheticInterval;
+
+  /// No description provided for @syntheticTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Timeout'**
+  String get syntheticTimeout;
+
+  /// No description provided for @syntheticUptime.
+  ///
+  /// In en, this message translates to:
+  /// **'Uptime'**
+  String get syntheticUptime;
+
+  /// No description provided for @syntheticRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get syntheticRuns;
+
+  /// No description provided for @syntheticFailureCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Failures'**
+  String get syntheticFailureCount;
+
+  /// No description provided for @syntheticAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get syntheticAvg;
+
+  /// No description provided for @syntheticP95.
+  ///
+  /// In en, this message translates to:
+  /// **'p95'**
+  String get syntheticP95;
+
+  /// No description provided for @syntheticP99.
+  ///
+  /// In en, this message translates to:
+  /// **'p99'**
+  String get syntheticP99;
+
+  /// No description provided for @syntheticStateUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Up'**
+  String get syntheticStateUp;
+
+  /// No description provided for @syntheticStateDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Down'**
+  String get syntheticStateDown;
+
+  /// No description provided for @syntheticStateUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get syntheticStateUnknown;
+
   /// No description provided for @templatesEmpty.
   ///
   /// In en, this message translates to:

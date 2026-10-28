@@ -1641,6 +1641,16 @@ class OpenlogClient {
         await _send('GET', _listPath('/api/v1/synthetics/checks', q)),
       );
 
+  /// One check: its schedule per location, the period's summary and the runs
+  /// that failed. The list already carries the rest.
+  Future<SyntheticResults> syntheticResults(String id) async =>
+      SyntheticResults.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/synthetics/checks/${Uri.encodeComponent(id)}/results',
+        ),
+      );
+
   Future<JobMonitorPage> jobMonitors({String q = ''}) async =>
       JobMonitorPage.fromJson(
         await _send('GET', _listPath('/api/v1/jobs/monitors', q)),
