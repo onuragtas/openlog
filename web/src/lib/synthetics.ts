@@ -221,7 +221,7 @@ export function validateSyntheticInput(input: SyntheticCheckInput): SyntheticFor
   const timeout = input.timeout_ms ?? 10000;
   const interval = input.interval_seconds ?? 300;
   if (!Number.isInteger(timeout) || timeout < 500 || timeout > 60000 || timeout > interval * 1000) e.timeout_ms = "timeout";
-  if (!Number.isInteger(interval) || interval < 30 || interval > 86400) e.interval_seconds = "interval";
+  if (!Number.isInteger(interval) || interval < 5 || interval > 86400) e.interval_seconds = "interval";
   if (type !== "http") return e;
   if (input.assertion_type === "contains" || input.assertion_type === "not_contains") {
     if (!input.assertion_value) e.assertion_value = "assertionValue";

@@ -140,6 +140,29 @@ describe("Synthetics", () => {
     expect(onSaved).not.toHaveBeenCalled();
   });
 
+  it("accepts the 5 second floor and rejects anything below it", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    renderWithClient(<SyntheticForm onSaved={onSaved} />);
+
+    await user.type(screen.getByLabelText("Name"), "Fast check");
+    await user.type(screen.getByLabelText("URL"), "https://shop.example.com/health");
+    await user.clear(screen.getByLabelText("Timeout (ms)"));
+    await user.type(screen.getByLabelText("Timeout (ms)"), "2000");
+    await user.clear(screen.getByLabelText("Interval (seconds)"));
+    await user.type(screen.getByLabelText("Interval (seconds)"), "4");
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+    expect(screen.getByText("Enter 5 to 86400 seconds.")).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await user.clear(screen.getByLabelText("Interval (seconds)"));
+    await user.type(screen.getByLabelText("Interval (seconds)"), "5");
+    await user.click(screen.getByRole("button", { name: "Create check" }));
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(screen.queryByText("Enter 5 to 86400 seconds.")).not.toBeInTheDocument();
+  });
+
   it("shows uptime, latency and the recent failures of a check", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     renderWithClient(<SyntheticDetail id={MOCK_SYNTHETIC_IDS.down} canWrite />);
