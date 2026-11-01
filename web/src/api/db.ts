@@ -2,6 +2,7 @@
 // include the range spec; the window is resolved inside queryFn like every other factory (api/queries.ts). A
 // database instance is addressed by its service.instance.id, a statement by its fingerprint.
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
@@ -91,14 +92,14 @@ export const dbLookupQuery = (p: { dbSystem: string; statement: string; range: R
 
 export type AppDbQuery = S["ApmDbQuery"];
 export type AppDbPlan = S["ApmDbQueryPlan"];
-export type AppDbSort = "time" | "calls" | "slowest" | "errors";
+export type AppDbSort = "time" | "calls" | "slowest" | "errors" | "max" | "statement" | "database";
 
 /** The statements of every service, as the applications measured them (apm.md §7.1). */
-export const appDbQueriesQuery = (range: RangeSpec, sort: AppDbSort, q: string) =>
+export const appDbQueriesQuery = (range: RangeSpec, list: ListState<AppDbSort>, q: string) =>
   queryOptions({
-    queryKey: ["apm", "db-queries", ...rangeKey(range), sort, q],
+    queryKey: ["apm", "db-queries", ...rangeKey(range), list, q],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/apm/db-queries", { params: { query: { ...window(range), sort, q: q || undefined } }, signal })).queries,
+      unwrap(await api.GET("/api/v1/apm/db-queries", { params: { query: { ...window(range), ...list, q: q || undefined } }, signal })),
     refetchInterval: live(range),
     placeholderData: keepPreviousData,
   });

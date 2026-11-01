@@ -1881,9 +1881,11 @@ paths:
       operationId: listApmDbQueriesAcrossServices
       description: >-
         The database statements every service runs, as the applications measured them, so with no connection to the database
-        server (apm.md §7). Statements group by database and normalized text. At most 1000 rows.
+        server (apm.md §7). Statements group by database and normalized text. A page is at most 1000 rows.
       parameters:
-        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors], default: time } }
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors, max, statement, database], default: time } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: q, in: query, description: Part of the statement text, schema: { type: string } }
         - { name: service, in: query, schema: { type: string } }
         - { name: db_system, in: query, schema: { type: string } }
@@ -1903,6 +1905,7 @@ paths:
                   queries:
                     type: array
                     items: { $ref: "#/components/schemas/ApmDbQuery" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -8428,6 +8431,16 @@ components:
       description: OPENLOG_AUTH_MODE=static only (development/tests); also accepted as a bearer token in that mode.
 
   parameters:
+    ListDir:
+      name: dir
+      in: query
+      description: Sort direction. Each column has a natural default. See "Lists" in api.md.
+      schema: { type: string, enum: [asc, desc] }
+    ListOffset:
+      name: offset
+      in: query
+      description: Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page.
+      schema: { type: integer, minimum: 0, maximum: 100000 }
     HostID:
       name: host_id
       in: path

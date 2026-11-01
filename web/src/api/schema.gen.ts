@@ -1096,7 +1096,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The database statements every service runs, as the applications measured them, so with no connection to the database server (apm.md §7). Statements group by database and normalized text. At most 1000 rows. */
+        /** @description The database statements every service runs, as the applications measured them, so with no connection to the database server (apm.md §7). Statements group by database and normalized text. A page is at most 1000 rows. */
         get: operations["listApmDbQueriesAcrossServices"];
         put?: never;
         post?: never;
@@ -10979,6 +10979,10 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+        ListDir: "asc" | "desc";
+        /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+        ListOffset: number;
         HostID: string;
         K8sClusterUID: string;
         K8sNamespace: string;
@@ -13280,7 +13284,11 @@ export interface operations {
     listApmDbQueriesAcrossServices: {
         parameters: {
             query?: {
-                sort?: "time" | "calls" | "slowest" | "errors";
+                sort?: "time" | "calls" | "slowest" | "errors" | "max" | "statement" | "database";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 /** @description Part of the statement text */
                 q?: string;
                 service?: string;
@@ -13304,6 +13312,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         queries: components["schemas"]["ApmDbQuery"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };

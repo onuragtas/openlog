@@ -549,6 +549,10 @@ export const en = {
     },
   },
   common: {
+    previousPage: "Previous",
+    nextPage: "Next",
+    pageRange: "{{from}}–{{to}}",
+    perPage: "Rows per page",
     loading: "Loading…",
     retry: "Retry",
     search: "Search",

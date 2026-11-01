@@ -10,6 +10,12 @@ Errors: HTTP status + `{"error": {"code": "invalid_argument", "message": "…"}}
 telemetry query could not read data from storage, typically parts on S3 after tiered storage; retry later or query a
 more recent range, [config.md](config.md) "ClickHouse read-only user and per-tenant query limits"), `timeout` (504).
 
+## Lists
+
+A list that can outgrow a page takes `sort`, `dir` (`asc` or `desc`), `limit` and `offset`, and answers with `has_more`. Sorting happens on the server, because a browser can only sort the page it was sent. `sort` is one of the
+names that list documents, and anything else is `400`: the name selects a column and never reaches a statement. Each column has a natural direction when `dir` is absent. There is no total, because counting a grouped list means reading all of it: `has_more` is known by asking for one row more
+than a page. `offset` stops at 100000, since ClickHouse reads and discards everything before it, and past that a filter is the better tool. Logs and traces page with a `cursor` instead, because they change while being read. A row can repeat or be skipped between pages when new data arrives.
+
 ## Authentication
 
 `OPENLOG_AUTH_MODE=postgres` (default). Every endpoint except the public ones below needs one of:

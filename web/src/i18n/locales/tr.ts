@@ -550,6 +550,10 @@ export const tr: Messages = {
     },
   },
   common: {
+    previousPage: "Önceki",
+    nextPage: "Sonraki",
+    pageRange: "{{from}}–{{to}}",
+    perPage: "Sayfa başına satır",
     loading: "Yükleniyor…",
     retry: "Tekrar dene",
     search: "Ara",

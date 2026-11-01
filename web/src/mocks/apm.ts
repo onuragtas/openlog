@@ -627,7 +627,7 @@ export const apmHandlers = [
     const queries = Object.entries(QUERIES).flatMap(([service, list]) =>
       list.map((q) => ({ ...q, throughput: q.calls / 60, error_rate: q.calls ? q.errors / q.calls : 0, time_share: 0.25, services: [service] })),
     );
-    return HttpResponse.json({ queries });
+    return HttpResponse.json({ queries, has_more: false });
   }),
   http.get(`${API}/apm/db-queries/plans`, () =>
     HttpResponse.json({ plans: [{ plan: "Seq Scan on orders  (cost=0.00..35.50 rows=2550 width=4)\n  Filter: (id = $1)", service: "orders", generic: true, captured_at: new Date().toISOString(), trace_id: "0af7651916cd43dd8448eb211c80319c" }] }),

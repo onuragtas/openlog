@@ -114,7 +114,7 @@ and that can be later than the next launch on older iOS versions.
 **How far this has been tested.** On an Android 16 emulator with IL2CPP, a real native crash, an abort and an ANR were reported end to end, and on a real
 iPhone with iOS 26, so were a real native crash and an abort, through MetricKit. Native stacks were read back with their function names after uploading `symbols.zip` on
 Android and the dSYMs on iOS. On that iPhone the reports arrived on the next launch or two, but Apple promises no timing. Out-of-memory kills use the same path as the ANR, but were
-not triggered, and neither was a report delivered from the phone to a server over the network: it was read from the device and sent on by hand.
+not triggered. A report has also reached a server from an iPhone by itself on the next launch, with no Xcode attached, though so far that is one crash on one device in a development build.
 
 ## Not covered
 

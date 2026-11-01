@@ -4,21 +4,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useId, useState } from "react";
+import { Fragment, useEffect, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { appDbPlansQuery, appDbQueriesQuery, type AppDbQuery, type AppDbSort } from "@/api/db";
 import { ServerViewLink } from "@/components/apm/ServerViewLink";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMs, formatRate, formatRpm } from "@/lib/apm";
 import { formatDateTime } from "@/lib/format";
+import { useListState } from "@/lib/list";
 import type { RangeSpec } from "@/lib/time";
-
-const SORTS: AppDbSort[] = ["time", "calls", "slowest", "errors"];
 
 function Plans({ range, query }: { range: RangeSpec; query: AppDbQuery }) {
   const { t, i18n } = useTranslation();
@@ -44,11 +43,13 @@ function Plans({ range, query }: { range: RangeSpec; query: AppDbQuery }) {
 export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: string; onSearch: (q: string) => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const sortId = useId();
   const searchId = useId();
-  const [sort, setSort] = useState<AppDbSort>("time");
+  const list = useListState<AppDbSort>("time");
   const [open, setOpen] = useState<string | null>(null);
-  const queries = useQuery(appDbQueriesQuery(range, sort, q));
+  const queries = useQuery(appDbQueriesQuery(range, list.state, q));
+  const { toFirstPage } = list;
+  // A search changes what the pages hold, so staying on page five of it would usually show nothing.
+  useEffect(toFirstPage, [q, toFirstPage]);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-xs text-muted-foreground">{t("db.app.hint")}</p>
@@ -57,40 +58,30 @@ export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: stri
           <Label htmlFor={searchId}>{t("db.app.search")}</Label>
           <Input id={searchId} className="w-64" defaultValue={q} onChange={(e) => onSearch(e.target.value)} />
         </div>
-        <div className="flex flex-col gap-1">
-          <Label htmlFor={sortId}>{t("apm.databases.sort")}</Label>
-          <NativeSelect id={sortId} value={sort} onChange={(e) => setSort(e.target.value as AppDbSort)}>
-            {SORTS.map((s) => (
-              <option key={s} value={s}>
-                {t(`apm.databases.sorts.${s}`)}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
       </div>
       {queries.isPending ? (
         <LoadingState />
       ) : queries.isError ? (
         <ErrorState error={queries.error} onRetry={() => void queries.refetch()} />
-      ) : queries.data.length === 0 ? (
+      ) : queries.data.queries.length === 0 && list.state.offset === 0 ? (
         <EmptyState>{t("db.app.empty")}</EmptyState>
       ) : (
         <div className="rounded-xl border bg-card">
           <Table data-testid="app-db-queries">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("apm.databases.statement")}</TableHead>
+                <SortableHead column="statement" defaultDir="asc" {...list.head}>{t("apm.databases.statement")}</SortableHead>
                 <TableHead>{t("db.app.services")}</TableHead>
-                <TableHead>{t("apm.databases.system")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.throughput")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.avg")}</TableHead>
+                <SortableHead column="database" defaultDir="asc" {...list.head}>{t("apm.databases.system")}</SortableHead>
+                <SortableHead column="calls" className="text-right" {...list.head}>{t("apm.metrics.throughput")}</SortableHead>
+                <SortableHead column="slowest" className="text-right" {...list.head}>{t("apm.metrics.avg")}</SortableHead>
                 <TableHead className="text-right">{t("apm.metrics.p95")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.errorRate")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.timeShare")}</TableHead>
+                <SortableHead column="errors" className="text-right" {...list.head}>{t("apm.metrics.errorRate")}</SortableHead>
+                <SortableHead column="time" className="text-right" {...list.head}>{t("apm.metrics.timeShare")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {queries.data.map((d) => {
+              {queries.data.queries.map((d) => {
                 const key = `${d.db_system}|${d.db_name}|${d.statement}`;
                 const expanded = open === key;
                 return (
@@ -141,6 +132,7 @@ export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: stri
               })}
             </TableBody>
           </Table>
+          <ListPager list={list} count={queries.data.queries.length} hasMore={queries.data.has_more ?? false} />
         </div>
       )}
     </div>

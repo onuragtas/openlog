@@ -111,7 +111,7 @@ bu bir sonraki açılıştan sonra olabilir.
 
 **Native stack'leri okumak için sembollerini** release derlemesinin bir parçası olarak yükle: [Stack'lerini oku](/tr/guide/crash-reporting#read-your-stacks) bölümüne bak.
 
-**Ne kadar test edildi?** IL2CPP ile Android 16 emülatöründe gerçek bir native crash, bir abort ve bir ANR uçtan uca raporlandı. iOS 26'lı gerçek bir iPhone'da da MetricKit üzerinden gerçek bir native crash ve bir abort raporlandı. Native stack'ler, Android'de `symbols.zip`, iOS'ta dSYM'ler yüklendikten sonra fonksiyon adlarıyla okundu. O iPhone'da raporlar sonraki bir iki açılışta geldi, ama Apple bir süre garanti etmiyor. Bellek yetersizliği ANR ile aynı yolu kullanıyor ama tetiklenmedi. Raporun telefondan sunucuya ağ üzerinden teslimi de denenmedi: rapor cihazdan okunup sunucuya elle gönderildi.
+**Ne kadar test edildi?** IL2CPP ile Android 16 emülatöründe gerçek bir native crash, bir abort ve bir ANR uçtan uca raporlandı. iOS 26'lı gerçek bir iPhone'da da MetricKit üzerinden gerçek bir native crash ve bir abort raporlandı. Native stack'ler, Android'de `symbols.zip`, iOS'ta dSYM'ler yüklendikten sonra fonksiyon adlarıyla okundu. O iPhone'da raporlar sonraki bir iki açılışta geldi, ama Apple bir süre garanti etmiyor. Bellek yetersizliği ANR ile aynı yolu kullanıyor ama tetiklenmedi. Rapor, bir iPhone'dan sunucuya sonraki açılışta Xcode bağlı olmadan kendiliğinden de ulaştı; ama bu şimdilik tek cihazda, tek crash ve geliştirme derlemesiyle görüldü.
 
 ## Kapsam dışı {#not-covered}
 

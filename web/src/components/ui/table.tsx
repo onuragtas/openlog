@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
 import { createContext, useContext, type ComponentProps } from "react";
 import { cn } from "@/lib/utils";
 
@@ -75,5 +76,37 @@ export function TableCell({ className, label, ...props }: ComponentProps<"td"> &
       )}
       {...props}
     />
+  );
+}
+
+export type SortDir = "asc" | "desc";
+
+/**
+ * A heading that sorts its column. It only reports what was clicked: whoever owns the rows decides where the sorting happens,
+ * which for a list that can outgrow a page has to be the server, because a browser can only sort the page it was sent.
+ */
+export function SortableHead<S extends string>({
+  column, sort, dir, onSort, defaultDir = "desc", children, className, ...props
+}: Omit<ComponentProps<"th">, "onClick"> & {
+  column: S;
+  sort: S;
+  dir: SortDir;
+  onSort: (column: S, dir: SortDir) => void;
+  /** The way this column reads best at first: largest first for numbers, A to Z for names. */
+  defaultDir?: SortDir;
+}) {
+  const active = sort === column;
+  const Icon = !active ? ChevronsUpDown : dir === "asc" ? ChevronUp : ChevronDown;
+  return (
+    <TableHead aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"} className={className} {...props}>
+      <button
+        type="button"
+        className={cn("inline-flex items-center gap-1 hover:text-foreground", active && "text-foreground")}
+        onClick={() => onSort(column, active ? (dir === "asc" ? "desc" : "asc") : defaultDir)}
+      >
+        {children}
+        <Icon className={cn("size-3", !active && "opacity-50")} aria-hidden="true" />
+      </button>
+    </TableHead>
   );
 }

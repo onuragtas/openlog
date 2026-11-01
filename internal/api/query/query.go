@@ -284,6 +284,7 @@ type Select struct {
 	orderBy []string
 	limitBy string
 	limit   int
+	offset  int
 	params  map[string]string
 	err     error
 }
@@ -385,6 +386,12 @@ func (q *Select) LimitBy(n int, exprs ...string) *Select {
 // Limit sets LIMIT.
 func (q *Select) Limit(n int) *Select {
 	q.limit = n
+	return q
+}
+
+// Offset sets OFFSET, for a page past the first.
+func (q *Select) Offset(n int) *Select {
+	q.offset = n
 	return q
 }
 
@@ -508,6 +515,9 @@ func (q *Select) render(params map[string]string) (string, error) {
 	}
 	if q.limit > 0 {
 		b.WriteString(" LIMIT " + strconv.Itoa(q.limit))
+		if q.offset > 0 {
+			b.WriteString(" OFFSET " + strconv.Itoa(q.offset))
+		}
 	}
 	return b.String(), nil
 }

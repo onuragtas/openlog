@@ -364,7 +364,7 @@ The same function normalizes the statements of database query monitoring (db-mon
 
 ### 7.1 Across services, and execution plans
 
-`GET /apm/db-queries` reads `apm_db_queries_1m` across services, so statements show on the **Databases** screen with no connection to the database server. These are the
+`GET /apm/db-queries` reads `apm_db_queries_1m` across services (sorted and paged as api.md "Lists" says; `time_share` is of the page), so statements show on the **Databases** screen with no connection to the database server. These are the
 application's durations, which include the network and waiting for a pooled connection, so they are shown beside the server's view (db-monitoring.md) and never merged into it.
 Wait events and sessions need the server: no one application can see them.
 

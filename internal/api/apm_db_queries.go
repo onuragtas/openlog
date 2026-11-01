@@ -24,12 +24,24 @@ const (
 	maxDBPlanScan = 200
 )
 
+var apmDBQueriesList = listSpec{
+	columns: map[string]string{
+		"time": "a_dsum", "calls": "a_req", "slowest": "a_avg", "errors": "a_err", "max": "a_max",
+		"statement": "db_statement_normalized", "database": "db_name",
+	},
+	sort:     "time",
+	asc:      map[string]bool{"statement": true, "database": true},
+	tiebreak: []string{"db_system", "db_name", "db_statement_normalized"},
+	limit:    100,
+	maxLimit: 1000,
+}
+
 // apmDBQueriesSelect groups a statement across the services running it.
-func apmDBQueriesSelect(sc *query.Scope, r *http.Request, from, to time.Time, order string, limit int) *query.Select {
+func apmDBQueriesSelect(sc *query.Scope, r *http.Request, from, to time.Time, l listRequest) *query.Select {
 	q := minuteRange(sc.From(query.ApmDBQueries1m).Columns(cols([]string{"db_system", "db_name", "db_statement_normalized", "anyLast(db_operation) AS a_op"},
 		callAggColumns, []string{"max(duration_max_ms) AS a_max", "sum(duration_sum_ms) / greatest(sum(calls), 1e-9) AS a_avg",
 			"arraySort(groupUniqArray(50)(toString(service_name))) AS a_services"})...), from, to).
-		GroupBy("db_system", "db_name", "db_statement_normalized").OrderBy(order).Limit(limit)
+		GroupBy("db_system", "db_name", "db_statement_normalized").OrderBy(apmDBQueriesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	params := r.URL.Query()
 	if v := params.Get("db_system"); v != "" {
 		q.Where("db_system = {db_system:String}").Param("db_system", v)
@@ -52,15 +64,11 @@ func (s *Server) apmDBQueries(w http.ResponseWriter, r *http.Request, sc *query.
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 100, 1000)
+	l, err := apmDBQueriesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	order := map[string]string{"": "a_dsum DESC", "time": "a_dsum DESC", "calls": "a_req DESC", "slowest": "a_avg DESC", "errors": "a_err DESC"}[r.URL.Query().Get("sort")]
-	if order == "" {
-		return badRequest("sort must be time, calls, slowest or errors")
-	}
-	rows, err := sc.Query(r.Context(), apmDBQueriesSelect(sc, r, from, to, order, limit))
+	rows, err := sc.Query(r.Context(), apmDBQueriesSelect(sc, r, from, to, l))
 	if err != nil {
 		return err
 	}
@@ -84,12 +92,14 @@ func (s *Server) apmDBQueries(w http.ResponseWriter, r *http.Request, sc *query.
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	out, more := page(out, l)
+	// A share of the page and not of everything, since the rest was not read. Over a page it still says which of these matter.
 	for i := range out {
 		if totalTime > 0 {
 			out[i].TimeShare = out[i].TimeConsumedMs / totalTime
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"queries": out})
+	writeJSON(w, http.StatusOK, map[string]any{"queries": out, "has_more": more})
 	return nil
 }
 
