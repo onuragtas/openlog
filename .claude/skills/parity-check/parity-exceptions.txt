@@ -1,0 +1,5 @@
+# Gaps the platforms make, not gaps in the work. One per line: METHOD /path  # why
+# parity-check/SKILL.md step 3 says what counts.
+POST /api/v1/auth/device  # A phone keeps a device token, and a browser has a session cookie instead.
+POST /api/v1/auth/login  # The browser's cookie session. A phone signs in through /auth/device.
+POST /api/v1/auth/logout  # Ends the browser's cookie session. A phone revokes its device token.
