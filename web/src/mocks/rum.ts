@@ -234,11 +234,31 @@ export const rumHandlers = [
     }),
   )),
 
+  http.get(`${API}/analytics/compare`, authed(() => {
+    const metric = (current: number, previous: number | null) => ({
+      current,
+      previous,
+      change: previous === null ? null : current - previous,
+      change_rate: previous ? (current - previous) / previous : null,
+    });
+    return HttpResponse.json({
+      days: 28,
+      current: { from: "2026-10-04", to: "2026-10-31" },
+      previous: { from: "2026-09-06", to: "2026-10-03" },
+      previous_partial: false,
+      collecting: true,
+      metrics: {
+        users: metric(1200, 1000), new_users: metric(300, 400), avg_daily_users: metric(180, 180), dau: metric(210, 190), wau: metric(620, 600),
+        mau: metric(1200, 1000), stickiness: metric(0.175, 0.19), sessions: metric(5000, null), page_views: metric(21000, 20000), events: metric(900, 0),
+      },
+    });
+  })),
+
   http.get(`${API}/analytics/events`, authed(() =>
     HttpResponse.json({
       events: [
-        { name: "checkout_started", count: 1200, sessions: 800, users: 640 },
-        { name: "signup", count: 300, sessions: 290, users: 280 },
+        { name: "checkout_started", count: 1200, sessions: 800, users: 640, previous_count: 1000, previous_sessions: 900, previous_users: 640 },
+        { name: "signup", count: 300, sessions: 290, users: 280, previous_count: 0, previous_sessions: 0, previous_users: 0 },
       ],
     }),
   )),

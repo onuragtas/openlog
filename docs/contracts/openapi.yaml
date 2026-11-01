@@ -3119,6 +3119,7 @@ paths:
         answers `collecting: false` with no days. The range defaults to 30 days and is at most 92.
       parameters:
         - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: days, in: query, description: "A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers.", schema: { type: integer, minimum: 1, maximum: 90 } }
         - { name: environment, in: query, schema: { type: string } }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
@@ -3228,6 +3229,7 @@ paths:
         on distinct names (analytics.md §4).
       parameters:
         - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: days, in: query, description: "A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers.", schema: { type: integer, minimum: 1, maximum: 90 } }
         - { name: environment, in: query, schema: { type: string } }
         - { name: name, in: query, schema: { type: string } }
         - { name: param, in: query, schema: { type: string } }
@@ -3257,6 +3259,7 @@ paths:
         and 90 days.
       parameters:
         - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: days, in: query, description: "A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers.", schema: { type: integer, minimum: 1, maximum: 90 } }
         - { name: environment, in: query, schema: { type: string } }
         - { name: by, in: query, schema: { type: string, enum: [referrer, source, medium, campaign], default: referrer } }
         - { name: from, in: query, schema: { type: string } }
@@ -3277,6 +3280,48 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/compare:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsCompare
+      description: >-
+        A period against the one before it, of the same length. Both are complete days ending with yesterday in UTC, because counting today would
+        show every number falling every morning (analytics.md §6.1).
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: days, in: query, schema: { type: integer, minimum: 1, maximum: 90, default: 28 } }
+      responses:
+        "200":
+          description: The numbers of both periods
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days, current, previous, previous_partial, collecting, metrics]
+                properties:
+                  days: { type: integer }
+                  current: { $ref: "#/components/schemas/AnalyticsPeriod" }
+                  previous: { $ref: "#/components/schemas/AnalyticsPeriod" }
+                  previous_partial: { type: boolean, description: The application has no data from the start of the previous period, so a rise may only mean it was installed since }
+                  collecting: { type: boolean }
+                  metrics:
+                    type: object
+                    required: [users, new_users, avg_daily_users, dau, wau, mau, stickiness, sessions, page_views, events]
+                    properties:
+                      users: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      new_users: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      avg_daily_users: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      dau: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      wau: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      mau: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      stickiness: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      sessions: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      page_views: { $ref: "#/components/schemas/AnalyticsMetric" }
+                      events: { $ref: "#/components/schemas/AnalyticsMetric" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
   /api/v1/analytics/audience:
     get:
       tags: [rum]
@@ -3287,6 +3332,7 @@ paths:
         from the mobile SDKs only. At most 200 rows and 90 days.
       parameters:
         - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: days, in: query, description: "A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers.", schema: { type: integer, minimum: 1, maximum: 90 } }
         - { name: environment, in: query, schema: { type: string } }
         - { name: by, in: query, schema: { type: string, enum: [country, device, model, os, browser, version], default: country } }
         - { name: from, in: query, schema: { type: string } }
@@ -11553,10 +11599,27 @@ components:
       type: object
       required: [name, count, sessions, users]
       properties:
+        previous_count: { type: number, description: Set with `days`. Optional, since older servers do not send it. }
+        previous_sessions: { type: number }
+        previous_users: { type: number }
         name: { type: string, description: The event name, or the parameter value when one was asked for }
         count: { type: number }
         sessions: { type: number }
         users: { type: number, description: 0 unless the key is in visitors mode }
+    AnalyticsPeriod:
+      type: object
+      required: [from, to]
+      properties:
+        from: { type: string, format: date }
+        to: { type: string, format: date, description: The last day in the period }
+    AnalyticsMetric:
+      type: object
+      required: [current, previous, change, change_rate]
+      properties:
+        current: { type: number }
+        previous: { type: number, nullable: true, description: "Null where that period can't be known: events are kept for 90 days" }
+        change: { type: number, nullable: true, description: current minus previous }
+        change_rate: { type: number, nullable: true, description: "change / previous, and null when previous is 0, since a rise from nothing has no percentage" }
     AnalyticsSource:
       type: object
       required: [value, sessions, users]
@@ -11564,6 +11627,8 @@ components:
         value: { type: string, description: Empty for a direct visit }
         sessions: { type: number }
         users: { type: number }
+        previous_sessions: { type: number, description: Set with `days`. Optional, since older servers do not send it. }
+        previous_users: { type: number }
     AnalyticsDay:
       type: object
       required: [date, dau, wau, mau, new_users, stickiness]

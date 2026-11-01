@@ -26,10 +26,10 @@ export type AnalyticsGrain = "day" | "week" | "month";
 const RETENTION_DAYS: Record<AnalyticsGrain, number> = { day: 30, week: 180, month: 365 };
 
 /** Over days and not the page's range: an hour of DAU means nothing, so the server's 30-day default applies. */
-export const analyticsActivityQuery = (app: string, environment?: string) =>
+export const analyticsActivityQuery = (app: string, days: number, environment?: string) =>
   queryOptions({
-    queryKey: ["analytics", "activity", app, environment ?? ""],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/activity", { params: { query: { app, environment } }, signal })),
+    queryKey: ["analytics", "activity", app, environment ?? "", days],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/activity", { params: { query: { app, environment, days } }, signal })),
     enabled: app !== "",
   });
 
@@ -43,29 +43,39 @@ export const rumCrashesQuery = (range: RangeSpec, app: string, environment?: str
     refetchInterval: live(range),
   });
 
-export const analyticsEventsQuery = (app: string, environment?: string) =>
+export const analyticsEventsQuery = (app: string, days: number, environment?: string) =>
   queryOptions({
-    queryKey: ["analytics", "events", app, environment ?? ""],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/events", { params: { query: { app, environment } }, signal })),
+    queryKey: ["analytics", "events", app, environment ?? "", days],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/events", { params: { query: { app, environment, days } }, signal })),
     enabled: app !== "",
+  });
+
+export type AnalyticsMetric = components["schemas"]["AnalyticsMetric"];
+
+export const analyticsCompareQuery = (app: string, days: number, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "compare", app, environment ?? "", days],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/compare", { params: { query: { app, environment, days } }, signal })),
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
   });
 
 export type AnalyticsAudienceBy = "country" | "device" | "model" | "os" | "browser" | "version";
 
-export const analyticsAudienceQuery = (app: string, by: AnalyticsAudienceBy, environment?: string) =>
+export const analyticsAudienceQuery = (app: string, by: AnalyticsAudienceBy, days: number, environment?: string) =>
   queryOptions({
-    queryKey: ["analytics", "audience", app, environment ?? "", by],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/audience", { params: { query: { app, environment, by } }, signal })),
+    queryKey: ["analytics", "audience", app, environment ?? "", by, days],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/audience", { params: { query: { app, environment, by, days } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
   });
 
 export type AnalyticsSourceBy = "referrer" | "source" | "medium" | "campaign";
 
-export const analyticsAcquisitionQuery = (app: string, by: AnalyticsSourceBy, environment?: string) =>
+export const analyticsAcquisitionQuery = (app: string, by: AnalyticsSourceBy, days: number, environment?: string) =>
   queryOptions({
-    queryKey: ["analytics", "acquisition", app, environment ?? "", by],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/acquisition", { params: { query: { app, environment, by } }, signal })),
+    queryKey: ["analytics", "acquisition", app, environment ?? "", by, days],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/acquisition", { params: { query: { app, environment, by, days } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
   });

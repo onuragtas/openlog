@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -280,5 +280,16 @@ describe("RUM", () => {
 
     await user.click(within(table).getByRole("button", { name: `Open session ${MOCK_RUM_SESSION_ID}` }));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ session_id: MOCK_RUM_SESSION_ID }));
+  });
+
+  it("shows how far each number moved, as a count and a share", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<RumAnalyticsTab app={MOCK_RUM_APP} />);
+    const totals = await screen.findByTestId("analytics-totals");
+    await waitFor(() => expect(totals).toHaveTextContent("+200(+20%)"));
+    // A fall, and a rise from nothing, which has no percentage.
+    expect(totals).toHaveTextContent("−100(−25%)");
+    expect(totals).toHaveTextContent("+900(new)");
+    expect(await screen.findByTestId("analytics-compare-range")).toHaveTextContent("2026-09-06");
   });
 });

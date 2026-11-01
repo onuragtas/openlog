@@ -4,14 +4,16 @@
 // application that sends no visitor id gets a sentence saying what to turn on rather than empty charts, because an
 // empty retention table reads as "nobody came back".
 import { useQuery } from "@tanstack/react-query";
-import { Users } from "lucide-react";
-import { useState } from "react";
+import { ArrowDown, ArrowUp, Users } from "lucide-react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   analyticsAcquisitionQuery,
   analyticsAudienceQuery,
   type AnalyticsAudienceBy,
   analyticsActivityQuery,
+  type AnalyticsMetric,
+  analyticsCompareQuery,
   analyticsEventsQuery,
   analyticsRetentionQuery,
   type AnalyticsCohort,
@@ -24,16 +26,43 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { formatNumber } from "@/lib/format";
 import { formatShare } from "@/lib/rum";
+import { cn } from "@/lib/utils";
 
 const GRAINS: AnalyticsGrain[] = ["day", "week", "month"];
 /** Columns of the retention table. Beyond this it stops fitting and stops being what anyone reads. */
 const MAX_PERIODS = 12;
 
-function Total({ label, value }: { label: string; value: string }) {
+const PERIODS = [7, 28, 90];
+
+/** One decimal, because a whole number would show a 0.4% move as nothing having happened. */
+const formatPercent = (share: number, locale: string) => new Intl.NumberFormat(locale, { style: "percent", maximumFractionDigits: 1 }).format(share);
+
+/** How far a number moved: the count and the share, as Google Analytics shows them. An arrow and a sign carry the direction, so it never rests on color alone. */
+function Delta({ change, rate, format }: { change: number | null | undefined; rate?: number | null; format?: (n: number) => string }) {
+  const { t, i18n } = useTranslation();
+  if (change === null || change === undefined) return <span className="text-xs text-muted-foreground">–</span>;
+  const number = format ?? ((n: number) => formatNumber(n, i18n.language));
+  if (change === 0) return <span className="text-xs text-muted-foreground">{t("rum.analytics.noChange")}</span>;
+  const up = change > 0;
+  const Arrow = up ? ArrowUp : ArrowDown;
+  return (
+    <span className={cn("inline-flex items-center gap-0.5 text-xs tabular-nums", up ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")} data-testid="analytics-delta">
+      <Arrow className="size-3" aria-hidden="true" />
+      {up ? "+" : "−"}
+      {number(Math.abs(change))}
+      <span className="ml-1">
+        {rate === null || rate === undefined ? t("rum.analytics.fromNothing") : `(${up ? "+" : "−"}${formatPercent(Math.abs(rate), i18n.language)})`}
+      </span>
+    </span>
+  );
+}
+
+function Total({ label, value, metric, format }: { label: string; value: string; metric?: AnalyticsMetric; format?: (n: number) => string }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-xl border bg-card p-3">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-2xl font-semibold tabular-nums">{value}</span>
+      {metric && <Delta change={metric.change} rate={metric.change_rate} format={format} />}
     </div>
   );
 }
@@ -103,7 +132,7 @@ function RetentionTable({ cohorts, grain }: { cohorts: AnalyticsCohort[]; grain:
 const SOURCE_BYS: AnalyticsSourceBy[] = ["referrer", "source", "medium", "campaign"];
 
 /** One named thing per row with its counts. These read as lists, so a table beats a chart and shows every number. */
-function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameLabel: string; rows: { name: string; values: number[] }[]; columns: string[] }) {
+function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameLabel: string; rows: { name: string; values: number[]; previous?: (number | undefined)[] }[]; columns: string[] }) {
   const { t, i18n } = useTranslation();
   if (rows.length === 0) return <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">{t("rum.analytics.noRows")}</p>;
   return (
@@ -122,7 +151,10 @@ function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameL
             <tr key={r.name} className="border-t">
               <th scope="row" className="px-2 py-1.5 text-left font-mono text-xs font-normal break-all">{r.name}</th>
               {r.values.map((v, i) => (
-                <td key={i} className="px-2 py-1.5 text-right tabular-nums">{formatNumber(v, i18n.language)}</td>
+                <td key={i} className="px-2 py-1.5 text-right tabular-nums">
+                  <div>{formatNumber(v, i18n.language)}</div>
+                  {r.previous?.[i] !== undefined && <Delta change={v - r.previous[i]!} rate={r.previous[i] === 0 ? null : (v - r.previous[i]!) / r.previous[i]!} />}
+                </td>
               ))}
             </tr>
           ))}
@@ -132,9 +164,9 @@ function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameL
   );
 }
 
-function EventsSection({ app, environment }: { app: string; environment?: string }) {
+function EventsSection({ app, days, environment }: { app: string; days: number; environment?: string }) {
   const { t } = useTranslation();
-  const events = useQuery(analyticsEventsQuery(app, environment));
+  const events = useQuery(analyticsEventsQuery(app, days, environment));
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">{t("rum.analytics.events")}</h2>
@@ -147,17 +179,17 @@ function EventsSection({ app, environment }: { app: string; environment?: string
           testId="analytics-events"
           nameLabel={t("rum.analytics.eventName")}
           columns={[t("rum.analytics.count"), t("rum.analytics.sessions"), t("rum.analytics.users")]}
-          rows={events.data.events.map((e) => ({ name: e.name, values: [e.count, e.sessions, e.users] }))}
+          rows={events.data.events.map((e) => ({ name: e.name, values: [e.count, e.sessions, e.users], previous: [e.previous_count, e.previous_sessions, e.previous_users] }))}
         />
       )}
     </section>
   );
 }
 
-function AcquisitionSection({ app, environment }: { app: string; environment?: string }) {
+function AcquisitionSection({ app, days, environment }: { app: string; days: number; environment?: string }) {
   const { t } = useTranslation();
   const [by, setBy] = useState<AnalyticsSourceBy>("referrer");
-  const sources = useQuery(analyticsAcquisitionQuery(app, by, environment));
+  const sources = useQuery(analyticsAcquisitionQuery(app, by, days, environment));
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -184,7 +216,7 @@ function AcquisitionSection({ app, environment }: { app: string; environment?: s
           testId="analytics-sources"
           nameLabel={t(`rum.analytics.sourceBy.${by}`)}
           columns={[t("rum.analytics.sessions"), t("rum.analytics.users")]}
-          rows={sources.data.sources.map((s) => ({ name: s.value || t("rum.analytics.direct"), values: [s.sessions, s.users] }))}
+          rows={sources.data.sources.map((s) => ({ name: s.value || t("rum.analytics.direct"), values: [s.sessions, s.users], previous: [s.previous_sessions, s.previous_users] }))}
         />
       )}
     </section>
@@ -202,10 +234,10 @@ function countryName(code: string, language: string): string {
   }
 }
 
-function AudienceSection({ app, environment }: { app: string; environment?: string }) {
+function AudienceSection({ app, days, environment }: { app: string; days: number; environment?: string }) {
   const { t, i18n } = useTranslation();
   const [by, setBy] = useState<AnalyticsAudienceBy>("country");
-  const audience = useQuery(analyticsAudienceQuery(app, by, environment));
+  const audience = useQuery(analyticsAudienceQuery(app, by, days, environment));
   const name = (value: string) => {
     if (value === "") return t("rum.analytics.unknown");
     return by === "country" ? countryName(value, i18n.language) : value;
@@ -237,7 +269,7 @@ function AudienceSection({ app, environment }: { app: string; environment?: stri
             testId="analytics-audience"
             nameLabel={t(`rum.analytics.audienceBy.${by}`)}
             columns={[t("rum.analytics.sessions"), t("rum.analytics.users")]}
-            rows={audience.data.rows.map((r) => ({ name: name(r.value), values: [r.sessions, r.users] }))}
+            rows={audience.data.rows.map((r) => ({ name: name(r.value), values: [r.sessions, r.users], previous: [r.previous_sessions, r.previous_users] }))}
           />
           {by === "country" && audience.data.rows.length > 0 && audience.data.rows.every((r) => r.value === "") && (
             <p className="text-xs text-muted-foreground">{t("rum.analytics.noCountry")}</p>
@@ -251,27 +283,57 @@ function AudienceSection({ app, environment }: { app: string; environment?: stri
 export function RumAnalyticsTab({ app, environment }: { app: string; environment?: string }) {
   const { t, i18n } = useTranslation();
   const [grain, setGrain] = useState<AnalyticsGrain>("week");
-  const activity = useQuery(analyticsActivityQuery(app, environment));
+  const [days, setDays] = useState(28);
+  const periodId = useId();
+  const activity = useQuery(analyticsActivityQuery(app, days, environment));
+  const compare = useQuery(analyticsCompareQuery(app, days, environment));
   const retention = useQuery(analyticsRetentionQuery(app, grain, environment));
 
   if (activity.isPending) return <LoadingState />;
   if (activity.isError) return <ErrorState error={activity.error} onRetry={() => void activity.refetch()} />;
   if (!activity.data.collecting) return <NotCollecting />;
 
-  const { days } = activity.data;
+  const series0 = activity.data.days;
   // The last full picture: today is still filling up, but it is also what somebody opens this screen to see.
-  const latest = days[days.length - 1];
-  const series = (pick: (d: (typeof days)[number]) => number): [number, number][] => days.map((d) => [Date.parse(d.date), pick(d)]);
-  const newUsers = days.reduce((sum, d) => sum + d.new_users, 0);
+  const latest = series0[series0.length - 1];
+  const series = (pick: (d: (typeof series0)[number]) => number): [number, number][] => series0.map((d) => [Date.parse(d.date), pick(d)]);
+  const m = compare.data?.metrics;
+  const n = (metric: AnalyticsMetric | undefined, fallback = 0) => formatNumber(metric?.current ?? fallback, i18n.language);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Total label={t("rum.analytics.dau")} value={formatNumber(latest?.dau ?? 0, i18n.language)} />
-        <Total label={t("rum.analytics.wau")} value={formatNumber(latest?.wau ?? 0, i18n.language)} />
-        <Total label={t("rum.analytics.mau")} value={formatNumber(latest?.mau ?? 0, i18n.language)} />
-        <Total label={t("rum.analytics.newUsers")} value={formatNumber(newUsers, i18n.language)} />
-        <Total label={t("rum.analytics.stickiness")} value={formatShare(latest?.stickiness ?? 0)} />
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor={periodId} className="text-xs text-muted-foreground">
+            {t("rum.analytics.periodLabel")}
+          </Label>
+          <NativeSelect id={periodId} className="w-36" value={String(days)} onChange={(e) => setDays(Number(e.target.value))}>
+            {PERIODS.map((p) => (
+              <option key={p} value={p}>
+                {t("rum.analytics.lastDays", { days: p })}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+        {compare.data && (
+          <p className="text-xs text-muted-foreground" data-testid="analytics-compare-range">
+            {t("rum.analytics.comparedWith", { from: compare.data.previous.from, to: compare.data.previous.to })}
+          </p>
+        )}
+      </div>
+      {compare.data?.previous_partial && <p className="text-xs text-muted-foreground">{t("rum.analytics.previousPartial")}</p>}
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-testid="analytics-totals">
+        <Total label={t("rum.analytics.users")} value={n(m?.users)} metric={m?.users} />
+        <Total label={t("rum.analytics.newUsersLabel")} value={n(m?.new_users)} metric={m?.new_users} />
+        <Total label={t("rum.analytics.sessions")} value={n(m?.sessions)} metric={m?.sessions} />
+        <Total label={t("rum.analytics.pageViews")} value={n(m?.page_views)} metric={m?.page_views} />
+        <Total label={t("rum.analytics.events")} value={n(m?.events)} metric={m?.events} />
+        <Total label={t("rum.analytics.dau")} value={n(m?.dau, latest?.dau)} metric={m?.dau} />
+        <Total label={t("rum.analytics.wau")} value={n(m?.wau, latest?.wau)} metric={m?.wau} />
+        <Total label={t("rum.analytics.mau")} value={n(m?.mau, latest?.mau)} metric={m?.mau} />
+        <Total label={t("rum.analytics.avgDailyUsers")} value={n(m?.avg_daily_users)} metric={m?.avg_daily_users} />
+        <Total label={t("rum.analytics.stickiness")} value={formatShare(m?.stickiness.current ?? latest?.stickiness ?? 0)} metric={m?.stickiness} format={formatShare} />
       </div>
 
       <div className="rounded-xl border bg-card p-3">
@@ -318,9 +380,9 @@ export function RumAnalyticsTab({ app, environment }: { app: string; environment
       </section>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <EventsSection app={app} environment={environment} />
-        <AcquisitionSection app={app} environment={environment} />
-        <AudienceSection app={app} environment={environment} />
+        <EventsSection app={app} days={days} environment={environment} />
+        <AcquisitionSection app={app} days={days} environment={environment} />
+        <AudienceSection app={app} days={days} environment={environment} />
       </div>
     </div>
   );

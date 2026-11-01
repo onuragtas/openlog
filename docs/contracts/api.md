@@ -1892,8 +1892,11 @@ At most 90 days, like the three below.
 together, `name` in each row is a value of that parameter of that event. `(other)` holds what is past the key's bound on
 distinct event names ([analytics.md](analytics.md) §4). `users` is 0 unless the key is in `visitors` mode.
 
-### `GET /api/v1/analytics/audience?app=&environment=&by=&from=&to=`
-`{"by", "rows": [{"value", "sessions", "users"}]}`, most sessions first, at most 200 rows and 90 days. `by` is `country` (the default), `device`, `model`, `os`,
+### `GET /api/v1/analytics/compare?app=&environment=&days=`
+`{"days", "current": {"from", "to"}, "previous": {"from", "to"}, "previous_partial", "collecting", "metrics": {"users": {"current", "previous", "change", "change_rate"}, …}}`. Metrics: `users`, `new_users`, `avg_daily_users`, `dau`, `wau`, `mau`, `stickiness`, `sessions`, `page_views`, `events`. `days` is 1–90, 28 by default ([analytics.md](analytics.md) §6.1).
+
+### `GET /api/v1/analytics/audience?app=&environment=&by=&days=&from=&to=`
+`{"by", "rows": [{"value", "sessions", "users"}]}`, with `previous_sessions` and `previous_users` when `days` is given, most sessions first, at most 200 rows and 90 days. `by` is `country` (the default), `device`, `model`, `os`,
 `browser` or `version`. A session counts once, under its first event. An empty `value` means nobody reported it: `country` needs a header or a database
 ([rum.md](rum.md) §3.7), and `model` comes from the mobile SDKs only.
 

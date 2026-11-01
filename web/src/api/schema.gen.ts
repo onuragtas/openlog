@@ -1895,6 +1895,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description A period against the one before it, of the same length. Both are complete days ending with yesterday in UTC, because counting today would show every number falling every morning (analytics.md §6.1). */
+        get: operations["getAnalyticsCompare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/audience": {
         parameters: {
             query?: never;
@@ -7882,6 +7899,10 @@ export interface components {
             note: string;
         };
         AnalyticsEventRow: {
+            /** @description Set with `days`. Optional */
+            previous_count?: number;
+            previous_sessions?: number;
+            previous_users?: number;
             /** @description The event name */
             name: string;
             count: number;
@@ -7889,11 +7910,32 @@ export interface components {
             /** @description 0 unless the key is in visitors mode */
             users: number;
         };
+        AnalyticsPeriod: {
+            /** Format: date */
+            from: string;
+            /**
+             * Format: date
+             * @description The last day in the period
+             */
+            to: string;
+        };
+        AnalyticsMetric: {
+            current: number;
+            /** @description Null where that period can't be known: events are kept for 90 days */
+            previous: number | null;
+            /** @description current minus previous */
+            change: number | null;
+            /** @description change / previous, and null when previous is 0, since a rise from nothing has no percentage */
+            change_rate: number | null;
+        };
         AnalyticsSource: {
             /** @description Empty for a direct visit */
             value: string;
             sessions: number;
             users: number;
+            /** @description Set with `days`. Optional */
+            previous_sessions?: number;
+            previous_users?: number;
         };
         AnalyticsDay: {
             /** Format: date */
@@ -14853,6 +14895,8 @@ export interface operations {
         parameters: {
             query: {
                 app: string;
+                /** @description A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers. */
+                days?: number;
                 environment?: string;
                 from?: string;
                 to?: string;
@@ -14986,6 +15030,8 @@ export interface operations {
         parameters: {
             query: {
                 app: string;
+                /** @description A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers. */
+                days?: number;
                 environment?: string;
                 name?: string;
                 param?: string;
@@ -15018,6 +15064,8 @@ export interface operations {
         parameters: {
             query: {
                 app: string;
+                /** @description A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers. */
+                days?: number;
                 environment?: string;
                 by?: "referrer" | "source" | "medium" | "campaign";
                 from?: string;
@@ -15046,10 +15094,58 @@ export interface operations {
             504: components["responses"]["Timeout"];
         };
     };
+    getAnalyticsCompare: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The numbers of both periods */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        days: number;
+                        current: components["schemas"]["AnalyticsPeriod"];
+                        previous: components["schemas"]["AnalyticsPeriod"];
+                        /** @description The application has no data from the start of the previous period */
+                        previous_partial: boolean;
+                        collecting: boolean;
+                        metrics: {
+                            users: components["schemas"]["AnalyticsMetric"];
+                            new_users: components["schemas"]["AnalyticsMetric"];
+                            avg_daily_users: components["schemas"]["AnalyticsMetric"];
+                            dau: components["schemas"]["AnalyticsMetric"];
+                            wau: components["schemas"]["AnalyticsMetric"];
+                            mau: components["schemas"]["AnalyticsMetric"];
+                            stickiness: components["schemas"]["AnalyticsMetric"];
+                            sessions: components["schemas"]["AnalyticsMetric"];
+                            page_views: components["schemas"]["AnalyticsMetric"];
+                            events: components["schemas"]["AnalyticsMetric"];
+                        };
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     getAnalyticsAudience: {
         parameters: {
             query: {
                 app: string;
+                /** @description A period of complete days ending yesterday, instead of from and to. Lists then also carry the previous period's numbers. */
+                days?: number;
                 environment?: string;
                 by?: "country" | "device" | "model" | "os" | "browser" | "version";
                 from?: string;

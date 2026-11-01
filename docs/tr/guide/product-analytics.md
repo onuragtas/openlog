@@ -137,6 +137,17 @@ curl -X POST https://apm.resoft.org/api/v1/analytics/erase \
 `202` ve bir kimlik döner, `GET /api/v1/analytics/erase/{id}` durumu bildirir. Silme kısa süre sonra arka planda gerçekleşir. Span'lerdeki
 ham kimliği bu silmez: o, 7 günlük trace saklama süresiyle birlikte kendiliğinden silinir.
 
+## Önceki dönemle karşılaştır
+
+**Analytics** sekmesinde 7, 28 veya 90 günlük bir dönem var. Her toplam ve listelerin her satırı, ondan önceki aynı sayıda güne göre ne kadar değiştiğini sayı ve yüzde olarak gösterir: `+200 (+%20,0)`.
+
+- **Tamamlanmış günler, dünle biten, UTC.** Sabahları bugün daha yeni başlamıştır; onu saymak her sabah bütün sayıları düşüyor gösterirdi.
+- **`(yeni)`** önceki sayının sıfır olduğu anlamına gelir, çünkü sıfırdan artışın yüzdesi olmaz. `–` ise önceki sayının bilinemediği anlamına gelir: 90 günde, önceki 90 gün event'lerin saklanma süresini aşar, ama kullanıcılar yine karşılaştırılır.
+- **Şimdi `0` görünen ve düşen bir satır,** tamamen durmuş bir şeydir.
+- Uygulama önceki dönem içinde veri göndermeye başladıysa sekme bunu söyler, çünkü artış yalnızca bundan kaynaklanıyor olabilir.
+
+Aynı sayılar API'de de var: `GET /api/v1/analytics/compare?app=&days=`.
+
 ## Kitleni gör
 
 **Analytics** sekmesindeki **Kitle** tablosu oturumları ve kişileri ülkeye, cihaz türüne, cihaz modeline, işletim sistemine, tarayıcıya ve uygulama sürümüne göre

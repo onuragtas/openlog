@@ -188,9 +188,23 @@ OQL gains the event type `AnalyticsEvent`, which makes every question below aler
 | `GET /events` | event names with count, users and trend; `?name=` adds a breakdown by one param | |
 | `GET /acquisition` | sessions and users by referrer host, UTM source, medium, campaign | |
 | `GET /audience?by=country\|device\|model\|os\|browser\|version` | sessions and users by what they ran on and where; a session counts once, under its first event | |
+| `GET /compare?days=` | every number for a period and the one before it, with the change (§6.1) | people: `visitors` |
 | `GET /retention?grain=day\|week\|month` | cohorts by `first_seen`, percentage returning per period | `visitors` |
 | `GET /funnel?step=&step=&window=&by=session\|user` | as rum.md §2.8, over §5.1, up to 90 days | `by=user`: `visitors` |
 | `GET /activity` | DAU, WAU, MAU, new users and stickiness per day | `visitors` |
+
+### 6.1 Against the previous period
+
+`GET /compare?days=` returns each number for a period and the one before it, of the same length, with `change` and `change_rate`. `days` on `/activity`, `/events`, `/acquisition` and `/audience` reads the same period,
+and the three lists then carry `previous_*` too.
+
+- **Complete days, ending with yesterday, in UTC.** Today has only just started in the morning, so counting it would show every number falling, every morning. Google Analytics leaves today out of its default ranges for the same reason.
+- **`previous` is null where it can't be known.** `analytics_events` is kept for 90 days, so with `days` over 45 sessions, page views and events have no previous number, rather than a fall to zero. People are kept for 13 months and always have one.
+- **`change_rate` is null when `previous` is 0,** because a rise from nothing has no percentage. A screen says "new".
+- **`previous_partial`** says the application has no people on record from the start of the previous period, so a rise may only mean the SDK was installed since. Screens say so beside the numbers.
+- **A row only the previous period has is added with zeroes,** because what stopped altogether is the largest fall there is. Lists are cut at 200 rows per period, so past that a row can read as new or gone when it only left the top 200.
+- DAU, WAU and MAU compare as they stood on each period's last day. Stickiness compares as a ratio, so read its `change` as points.
+- Past a few thousand people the counts are estimates within about 1%, so a small change at that size can be noise.
 
 An endpoint that needs `visitors` answers `collecting: false` on an application with no actors in the range, so the UI
 can say what to turn on: an empty retention chart reads as "nobody came back". It is decided from the data, because a

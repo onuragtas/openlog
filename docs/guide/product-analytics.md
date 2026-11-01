@@ -139,6 +139,17 @@ curl -X POST https://openlog.example.com/api/v1/analytics/erase \
 It answers `202` with an id, and `GET /api/v1/analytics/erase/{id}` reports the status. Deletion runs in the background
 shortly after. The raw id on spans is not deleted by this: it expires with the 7-day trace retention.
 
+## Compare with the previous period
+
+The **Analytics** tab has a period of 7, 28 or 90 days, and every total and every row of its lists shows how far it moved from the same number of days before that, as a count and a percentage: `+200 (+20.0%)`.
+
+- **Complete days, ending yesterday, in UTC.** Today has only just started in the morning, so counting it would show every number falling, every morning.
+- **`(new)`** means the previous number was zero, and a rise from nothing has no percentage. `–` means the previous number can't be known: with 90 days, the 90 before that are past how long events are kept, though people are still compared.
+- **A row with `0` now and a fall** is something that stopped altogether.
+- If the app started reporting during the previous period, the tab says so, because the rise may only mean that.
+
+The same numbers are on the API, under `GET /api/v1/analytics/compare?app=&days=`.
+
 ## See your audience
 
 The **Audience** table on the **Analytics** tab shows sessions and people by country, device type, device model, operating system, browser and

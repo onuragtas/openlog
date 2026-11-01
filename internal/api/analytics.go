@@ -36,6 +36,7 @@ func (s *Server) analyticsRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/analytics/activity", s.analyticsActivity)
 	route("GET /api/v1/analytics/retention", s.analyticsRetention)
 	route("GET /api/v1/analytics/overview", s.analyticsOverview)
+	route("GET /api/v1/analytics/compare", s.analyticsCompare)
 	route("GET /api/v1/analytics/events", s.analyticsEvents)
 	route("GET /api/v1/analytics/acquisition", s.analyticsAcquisition)
 	route("GET /api/v1/analytics/audience", s.analyticsAudience)
@@ -126,7 +127,7 @@ func (s *Server) analyticsActivity(w http.ResponseWriter, r *http.Request, sc *q
 	if err != nil {
 		return err
 	}
-	from, to, err := s.analyticsRange(r, analyticsMaxActivityRange)
+	from, to, _, err := s.analyticsWindow(r, analyticsMaxActivityRange)
 	if err != nil {
 		return err
 	}

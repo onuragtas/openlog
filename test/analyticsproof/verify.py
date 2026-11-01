@@ -333,5 +333,30 @@ if os.environ.get("OPENLOG_PROOF_GEOIP") == "1":
 else:
     check("no database means no country", countries == {"": 4}, countries)
 
+# ---- against the previous period (analytics.md §6.1). Complete days: today is not counted, however much it holds.
+APP_CMP = f"compare-{RUN}"
+_, key_cmp = make_key("compare", APP_CMP)
+day1, day2 = now - timedelta(days=1), now - timedelta(days=2)
+cmp_page = {"openlog.rum.route": "/home", "device.type": "desktop"}
+send_res(key_cmp, [span("page_view", day2, f"p{i}", **cmp_page, **{"openlog.rum.visitor.id": hex_id(f"p{i}", 32)}) for i in range(2)]
+         + [span("custom", day2, "p0", **{"openlog.rum.custom.name": "gone"})], "1.0", False)
+send_res(key_cmp, [span("page_view", day1, f"c{i}", **cmp_page, **{"openlog.rum.visitor.id": hex_id(f"c{i}", 32)}) for i in range(5)]
+         + [span("custom", day1, "c0", **{"openlog.rum.custom.name": "fresh"})], "1.0", False)
+send_res(key_cmp, [span("page_view", now, f"t{i}", **cmp_page) for i in range(7)], "1.0", False)
+cmp = poll(f"/api/v1/analytics/compare?{q(APP_CMP)}&days=1", lambda d: d.get("metrics", {}).get("sessions", {}).get("current") == 5 and d["metrics"]["sessions"].get("previous") == 2, 60)
+print("compare:", json.dumps(cmp)[:500])
+ms = cmp.get("metrics", {}).get("sessions", {})
+check("a period against the one before, with today left out", ms.get("current") == 5 and ms.get("previous") == 2 and ms.get("change") == 3 and ms.get("change_rate") == 1.5, ms)
+us = cmp.get("metrics", {}).get("users", {})
+check("people are compared too", us.get("current") == 5 and us.get("previous") == 2, us)
+_, ev = call("GET", f"/api/v1/analytics/events?{q(APP_CMP)}&days=1")
+by_ev = {e["name"]: e for e in ev.get("events", [])}
+check("a list carries the previous numbers", by_ev.get("fresh", {}).get("count") == 1 and by_ev.get("fresh", {}).get("previous_count") == 0, by_ev)
+check("what stopped altogether is on the list", by_ev.get("gone", {}).get("count") == 0 and by_ev.get("gone", {}).get("previous_count") == 1, by_ev)
+code, _ = call("GET", f"/api/v1/analytics/compare?{q(APP_CMP)}&days=500")
+check("a period too long is refused", code == 400, code)
+_, long_cmp = call("GET", f"/api/v1/analytics/compare?{q(APP_CMP)}&days=90")
+check("past retention the previous number is unknown and not zero", long_cmp["metrics"]["sessions"]["previous"] is None and long_cmp["metrics"]["users"]["previous"] is not None, long_cmp["metrics"])
+
 print(f"\n{fails} failed")
 sys.exit(1 if fails else 0)

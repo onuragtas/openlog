@@ -187,31 +187,26 @@ func (s *Server) analyticsAudience(w http.ResponseWriter, r *http.Request, sc *q
 	if !ok && by != analyticsAudienceModel {
 		return badRequest("by must be country, device, model, os, browser or version")
 	}
-	from, to, err := s.analyticsRange(r, analyticsMaxEventsRange)
+	from, to, previous, err := s.analyticsWindow(r, analyticsMaxEventsRange)
 	if err != nil {
 		return err
 	}
-	q := analyticsAudienceSelect
-	selected := func() *query.Select { return q(sc, f, column, from, to) }
-	if by == analyticsAudienceModel {
-		selected = func() *query.Select { return analyticsAudienceModelSelect(sc, f, from, to) }
+	selected := func(from, to time.Time) *query.Select {
+		if by == analyticsAudienceModel {
+			return analyticsAudienceModelSelect(sc, f, from, to)
+		}
+		return analyticsAudienceSelect(sc, f, column, from, to)
 	}
-	rows, err := sc.Query(r.Context(), selected())
+	out, err := readSessionRows(r, sc, selected(from, to))
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var key string
-		var sessions, users float64
-		if err := rows.Scan(&key, &sessions, &users); err != nil {
+	if previous != nil {
+		before, err := readSessionRows(r, sc, selected(previous.from, previous.to))
+		if err != nil {
 			return err
 		}
-		out = append(out, map[string]any{"value": key, "sessions": sessions, "users": users})
-	}
-	if err := rows.Err(); err != nil {
-		return err
+		out = compareRows(out, "value", []string{"sessions", "users"}, before)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"by": by, "rows": out})
 	return nil
@@ -232,29 +227,59 @@ func (s *Server) analyticsEvents(w http.ResponseWriter, r *http.Request, sc *que
 	if len(name) > rum.MaxCustomNameBytes || len(param) > rum.MaxCustomParamKeyBytes {
 		return badRequest("name or param is too long")
 	}
-	from, to, err := s.analyticsRange(r, analyticsMaxEventsRange)
+	from, to, previous, err := s.analyticsWindow(r, analyticsMaxEventsRange)
 	if err != nil {
 		return err
 	}
-	rows, err := sc.Query(r.Context(), analyticsEventsSelect(sc, f, name, param, from, to))
+	read := func(from, to time.Time) ([]map[string]any, error) {
+		rows, err := sc.Query(r.Context(), analyticsEventsSelect(sc, f, name, param, from, to))
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		out := []map[string]any{}
+		for rows.Next() {
+			var key string
+			var count, sessions, users float64
+			if err := rows.Scan(&key, &count, &sessions, &users); err != nil {
+				return nil, err
+			}
+			out = append(out, map[string]any{"name": key, "count": count, "sessions": sessions, "users": users})
+		}
+		return out, rows.Err()
+	}
+	out, err := read(from, to)
 	if err != nil {
 		return err
+	}
+	if previous != nil {
+		before, err := read(previous.from, previous.to)
+		if err != nil {
+			return err
+		}
+		out = compareRows(out, "name", []string{"count", "sessions", "users"}, before)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+	return nil
+}
+
+// readSessionRows reads the value, sessions and users shape that acquisition and audience share.
+func readSessionRows(r *http.Request, sc *query.Scope, q *query.Select) ([]map[string]any, error) {
+	rows, err := sc.Query(r.Context(), q)
+	if err != nil {
+		return nil, err
 	}
 	defer rows.Close()
 	out := []map[string]any{}
 	for rows.Next() {
 		var key string
-		var count, sessions, users float64
-		if err := rows.Scan(&key, &count, &sessions, &users); err != nil {
-			return err
+		var sessions, users float64
+		if err := rows.Scan(&key, &sessions, &users); err != nil {
+			return nil, err
 		}
-		out = append(out, map[string]any{"name": key, "count": count, "sessions": sessions, "users": users})
+		out = append(out, map[string]any{"value": key, "sessions": sessions, "users": users})
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": out})
-	return nil
+	return out, rows.Err()
 }
 
 // analyticsAcquisition serves GET /api/v1/analytics/acquisition.
@@ -272,26 +297,20 @@ func (s *Server) analyticsAcquisition(w http.ResponseWriter, r *http.Request, sc
 	if !ok {
 		return badRequest("by must be referrer, source, medium or campaign")
 	}
-	from, to, err := s.analyticsRange(r, analyticsMaxEventsRange)
+	from, to, previous, err := s.analyticsWindow(r, analyticsMaxEventsRange)
 	if err != nil {
 		return err
 	}
-	rows, err := sc.Query(r.Context(), analyticsAcquisitionSelect(sc, f, column, from, to))
+	out, err := readSessionRows(r, sc, analyticsAcquisitionSelect(sc, f, column, from, to))
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	out := []map[string]any{}
-	for rows.Next() {
-		var key string
-		var sessions, users float64
-		if err := rows.Scan(&key, &sessions, &users); err != nil {
+	if previous != nil {
+		before, err := readSessionRows(r, sc, analyticsAcquisitionSelect(sc, f, column, previous.from, previous.to))
+		if err != nil {
 			return err
 		}
-		out = append(out, map[string]any{"value": key, "sessions": sessions, "users": users})
-	}
-	if err := rows.Err(); err != nil {
-		return err
+		out = compareRows(out, "value", []string{"sessions", "users"}, before)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"by": by, "sources": out})
 	return nil
