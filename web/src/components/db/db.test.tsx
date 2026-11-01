@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { login } from "@/api/account";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { server } from "@/mocks/server";
+import { AppDbQueries } from "./AppDbQueries";
 import { DbQueriesTab } from "./DbQueriesTab";
 import { DbSessionsTab } from "./DbSessionsTab";
 
@@ -73,5 +74,25 @@ describe("database screens", () => {
     expect(row).toHaveTextContent("75 %");
     expect(row).toHaveTextContent("2/s");
     expect(sort).toBe("avg");
+  });
+
+  it("lists what applications measured, and opens a statement's plan", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderRouted(() => <AppDbQueries range={{ range: "1h" }} q="" onSearch={() => {}} />);
+    const table = await screen.findByTestId("app-db-queries");
+    const rows = within(table).getAllByTestId("app-db-query");
+    expect(within(rows[0]!).getByRole("link", { name: "orders" })).toBeInTheDocument();
+    fireEvent.click(within(rows[0]!).getAllByRole("button")[0]!);
+    const plans = await screen.findByTestId("app-db-plans");
+    expect(within(plans).getByText(/Seq Scan on orders/)).toBeInTheDocument();
+  });
+
+  it("says where a plan comes from when there is none", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    server.use(http.get("*/api/v1/apm/db-queries/plans", () => HttpResponse.json({ plans: [] })));
+    renderRouted(() => <AppDbQueries range={{ range: "1h" }} q="" onSearch={() => {}} />);
+    const rows = await screen.findAllByTestId("app-db-query");
+    fireEvent.click(within(rows[0]!).getAllByRole("button")[0]!);
+    expect(await screen.findByText(/WithExplain/)).toBeInTheDocument();
   });
 });

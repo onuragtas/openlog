@@ -3915,8 +3915,18 @@ export const tr: Messages = {
   },
 
   db: {
+    sources: { applications: "Uygulamalardan", servers: "Sunuculardan" },
+    app: {
+      hint: "Bu süreler uygulamaların ölçtüğü sürelerdir, ağı ve bağlantı beklemeyi de içerir. Bekleme nedenleri ve oturumlar sunucuya bağlantı ister: Sunuculardan sekmesine bak.",
+      search: "Statement ara",
+      services: "Servisler",
+      plan: "Çalıştırma planı",
+      generic: "Genel plan: parametre değerleri olmadan üretildi, bu yüzden yavaş çağrının kullandığından farklı olabilir.",
+      noPlan: "Yakalanmış plan yok. Planlar, açıklaması açık bir ajandan gelir; örneğin Go pgx paketindeki WithExplain.",
+      empty: "Bu aralıkta hiçbir uygulama veritabanı çağrısı göndermedi. APM ajanları bunları veritabanına bağlanmadan kendiliğinden raporlar.",
+    },
     title: "Veritabanları",
-    subtitle: "Infra agent'ların izlediği veritabanı sunucularında sorgu performansı: sorgular, beklemeler, bloklayan oturumlar ve planlar.",
+    subtitle: "Statement'lar, uygulamalarının ölçtüğü ve veritabanı sunucularının bildirdiği haliyle.",
     empty: "Henüz sorgu istatistiği gönderen veritabanı yok. Veritabanı sunucusundaki infra agent'ta sorgu izlemeyi açıp (config.yaml) yeniden başlatın:",
     back: "Tüm veritabanları",
     instanceSubtitle: "Sorgular, aktif oturumlar ve beklemeleri",

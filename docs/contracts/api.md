@@ -1382,6 +1382,14 @@ admin/owner (`204`, else `404`; audit `apm.error_group.comment_delete`).
 `sort` = `time` (default) | `calls` | `slowest` (avg) | `errors`.
 `{"queries": [{"db_system": "postgresql", "db_name": "orders", "db_operation": "SELECT", "statement": "SELECT … WHERE id = ?", "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms", "max_ms", "time_consumed_ms", "time_share"}]}`
 
+### `GET /api/v1/apm/db-queries?sort=&q=&service=&db_system=&environment=&limit=`
+The same rows across every service, with `"services": ["orders", "billing"]` on each: what the **Databases** screen shows when there is no connection to the
+database server. `q` matches part of the statement.
+
+### `GET /api/v1/apm/db-queries/plans?statement=&db_system=&service=`
+`{"plans": [{"plan", "service", "generic", "captured_at", "trace_id"}]}`: plans an agent captured for this normalized statement, newest first, at most 5
+([apm.md](apm.md) §7.1). Empty unless an agent has explaining turned on.
+
 ### `GET /api/v1/apm/services/{service_name}/hosts`
 `{"hosts": [...]}` (shape as in the service object).
 

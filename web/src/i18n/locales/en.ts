@@ -3914,8 +3914,18 @@ export const en = {
   },
 
   db: {
+    sources: { applications: "From applications", servers: "From servers" },
+    app: {
+      hint: "These durations are what the applications measured, so they include the network and waiting for a connection. Wait events and sessions need a connection to the server: see From servers.",
+      search: "Search statements",
+      services: "Services",
+      plan: "Execution plan",
+      generic: "Generic plan: made without the parameter values, so it can differ from what the slow call used.",
+      noPlan: "No plan captured. Plans come from an agent with explaining turned on, such as WithExplain in the Go pgx package.",
+      empty: "No application sent a database call in this range. APM agents report them on their own, with no connection to the database.",
+    },
     title: "Databases",
-    subtitle: "Query performance of the database servers the infra agents monitor: statements, waits, blocking sessions and plans.",
+    subtitle: "Statements as your applications measured them and as your database servers report them.",
     empty: "No database sends query statistics yet. Enable query monitoring on the infra agent of the database host (config.yaml) and restart it:",
     back: "All databases",
     instanceSubtitle: "Statements, active sessions and their waits",

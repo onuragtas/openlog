@@ -1875,6 +1875,65 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
+  /api/v1/apm/db-queries:
+    get:
+      tags: [apm]
+      operationId: listApmDbQueriesAcrossServices
+      description: >-
+        The database statements every service runs, as the applications measured them, so with no connection to the database
+        server (apm.md §7). Statements group by database and normalized text. At most 1000 rows.
+      parameters:
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors], default: time } }
+        - { name: q, in: query, description: Part of the statement text, schema: { type: string } }
+        - { name: service, in: query, schema: { type: string } }
+        - { name: db_system, in: query, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 100 } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The statements
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queries]
+                properties:
+                  queries:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmDbQuery" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/apm/db-queries/plans:
+    get:
+      tags: [apm]
+      operationId: listApmDbQueryPlans
+      description: >-
+        Execution plans an agent captured for one statement, newest first and at most 5. Plans live on spans, so they reach back as
+        far as trace retention, and only an agent with explaining turned on sends any (apm.md §7.1).
+      parameters:
+        - { name: statement, in: query, required: true, description: The normalized statement from /apm/db-queries, schema: { type: string } }
+        - { name: db_system, in: query, required: true, schema: { type: string } }
+        - { name: service, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The plans
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plans]
+                properties:
+                  plans:
+                    type: array
+                    items: { $ref: "#/components/schemas/ApmDbQueryPlan" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
   /api/v1/apm/services/{service_name}/databases:
     get:
       tags: [apm]
@@ -10763,10 +10822,20 @@ components:
         samples:
           type: array
           items: { $ref: "#/components/schemas/ApmErrorSample" }
+    ApmDbQueryPlan:
+      type: object
+      required: [plan, service, generic, captured_at, trace_id]
+      properties:
+        plan: { type: string, description: "PostgreSQL's text plan, with literal values replaced by ?" }
+        service: { type: string }
+        generic: { type: boolean, description: The plan was made without the statement's parameter values }
+        captured_at: { $ref: "#/components/schemas/Timestamp" }
+        trace_id: { type: string, description: The trace of the slow call that asked for it }
     ApmDbQuery:
       type: object
       required: [db_system, db_name, db_operation, statement, calls, throughput, errors, error_rate, avg_ms, p95_ms, max_ms, time_consumed_ms, time_share]
       properties:
+        services: { type: array, items: { type: string }, description: The services running it. Only on /apm/db-queries. }
         db_system: { type: string }
         db_name: { type: string }
         db_operation: { type: string }

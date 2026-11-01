@@ -226,6 +226,20 @@ pool, err := pgxpool.NewWithConfig(ctx, cfg)
 
 Yukarıdaki kurallar burada da geçerli, `OPENLOG_DB_QUERY_TEXT`, `WithQueryText` ve `WithRootSpans` da. Her çağrıya isteğin context'ini ver, yoksa statement'ın bağlanacağı bir span olmaz. Batch, statement'larını içeren tek bir span'dir; `CopyFrom` da tek span'dir. `openlogsql`'den farklı olarak `BEGIN`, `COMMIT` ve `ROLLBACK` de span alır, çünkü pgx için bunlar birer statement'tır. Sorgu span'i satırlar kapatılınca biter, yani okumayı da kapsar. Zaten bir tracer ayarlıysan `github.com/jackc/pgx/v5/multitracer` ile birleştir.
 
+**Çalıştırma planları.** openlog'dan veritabanına bağlantı açmadan PostgreSQL'in yavaş statement'larını nasıl çalıştırdığını görmek için bunu aç:
+
+```go
+tracer := openlogpgx.NewTracer(openlogpgx.WithExplain(500 * time.Millisecond))
+cfg.ConnConfig.Tracer = tracer
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+if err != nil {
+	return err
+}
+tracer.ExplainWith(pool)
+```
+
+Varsayılan olarak kapalıdır, çünkü uygulamanın istemediği bir sorgu çalıştırır. Eşikten yavaş bir `SELECT`, arka planda ve havuzundaki bir bağlantıyla saatte bir kez `EXPLAIN` edilir. `ANALYZE` asla kullanılmaz, yani statement yeniden çalışmaz. Parametre değerleri gönderilmez, literal değerler plandan çıkarılır. Parametreli statement'lar PostgreSQL 16 veya üstünü ister ve planları geneldir, bu yüzden yavaş çağrının kullandığı plandan farklı olabilir. Planlar **Veritabanları** ekranında görünür; `OPENLOG_DB_QUERY_TEXT` değeri `off` olmamalı.
+
 ### Runtime metrikleri {#runtime-metrics}
 
 Metrikler her gönderimde (varsayılan olarak 60 sn'de bir) `runtime/metrics` üzerinden okunur. Ek goroutine ve `ReadMemStats`

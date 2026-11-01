@@ -88,3 +88,24 @@ export const dbLookupQuery = (p: { dbSystem: string; statement: string; range: R
     enabled: p.enabled,
     staleTime: 60_000,
   });
+
+export type AppDbQuery = S["ApmDbQuery"];
+export type AppDbPlan = S["ApmDbQueryPlan"];
+export type AppDbSort = "time" | "calls" | "slowest" | "errors";
+
+/** The statements of every service, as the applications measured them (apm.md §7.1). */
+export const appDbQueriesQuery = (range: RangeSpec, sort: AppDbSort, q: string) =>
+  queryOptions({
+    queryKey: ["apm", "db-queries", ...rangeKey(range), sort, q],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/apm/db-queries", { params: { query: { ...window(range), sort, q: q || undefined } }, signal })).queries,
+    refetchInterval: live(range),
+    placeholderData: keepPreviousData,
+  });
+
+export const appDbPlansQuery = (range: RangeSpec, dbSystem: string, statement: string) =>
+  queryOptions({
+    queryKey: ["apm", "db-query-plans", ...rangeKey(range), dbSystem, statement],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/apm/db-queries/plans", { params: { query: { ...window(range), db_system: dbSystem, statement } }, signal })).plans,
+  });

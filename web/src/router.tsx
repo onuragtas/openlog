@@ -847,7 +847,11 @@ const profilesRoute = createRoute({
 const DATABASE_TABS = ["activity", "queries", "sessions"] as const;
 const DATABASE_SORTS = ["time", "calls", "avg", "rows", "errors", "reads"] as const;
 
+const DATABASE_SOURCES = ["applications", "servers"] as const;
+
 export interface DatabasesSearch {
+  /** Which view of the list: what applications measured, or what the servers report. */
+  source?: (typeof DATABASE_SOURCES)[number];
   range?: string;
   from?: string;
   to?: string;
@@ -860,7 +864,14 @@ export interface DatabasesSearch {
   fp?: string;
 }
 
-const databasesRoute = createRoute({ getParentRoute: () => appRoute, path: "/databases", component: DatabasesPage });
+const databasesRoute = createRoute({
+  getParentRoute: () => appRoute,
+  path: "/databases",
+  validateSearch: (s: Record<string, unknown>): DatabasesSearch => ({
+    range: str(s.range), from: str(s.from), to: str(s.to), source: oneOf(DATABASE_SOURCES, s.source), q: str(s.q),
+  }),
+  component: DatabasesPage,
+});
 
 const databaseInstanceRoute = createRoute({
   getParentRoute: () => appRoute,

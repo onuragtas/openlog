@@ -300,8 +300,9 @@ profiling, not auto-instrumentation: it produces flame graphs, not spans.
 
 ![Databases](images/databases.png)
 
-Query performance of the database servers the infra agents monitor: calls per second, average latency,
-average active sessions and the wait that dominates.
+Two views. **From applications** lists the statements of every service as your APM agents measured them, with no connection to the database: throughput, latency, time share and,
+if the agent has it turned on, the execution plan. **From servers** is the query performance of the database servers the infra agents monitor: calls per second, average latency,
+average active sessions and the wait that dominates. Wait events and sessions need that second view, because no one application can see them.
 
 ### Activity
 

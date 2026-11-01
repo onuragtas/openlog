@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -104,6 +105,124 @@ func TestQueryTextCanBeTurnedOff(t *testing.T) {
 	tr.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{})
 	if _, ok := attrs(rec.Ended()[0])["db.query.text"]; ok {
 		t.Error("query text recorded")
+	}
+}
+
+func TestExplainIsOffUnlessAskedFor(t *testing.T) {
+	tr, rec, ctx, done := setup()
+	defer done()
+	ctx = tr.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{SQL: "SELECT 1"})
+	tr.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{})
+	time.Sleep(20 * time.Millisecond)
+	for _, s := range rec.Ended() {
+		if s.Name() == "db.explain" {
+			t.Error("explained with nobody asking")
+		}
+	}
+}
+
+func explainPool(t *testing.T, ctx context.Context, tr *openlogpgx.Tracer) *pgxpool.Pool {
+	t.Helper()
+	dsn := os.Getenv("OPENLOG_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("OPENLOG_TEST_POSTGRES_DSN is not set")
+	}
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.ConnConfig.Tracer = tr
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	tr.ExplainWith(pool)
+	return pool
+}
+
+func plans(rec *tracetest.SpanRecorder) []sdktrace.ReadOnlySpan {
+	var out []sdktrace.ReadOnlySpan
+	for _, s := range rec.Ended() {
+		if s.Name() == "db.explain" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func waitForPlans(rec *tracetest.SpanRecorder, n int) []sdktrace.ReadOnlySpan {
+	for i := 0; i < 300 && len(plans(rec)) < n; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	return plans(rec)
+}
+
+func TestASlowSelectGetsAPlanWithNoValuesInIt(t *testing.T) {
+	tr, rec, ctx, done := setup(openlogpgx.WithExplain(time.Nanosecond))
+	defer done()
+	pool := explainPool(t, ctx, tr)
+	const secret = "ayşe-secret"
+	mk := "CREATE TABLE IF NOT EXISTS openlogpgx_explain (id int, name text)"
+	if _, err := pool.Exec(ctx, mk); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	sql := "SELECT count(*) FROM openlogpgx_explain WHERE name = $1 AND id > 12345"
+	if err := pool.QueryRow(ctx, sql, secret).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	got := waitForPlans(rec, 1)
+	if len(got) != 1 {
+		t.Fatalf("%d plans", len(got))
+	}
+	a := attrs(got[0])
+	plan := a["openlog.db.plan"]
+	if !strings.Contains(plan, "openlogpgx_explain") || !strings.Contains(plan, "cost=") {
+		t.Errorf("not a plan: %s", plan)
+	}
+	if strings.Contains(plan, secret) || strings.Contains(plan, "12345") {
+		t.Errorf("a value is in the plan: %s", plan)
+	}
+	if a["openlog.db.plan.generic"] != "true" || a["openlog.db.plan.system"] != "postgresql" {
+		t.Errorf("%v", a)
+	}
+	if _, ok := a["db.system.name"]; ok {
+		t.Error("a plan must not count as a database call")
+	}
+	// The EXPLAIN itself is no statement of the application's.
+	for _, s := range rec.Ended() {
+		if strings.Contains(attrs(s)["db.query.text"], "EXPLAIN") {
+			t.Errorf("the EXPLAIN became a span: %v", attrs(s))
+		}
+	}
+
+	// Once an hour: the same statement again asks for nothing.
+	if err := pool.QueryRow(ctx, sql, "other").Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(200 * time.Millisecond)
+	if got := plans(rec); len(got) != 1 {
+		t.Errorf("explained again: %d", len(got))
+	}
+}
+
+func TestOnlySelectsAreExplained(t *testing.T) {
+	tr, rec, ctx, done := setup(openlogpgx.WithExplain(time.Nanosecond))
+	defer done()
+	pool := explainPool(t, ctx, tr)
+	for _, sql := range []string{
+		"CREATE TABLE IF NOT EXISTS openlogpgx_explain2 (id int)",
+		"INSERT INTO openlogpgx_explain2 VALUES (1)",
+		"DELETE FROM openlogpgx_explain2 WHERE id = 1",
+	} {
+		if _, err := pool.Exec(ctx, sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	time.Sleep(200 * time.Millisecond)
+	if got := plans(rec); len(got) != 0 {
+		t.Errorf("%d plans", len(got))
 	}
 }
 

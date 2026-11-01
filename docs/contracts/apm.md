@@ -361,6 +361,27 @@ The same function normalizes the statements of database query monitoring (db-mon
 
 `db_operation` = `db.operation.name` | `db.operation` | first keyword of the statement (upper-cased).
 
+
+### 7.1 Across services, and execution plans
+
+`GET /apm/db-queries` reads `apm_db_queries_1m` across services, so statements show on the **Databases** screen with no connection to the database server. These are the
+application's durations, which include the network and waiting for a pooled connection, so they are shown beside the server's view (db-monitoring.md) and never merged into it.
+Wait events and sessions need the server: no one application can see them.
+
+**Plans.** An agent can run `EXPLAIN` over the application's own connection, which is how plans can exist with no credentials given to openlog. `openlogpgx` does this when `WithExplain` is
+set, and only then, because it is a query the application did not ask for.
+
+- `SELECT` only, one statement at a time, and never `ANALYZE`, which would run the statement.
+- A statement slower than the threshold is explained at most once an hour, one at a time, off the request's path, with a 2-second limit.
+- With parameters it uses `EXPLAIN (GENERIC_PLAN)`, so PostgreSQL 16 or newer: the parameter values are never sent to `EXPLAIN` and so are not in the plan. An older server gets plans only for
+  statements with no parameters. A generic plan can differ from the one the slow call really used.
+- Literals in the plan are replaced by `?` before it leaves the process, and it is cut at 16 KiB. Temporary tables and anything else private to the slow call's connection or transaction cannot be planned, and
+  such a statement quietly has no plan.
+- The plan travels on an `internal` span named `db.explain`, in the trace of the slow call, with `openlog.db.plan*` attributes and no `db.*` ones, so it is not counted as a database call. So
+  it follows trace retention and sampling, and reads back by normalizing `openlog.db.plan.statement` (bounded to the newest 200 such spans in the range).
+
+Other agents do not send plans yet.
+
 ## 8. Storage (ClickHouse)
 
 All tables are `Replicated*` `_local` tables with a `Distributed` table of the same name without `_local`, fed by

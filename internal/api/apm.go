@@ -49,6 +49,8 @@ func (s *Server) apmRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/apm/services/{service}/transactions", s.apmTransactions)
 	route("GET /api/v1/apm/services/{service}/transaction", s.apmTransaction)
 	route("GET /api/v1/apm/services/{service}/databases", s.apmDatabases)
+	route("GET /api/v1/apm/db-queries", s.apmDBQueries)
+	route("GET /api/v1/apm/db-queries/plans", s.apmDBQueryPlans)
 	route("GET /api/v1/apm/services/{service}/hosts", s.apmServiceHosts)
 	route("GET /api/v1/apm/services/{service}/settings", s.apmGetSettings)
 	route("GET /api/v1/apm/hosts/{host_id}/services", s.apmHostServices)
@@ -924,6 +926,24 @@ func (s *Server) apmTransaction(w http.ResponseWriter, r *http.Request, sc *quer
 
 // ---- databases ----
 
+type apmDBQueryJSON struct {
+	DBSystem       string   `json:"db_system"`
+	DBName         string   `json:"db_name"`
+	Operation      string   `json:"db_operation"`
+	Statement      string   `json:"statement"`
+	Calls          float64  `json:"calls"`
+	Throughput     float64  `json:"throughput"`
+	Errors         float64  `json:"errors"`
+	ErrorRate      float64  `json:"error_rate"`
+	AvgMs          *float64 `json:"avg_ms"`
+	P95Ms          *float64 `json:"p95_ms"`
+	MaxMs          float64  `json:"max_ms"`
+	TimeConsumedMs float64  `json:"time_consumed_ms"`
+	TimeShare      float64  `json:"time_share"`
+	// Services is set where a list spans services (apm_db_queries.go).
+	Services []string `json:"services,omitempty"`
+}
+
 func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	f, err := parseSvcFilter(r)
 	if err != nil {
@@ -953,26 +973,11 @@ func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.
 		return err
 	}
 	defer rows.Close()
-	type dbQueryJSON struct {
-		DBSystem       string   `json:"db_system"`
-		DBName         string   `json:"db_name"`
-		Operation      string   `json:"db_operation"`
-		Statement      string   `json:"statement"`
-		Calls          float64  `json:"calls"`
-		Throughput     float64  `json:"throughput"`
-		Errors         float64  `json:"errors"`
-		ErrorRate      float64  `json:"error_rate"`
-		AvgMs          *float64 `json:"avg_ms"`
-		P95Ms          *float64 `json:"p95_ms"`
-		MaxMs          float64  `json:"max_ms"`
-		TimeConsumedMs float64  `json:"time_consumed_ms"`
-		TimeShare      float64  `json:"time_share"`
-	}
 	minutes := rangeMinutes(from, to)
-	out := []dbQueryJSON{}
+	out := []apmDBQueryJSON{}
 	var totalTime float64
 	for rows.Next() {
-		var d dbQueryJSON
+		var d apmDBQueryJSON
 		var avg float64
 		dest, build := callAggDest()
 		if err := rows.Scan(append(append([]any{&d.DBSystem, &d.DBName, &d.Statement, &d.Operation}, dest...), &d.MaxMs, &avg)...); err != nil {

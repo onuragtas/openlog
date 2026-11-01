@@ -5,7 +5,8 @@
 //	cfg.ConnConfig.Tracer = openlogpgx.NewTracer()
 //	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 //
-// Spans are only created inside an existing span (a request, a job) unless WithRootSpans is used.
+// Spans are only created inside an existing span (a request, a job) unless WithRootSpans is used. WithExplain also
+// captures the execution plans of slow statements.
 package openlogpgx
 
 import (
@@ -14,6 +15,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/onuragtas/openlog/agents/go/openlogsql"
@@ -35,6 +37,7 @@ type config struct {
 	queryText openlogsql.QueryTextMode
 	rootSpans bool
 	tp        trace.TracerProvider
+	explain   time.Duration
 }
 
 // Option configures the tracer.
@@ -46,14 +49,19 @@ func WithQueryText(m openlogsql.QueryTextMode) Option { return func(c *config) {
 // WithRootSpans creates spans for statements executed without a parent span.
 func WithRootSpans() Option { return func(c *config) { c.rootSpans = true } }
 
+// WithExplain captures the execution plan of a SELECT slower than threshold, at most once an hour per statement. It runs a query
+// the application did not ask for, so it is off unless asked for here and given a pool with ExplainWith.
+func WithExplain(threshold time.Duration) Option { return func(c *config) { c.explain = threshold } }
+
 // WithTracerProvider uses tp instead of the global provider.
 func WithTracerProvider(tp trace.TracerProvider) Option { return func(c *config) { c.tp = tp } }
 
 // Tracer implements pgx.QueryTracer, pgx.BatchTracer and pgx.CopyFromTracer. Set it as ConnConfig.Tracer.
 type Tracer struct {
-	cfg  config
-	once sync.Once
-	otel trace.Tracer
+	cfg      config
+	once     sync.Once
+	otel     trace.Tracer
+	explains explainer
 }
 
 var (
@@ -87,7 +95,10 @@ func (t *Tracer) tracer() trace.Tracer {
 type spanKey struct{}
 
 type started struct {
-	span trace.Span
+	span  trace.Span
+	start time.Time
+	query string
+	conn  *pgx.Conn
 	// statements and failure collect a batch's statements as they come back.
 	statements []string
 	failure    error
@@ -153,13 +164,17 @@ func (t *Tracer) TraceQueryStart(ctx context.Context, conn *pgx.Conn, data pgx.T
 	if data.SQL == pingStatement {
 		return ctx
 	}
-	ctx, _ = t.start(ctx, conn, openlogsql.OperationName(data.SQL), t.queryAttr(data.SQL)...)
+	ctx, s := t.start(ctx, conn, openlogsql.OperationName(data.SQL), t.queryAttr(data.SQL)...)
+	if s != nil {
+		s.start, s.query, s.conn = time.Now(), data.SQL, conn
+	}
 	return ctx
 }
 
 // TraceQueryEnd implements pgx.QueryTracer.
 func (t *Tracer) TraceQueryEnd(ctx context.Context, _ *pgx.Conn, data pgx.TraceQueryEndData) {
 	if s := fromContext(ctx); s != nil {
+		t.maybeExplain(s, data.Err)
 		end(s, data.Err)
 	}
 }

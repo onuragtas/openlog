@@ -2,11 +2,13 @@
 // with query monitoring, one instance's load, statements and sessions, and one statement. An instance id
 // (service.instance.id, e.g. db1.internal:5432) contains characters a path segment would need to escape, so it is
 // a search parameter like the range.
+import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { DbQuerySort } from "@/api/db";
+import { dbInstancesQuery, type DbQuerySort } from "@/api/db";
 import { PageHeader } from "@/components/AppShell";
+import { AppDbQueries } from "@/components/db/AppDbQueries";
 import { DbActivityTab } from "@/components/db/DbActivityTab";
 import { DbInstances } from "@/components/db/DbInstances";
 import { DbQueriesTab } from "@/components/db/DbQueriesTab";
@@ -27,13 +29,36 @@ export function DatabasesPage() {
   const { t } = useTranslation();
   const search = listRoute.useSearch();
   const navigate = useNavigate();
+  const range = rangeOf(search);
+  const servers = useQuery(dbInstancesQuery(range));
+  // With no server reporting, the list of servers has nothing to say and the applications may well have.
+  const source = search.source ?? (servers.isPending || servers.isError || servers.data.length > 0 ? "servers" : "applications");
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title={t("db.title")} subtitle={t("db.subtitle")} />
-      <DbInstances
-        range={rangeOf(search)}
-        onOpen={(i) => void navigate({ to: "/databases/instance", search: (prev: Record<string, unknown>) => ({ ...rangeOf(prev as DatabasesSearch), instance: i.instance }) as never })}
-      />
+      <Tabs value={source} onValueChange={(v) => void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, source: v }) as never })}>
+        <TabsList>
+          <TabsTrigger value="applications">{t("db.sources.applications")}</TabsTrigger>
+          <TabsTrigger value="servers">{t("db.sources.servers")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="applications">
+          {source === "applications" && (
+            <AppDbQueries
+              range={range}
+              q={search.q ?? ""}
+              onSearch={(q) => void navigate({ to: ".", search: (prev: Record<string, unknown>) => ({ ...prev, q: q || undefined }) as never })}
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="servers">
+          {source === "servers" && (
+            <DbInstances
+              range={range}
+              onOpen={(i) => void navigate({ to: "/databases/instance", search: (prev: Record<string, unknown>) => ({ ...rangeOf(prev as DatabasesSearch), instance: i.instance }) as never })}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

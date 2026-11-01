@@ -218,6 +218,8 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/analytics/events?app=shop-web",
 		"/api/v1/analytics/events?app=shop-web&name=signup&param=plan",
 		"/api/v1/analytics/acquisition?app=shop-web&by=source",
+		"/api/v1/apm/db-queries?sort=calls&q=select",
+		"/api/v1/apm/db-queries/plans?statement=SELECT+%3F&db_system=postgresql",
 		"/api/v1/analytics/audience?app=shop-web&by=country",
 		"/api/v1/analytics/audience?app=shop-web&by=model",
 		"/api/v1/analytics/funnel?app=shop-web&step=a&step=b&by=user",

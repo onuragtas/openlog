@@ -230,6 +230,22 @@ each call, or a statement has no span to belong to. A batch is one span holding 
 `openlogsql`, `BEGIN`, `COMMIT` and `ROLLBACK` get spans too, because they are statements to pgx. A query's span ends when its rows are closed, so it
 includes reading them. If you already set a tracer, combine them with `github.com/jackc/pgx/v5/multitracer`.
 
+**Execution plans.** To see how PostgreSQL runs your slow statements with no connection from openlog to the database, turn this on:
+
+```go
+tracer := openlogpgx.NewTracer(openlogpgx.WithExplain(500 * time.Millisecond))
+cfg.ConnConfig.Tracer = tracer
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+if err != nil {
+	return err
+}
+tracer.ExplainWith(pool)
+```
+
+It is off by default, because it runs a query your application did not ask for. A `SELECT` slower than the threshold gets one `EXPLAIN` an hour, in the background, on a connection from your pool. It never uses
+`ANALYZE`, so the statement does not run again. Parameter values are not sent and literals are removed from the plan. Statements with parameters need PostgreSQL 16 or newer, and their plan is generic, so it can differ
+from the one the slow call used. Plans appear on the **Databases** screen and need `OPENLOG_DB_QUERY_TEXT` to not be `off`.
+
 ### Runtime metrics
 
 The metrics are read from `runtime/metrics` at every export (every 60 s by default). There is no extra goroutine and

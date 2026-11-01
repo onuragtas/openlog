@@ -275,7 +275,7 @@ bir operatör bu duruşu aynen korur. Bu profil çıkarmadır, otomatik enstrüm
 
 ![Databases](../images/databases.png)
 
-Altyapı ajanlarının izlediği veritabanı sunucularının sorgu performansı: saniyedeki çağrı, ortalama gecikme, ortalama aktif oturum ve baskın bekleme.
+İki görünüm var. **Uygulamalardan**, her servisin statement'larını APM ajanlarının ölçtüğü haliyle, veritabanına bağlanmadan listeler: throughput, gecikme, süre payı ve ajanda açıksa çalıştırma planı. **Sunuculardan**, altyapı ajanlarının izlediği veritabanı sunucularının sorgu performansıdır: saniyedeki çağrı, ortalama gecikme, ortalama aktif oturum ve baskın bekleme. Bekleme nedenleri ve oturumlar için bu ikinci görünüm gerekir, çünkü bunları tek bir uygulama göremez.
 
 ### Activity {#activity}
 

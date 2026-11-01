@@ -1089,6 +1089,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apm/db-queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The database statements every service runs, as the applications measured them, so with no connection to the database server (apm.md §7). Statements group by database and normalized text. At most 1000 rows. */
+        get: operations["listApmDbQueriesAcrossServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apm/db-queries/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Execution plans an agent captured for one statement, newest first and at most 5. Plans live on spans, so they reach back as far as trace retention, and only an agent with explaining turned on sends any (apm.md §7.1). */
+        get: operations["listApmDbQueryPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apm/services/{service_name}/databases": {
         parameters: {
             query?: never;
@@ -7197,7 +7231,19 @@ export interface components {
             series: components["schemas"]["MetricPoint"][];
             samples: components["schemas"]["ApmErrorSample"][];
         } & components["schemas"]["ApmErrorWorkflow"];
+        ApmDbQueryPlan: {
+            /** @description PostgreSQL's text plan, with literal values replaced by ? */
+            plan: string;
+            service: string;
+            /** @description The plan was made without the statement's parameter values */
+            generic: boolean;
+            captured_at: components["schemas"]["Timestamp"];
+            /** @description The trace of the slow call that asked for it */
+            trace_id: string;
+        };
         ApmDbQuery: {
+            /** @description The services running it. Only on /apm/db-queries. */
+            services?: string[];
             db_system: string;
             db_name: string;
             db_operation: string;
@@ -13187,6 +13233,73 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
+        };
+    };
+    listApmDbQueriesAcrossServices: {
+        parameters: {
+            query?: {
+                sort?: "time" | "calls" | "slowest" | "errors";
+                /** @description Part of the statement text */
+                q?: string;
+                service?: string;
+                db_system?: string;
+                environment?: string;
+                limit?: number;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The statements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queries: components["schemas"]["ApmDbQuery"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listApmDbQueryPlans: {
+        parameters: {
+            query: {
+                /** @description The normalized statement from /apm/db-queries */
+                statement: string;
+                db_system: string;
+                service?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        plans: components["schemas"]["ApmDbQueryPlan"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
         };
     };
     listApmDatabaseQueries: {

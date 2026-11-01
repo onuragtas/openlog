@@ -6,6 +6,8 @@ them and the API that reads them. It complements the server metrics of the integ
 database calls are slow", this answers "what costs the most on this database server, what are its sessions waiting
 for, how does the planner run it — and which services send it".
 
+The **Databases** screen shows both: **From applications** (APM, no connection to the server) and **From servers** (this contract). It opens on the first while no server reports.
+
 ## 1. Overview
 
 ```
