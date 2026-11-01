@@ -59,7 +59,8 @@ public final class OpenLog {
 
         // The operator's sample rate wins, so volume can be turned down without shipping a release. Until
         // it answers the application reports with its own, and failure is silent by design.
-        fetchConfig(cfg.configURL, ["openlog-browser-key": options.key]) { conf in
+        // A mobile key refuses a request that names no application, and this one is no exception.
+        fetchConfig(cfg.configURL, ["openlog-browser-key": options.key, "openlog-app-id": options.appID]) { conf in
             guard let conf else { return }
             cfg.serviceName = conf["service_name"] as? String ?? ""
             cfg.environment = conf["environment"] as? String ?? ""

@@ -41,7 +41,11 @@ Presenting a browser key here, or a mobile key without a matching app id, answer
 
 ```
 GET /v1/rum/config      → {"service_name", "environment", "sample_rate"}
+openlog-browser-key: olb_…
+openlog-app-id: com.example.shop
 ```
+
+The application id is required here as well: the key is authorised the same way on both endpoints.
 
 Read it at start-up and use what it returns. `sample_rate` is the operator's, set on the key, so an
 application's volume can be turned down without shipping a release. Until it answers — or if it fails —

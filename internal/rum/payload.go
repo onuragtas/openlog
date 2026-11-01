@@ -175,6 +175,12 @@ func Sanitize(req *coltrace.ExportTraceServiceRequest, key Key, sc Scope) Result
 	budget := MaxSpansPerRequest
 	kept := req.ResourceSpans[:0]
 	for _, rs := range req.GetResourceSpans() {
+		// Read before the rebuild. The rollups read span attributes, and the SDKs say these on the resource if at all.
+		sc := sc
+		sc.browser, sc.os = browserFacts(otlputil.AttrString(rs.GetResource().GetAttributes(), "user_agent.original"))
+		if v := truncate(otlputil.AttrString(rs.GetResource().GetAttributes(), AttrOSName), MaxAttrValueBytes); v != "" {
+			sc.os = v
+		}
 		// The resource is rebuilt, never merged: see the package comment.
 		rs.Resource = buildResource(rs.GetResource(), key)
 		rs.SchemaUrl = ""
@@ -269,6 +275,12 @@ func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 	// Forced like service.name: a country a page could send is a country a page could invent. Empty when no
 	// trusted proxy resolved one, which is an honest blank rather than a guess.
 	add(AttrGeoCountry, sc.Country)
+	if in[AttrBrowserName] == "" {
+		add(AttrBrowserName, sc.browser)
+	}
+	if in[AttrOSName] == "" {
+		add(AttrOSName, sc.os)
+	}
 
 	switch event {
 	case EventPageView:

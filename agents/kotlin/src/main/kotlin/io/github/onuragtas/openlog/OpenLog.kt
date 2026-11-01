@@ -82,7 +82,11 @@ class OpenLog private constructor(
                 // The operator's sample rate wins, so volume can be turned down without shipping a
                 // release. Until it answers the application reports with its own; failure is silent.
                 Thread({
-                    val conf = fetchConfig(cfg.configUrl, mapOf("openlog-browser-key" to options.key))
+                    // A mobile key refuses a request that names no application, and this one is no exception.
+                    val conf = fetchConfig(
+                        cfg.configUrl,
+                        mapOf("openlog-browser-key" to options.key, "openlog-app-id" to options.appId),
+                    )
                     if (conf != null) {
                         cfg.serviceName = conf["service_name"] as? String ?: ""
                         cfg.environment = conf["environment"] as? String ?: ""
