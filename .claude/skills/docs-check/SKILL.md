@@ -72,8 +72,8 @@ go test ./internal/config ./internal/migrate ./internal/api/...
 (cd docs && npm run build)
 ```
 
-`check-locales.py` fails on a page or console string missing from a language, and on a translation whose headings or code blocks don't match the
-English. `TestEnvVarCoverage` fails on an undocumented variable. A dead link fails the docs build. None of them looks at whether the prose is right, so they
+`check-locales.py` fails on a page missing from a language, and on a translation whose headings or code blocks don't match the English. The typecheck
+fails on a console string missing from a language. `TestEnvVarCoverage` fails on an undocumented variable. A dead link fails the docs build. None of them looks at whether the prose is right, so they
 end this check and do not replace it.
 
 Everything this change touched has to pass. Pages the script reports that this change did not touch are older gaps: fix them when asked to complete the
