@@ -281,6 +281,15 @@ code, oq = call("POST", "/api/v1/query", {"query": f"SELECT count(*) FROM Span W
 print("crash oql:", code, json.dumps(oq.get("rows", oq))[:200])
 check("crashes are alertable through OQL", code == 200 and oq["rows"][0]["values"][0] >= 2, oq)
 
+# The crash-free rate counts sessions, so it must not need anyone to be recognised across visits.
+APP_NOID = f"noid-{RUN}"
+_, key_noid = make_key("noid", APP_NOID, analytics_mode="off")
+send_res(key_noid, [span("page_view", two_days, f"n{i}", **page) for i in range(4)] + [crash(two_days + timedelta(seconds=5), "n0")], "3.0", True)
+rel = poll(f"/api/v1/rum/releases?{q(APP_NOID)}&from={frm}", lambda d: any(x.get("crashed_sessions") for x in d.get("releases", [])), 45)
+noid = {x["version"]: x for x in rel.get("releases", [])}.get("3.0", {})
+print("no identity:", json.dumps(noid)[:300])
+check("the crash-free rate works with analytics off", noid.get("sessions") == 4 and noid.get("session_crash_free_rate") == 3 / 4, noid)
+
 # ---- audience (analytics.md §6). Countries need OPENLOG_PROOF_GEOIP=1: a server started with
 # internal/rum/testdata/country-test.mmdb as OPENLOG_RUM_GEOIP_DB, and the path to it through a trusted proxy.
 APP_AU = f"audience-{RUN}"

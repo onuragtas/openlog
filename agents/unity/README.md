@@ -13,8 +13,10 @@ of the same one. Tested on Unity 6 with IL2CPP and high managed stripping. It us
 Add the package in **Window → Package Manager → + → Install package from git URL**:
 
 ```
-https://github.com/onuragtas/openlog.git?path=agents/unity
+https://github.com/onuragtas/openlog.git?path=agents/unity#v0.1.140
 ```
+
+The part after `#` pins a release, so a game's build doesn't change by itself. Without it you get whatever is on `master`. The package is in releases from `v0.1.139` on.
 
 Create a mobile key under **Settings → Browser keys**, with your package name and bundle identifier on its allowlist. Then
 start the SDK when the game starts:

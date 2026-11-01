@@ -33,6 +33,7 @@ shared_pkgs=(
 	./internal/savedview
 	./internal/operator
 	./internal/updatereq
+	./internal/synthetics
 )
 # Packages that start their own compose project when OPENLOG_TEST_POSTGRES_DSN is unset.
 self_pkgs=(

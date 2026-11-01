@@ -13,8 +13,10 @@ managed stripping ile Unity 6'da test edildi. Reflection kullanmaz, bu yüzden `
 Paketi **Window → Package Manager → + → Install package from git URL** ile ekle:
 
 ```
-https://github.com/onuragtas/openlog.git?path=agents/unity
+https://github.com/onuragtas/openlog.git?path=agents/unity#v0.1.140
 ```
+
+`#` işaretinden sonraki kısım bir sürüme sabitler, böylece oyununun derlemesi kendiliğinden değişmez. Bu kısım olmadan `master`'da ne varsa onu alırsın. Paket `v0.1.139` ve sonraki sürümlerde var.
 
 **Settings → Browser keys** altında, izin listesinde paket adın ve bundle identifier'ın olan bir mobil anahtar oluştur. Sonra oyun başlarken
 SDK'yı başlat:
