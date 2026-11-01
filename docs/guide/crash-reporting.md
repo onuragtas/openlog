@@ -27,12 +27,16 @@ stack, so that a new build does not reopen every group. Different crashes with t
 
 ## Set it up
 
+::: tip Which endpoint?
+These examples use the hosted service, `https://apm.resoft.org`. If you run openlog yourself, use your own server instead.
+:::
+
 ### iOS
 
 ```swift
 let openlog = try OpenLog.start(Options(
     key: "olb_…",
-    endpoint: "https://ingest.example.com:4318",
+    endpoint: "https://apm.resoft.org",
     appID: Bundle.main.bundleIdentifier ?? "",
     serviceVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
     captureCrashes: true
@@ -49,7 +53,7 @@ having an unknown session.
 val openlog = OpenLog.start(
     Options(
         key = "olb_…",
-        endpoint = "https://ingest.example.com:4318",
+        endpoint = "https://apm.resoft.org",
         appId = BuildConfig.APPLICATION_ID,
         serviceVersion = BuildConfig.VERSION_NAME,
         captureCrashes = true,
@@ -68,7 +72,7 @@ The SDK is pure Dart and cannot install Flutter's handlers itself, so connect th
 ```dart
 final openlog = Openlog.init(OpenlogOptions(
   key: 'olb_…',
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
   appId: 'com.example.shop',
   serviceVersion: '4.2.1',
   captureCrashes: true,

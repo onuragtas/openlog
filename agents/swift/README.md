@@ -14,7 +14,7 @@ import OpenLog
 
 let openlog = try OpenLog.start(Options(
     key: "olb_…",                        // a mobile key, from Settings → Browser keys
-    endpoint: "https://ingest.example.com:4318",
+    endpoint: "https://apm.resoft.org",
     appID: Bundle.main.bundleIdentifier ?? "",   // must be on the key's application allowlist
     serviceVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
     deviceModel: "iPhone15,2",

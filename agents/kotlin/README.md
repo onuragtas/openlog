@@ -19,7 +19,7 @@ it — not OkHttp, not kotlinx-serialization.
 val openlog = OpenLog.start(
     Options(
         key = "olb_…",                    // a mobile key, from Settings → Browser keys
-        endpoint = "https://ingest.example.com:4318",
+        endpoint = "https://apm.resoft.org",
         appId = BuildConfig.APPLICATION_ID,   // must be on the key's application allowlist
         serviceVersion = BuildConfig.VERSION_NAME,
         deviceManufacturer = Build.MANUFACTURER,

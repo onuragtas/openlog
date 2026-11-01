@@ -9,6 +9,10 @@ It runs on top of the [browser](/integrations/browser), [iOS](/integrations/ios)
 
 Results appear per application, in the **Analytics** tab under **Browser**.
 
+::: tip Which endpoint?
+These examples use the hosted service, `https://apm.resoft.org`. If you run openlog yourself, use your own server instead.
+:::
+
 ## 1. Check the key
 
 Open **Settings → Browser keys**. Each key has an **Analytics** setting:
@@ -31,7 +35,7 @@ Nothing else is needed:
 ```js
 import { init } from 'openlog-browser';
 
-const openlog = init({ key: 'olb_…', endpoint: 'https://ingest.example.com:4318' });
+const openlog = init({ key: 'olb_…', endpoint: 'https://apm.resoft.org' });
 ```
 
 ### iOS
@@ -41,7 +45,7 @@ Nothing else is needed. The id is kept in `UserDefaults`.
 ```swift
 let openlog = try OpenLog.start(Options(
     key: "olb_…",
-    endpoint: "https://ingest.example.com:4318",
+    endpoint: "https://apm.resoft.org",
     appID: Bundle.main.bundleIdentifier ?? ""
 ))
 ```
@@ -54,7 +58,7 @@ Give the SDK a private directory to keep the id in:
 val openlog = OpenLog.start(
     Options(
         key = "olb_…",
-        endpoint = "https://ingest.example.com:4318",
+        endpoint = "https://apm.resoft.org",
         appId = BuildConfig.APPLICATION_ID,
         visitorDirectory = context.filesDir.path,
     )
@@ -70,7 +74,7 @@ final dir = await getApplicationSupportDirectory();
 
 final openlog = Openlog.init(OpenlogOptions(
   key: 'olb_…',
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
   appId: 'com.example.shop',
   visitorDirectory: dir.path,
 ));
@@ -106,7 +110,7 @@ If you need to ask first, start with collection off and turn it on when they agr
 ```js
 const openlog = init({
   key: 'olb_…',
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
   analyticsCollection: false,
 });
 

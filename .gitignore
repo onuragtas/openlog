@@ -30,6 +30,10 @@ playwright-report/
 openlog-release-key-*.env
 *.release-key.env
 
+# What the IDE's Java and Kotlin extensions compile into.
+agents/java/**/bin/
+agents/kotlin/bin/
+
 # Installed dependencies and compiled test output of the JavaScript packages (web, agents/*).
 node_modules/
 .test-build/
