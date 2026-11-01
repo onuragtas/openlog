@@ -4,6 +4,7 @@
 // Every response carries a `pricing` object: the price table's version, date and caveat. The UI
 // renders it next to the numbers — a cost estimate must never be mistaken for a bill.
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
@@ -37,18 +38,22 @@ export const costSummaryQuery = (range: RangeSpec) =>
     refetchInterval: live(range),
   });
 
-export const costHostsQuery = (range: RangeSpec) =>
+export type CostHostSort = "host" | "instance" | "cost" | "idle";
+
+export const costHostsQuery = (range: RangeSpec, list: ListState<CostHostSort>) =>
   queryOptions({
-    queryKey: ["cost-hosts", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/costs/hosts", { params: { query: { ...window(range), limit: 200 } }, signal })),
+    queryKey: ["cost-hosts", ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/costs/hosts", { params: { query: { ...window(range), ...list } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
 
-export const costServicesQuery = (range: RangeSpec) =>
+export type CostServiceSort = "service" | "environment" | "containers" | "cost";
+
+export const costServicesQuery = (range: RangeSpec, list: ListState<CostServiceSort>) =>
   queryOptions({
-    queryKey: ["cost-services", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/costs/services", { params: { query: { ...window(range), limit: 200 } }, signal })),
+    queryKey: ["cost-services", ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/costs/services", { params: { query: { ...window(range), ...list } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });

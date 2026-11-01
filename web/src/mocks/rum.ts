@@ -153,6 +153,7 @@ export const rumHandlers = [
     const now = Date.now();
     return HttpResponse.json({
       apps: [{ app: MOCK_RUM_APP, environment: "production", views: 1840, sessions: 612, errors: 16, last_seen: formatTs(now - 30_000) }],
+      has_more: false,
     });
   })),
 
@@ -177,12 +178,13 @@ export const rumHandlers = [
     // One kind of visitor: the mock shop is slower on phones, which is the
     // whole reason the facet exists.
     if (url.searchParams.get("device_type") === "mobile") {
-      return HttpResponse.json({ pages: PAGES.map((p) => ({ ...p, views: Math.round(p.views / 3), avg_ms: (p.avg_ms ?? 0) * 2 })) });
+      return HttpResponse.json({ pages: PAGES.map((p) => ({ ...p, views: Math.round(p.views / 3), avg_ms: (p.avg_ms ?? 0) * 2 })), has_more: false });
     }
     const pages = [...PAGES].sort((a, b) =>
       sort === "avg" ? (b.avg_ms ?? 0) - (a.avg_ms ?? 0) : sort === "slowest" ? b.views * (b.avg_ms ?? 0) - a.views * (a.avg_ms ?? 0) : b.views - a.views,
     );
-    return HttpResponse.json({ pages });
+    if (url.searchParams.get("dir") === "asc") pages.reverse();
+    return HttpResponse.json({ pages, has_more: false });
   })),
 
   http.get(`${API}/rum/vitals`, authed(({ request }) => {
@@ -205,7 +207,7 @@ export const rumHandlers = [
       // The version before it came back for a while: a rollback, which the row says out loud.
       { timestamp: formatTs(now - 20 * 3_600_000), t: now - 20 * 3_600_000, service_namespace: "", environment: "production", version: "1.4.1", previous_version: "1.3.9", initial: false, rollback: true },
     ];
-    return HttpResponse.json({ releases, deployments });
+    return HttpResponse.json({ releases, deployments, has_more: false });
   })),
 
   http.get(`${API}/analytics/activity`, authed(() => {
@@ -312,7 +314,7 @@ export const rumHandlers = [
       // ids; the mock stands in for that with the one session that has one.
       const rows = user ? all.filter((s) => s.session_id === MOCK_RUM_SESSION_ID) : all;
       const device = url.searchParams.get("device_type");
-      return HttpResponse.json({ sessions: device ? rows.filter((s) => s.device_type === device) : rows });
+      return HttpResponse.json({ sessions: device ? rows.filter((s) => s.device_type === device) : rows, has_more: false });
     }),
   ),
 

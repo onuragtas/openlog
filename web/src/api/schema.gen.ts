@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Hosts seen in the last 24h, ordered by host_name */
+        /** Hosts seen in the last 24h, ordered by host_name unless asked otherwise */
         get: operations["listHosts"];
         put?: never;
         post?: never;
@@ -157,7 +157,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Hosts ordered by cost, most expensive first */
+        /** Hosts ordered by cost, most expensive first unless asked otherwise */
         get: operations["listCostHosts"];
         put?: never;
         post?: never;
@@ -1645,7 +1645,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Browser applications that reported in the range, with page views, sessions, errors and when they were last seen (rum.md §7). */
+        /** @description Browser applications that reported in the range, with page views, sessions, errors and when they were last seen (rum.md §7). With no `limit` this is every application, up to the server's row limit. */
         get: operations["listRumApps"];
         put?: never;
         post?: never;
@@ -1970,7 +1970,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5). */
+        /** @description Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5). With no `limit` this is every instance. Sorted and paged after merging two reads of at most 500 instances each, so complete up to those. */
         get: operations["listDbInstances"];
         put?: never;
         post?: never;
@@ -2031,6 +2031,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/db/activity/waits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every wait event of the range, where /db/activity holds the top ones. `share` is of all the instance's samples in the range. */
+        get: operations["listDbActivityWaits"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/db/activity/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Every statement the session samples caught in the range, where /db/activity holds the top ones. */
+        get: operations["listDbActivityQueries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/db/sessions": {
         parameters: {
             query?: never;
@@ -2038,7 +2072,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description The latest session sample at or before `at` (default now, looking back 5 minutes): what every non-idle session runs, waits for and blocks. */
+        /** @description The latest session sample at or before `at` (default now, looking back 5 minutes): what every non-idle session runs, waits for and blocks. Not paged, because a blocking chain can only be drawn over the whole sample: it holds the 1000 longest running sessions, and `has_more` says when the sample had more. */
         get: operations["getDbSessions"];
         put?: never;
         post?: never;
@@ -7752,13 +7786,14 @@ export interface components {
                 points: number[][];
             }[];
             waits: components["schemas"]["DbWait"][];
-            top_queries: {
-                fingerprint: string;
-                text: string;
-                samples: number;
-                avg_active_sessions: number;
-                top_wait: string;
-            }[];
+            top_queries: components["schemas"]["DbActivityQuery"][];
+        };
+        DbActivityQuery: {
+            fingerprint: string;
+            text: string;
+            samples: number;
+            avg_active_sessions: number;
+            top_wait: string;
         };
         DbSession: {
             session_id: string;
@@ -8485,6 +8520,10 @@ export interface components {
             };
             /** @description More than 2000 candidate groups or more than limit results */
             truncated: boolean;
+            /** @description More than 2000 candidate groups, so some are in no sort or page. Optional, since older servers do not send it. */
+            capped?: boolean;
+            /** @description There is another page. Optional */
+            has_more?: boolean;
             /** @description false without PostgreSQL (static auth mode): every group is unresolved */
             workflow: boolean;
         };
@@ -11012,7 +11051,7 @@ export interface components {
         ApmErrorAssignee: string;
         /** @description Case-insensitive substring of the error type, message, service name or span name */
         ApmErrorQuery: string;
-        ApmErrorSort: "count" | "last_seen" | "first_seen";
+        ApmErrorSort: "count" | "last_seen" | "first_seen" | "type" | "service" | "status" | "assignee" | "comments";
         /** @description 16 hex digits */
         ApmGroupID: string;
     };
@@ -11027,6 +11066,13 @@ export interface operations {
             query?: {
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Words that must all appear in the name, id, OS, architecture, agent version or a key=value resource attribute */
+                q?: string;
+                sort?: "name" | "os" | "cpu" | "memory" | "disk" | "load" | "agent" | "last_seen";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11042,6 +11088,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         hosts: components["schemas"]["Host"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -11306,6 +11354,11 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                sort?: "host" | "instance" | "cost" | "idle";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11323,6 +11376,8 @@ export interface operations {
                         hosts: components["schemas"]["CostHost"][];
                         /** @description Hosts before limit */
                         total: number;
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                         summary: components["schemas"]["CostSummary"];
                         pricing: components["schemas"]["CostPricing"];
                     };
@@ -11343,6 +11398,11 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                sort?: "service" | "environment" | "containers" | "cost";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11360,6 +11420,8 @@ export interface operations {
                         services: components["schemas"]["CostService"][];
                         /** @description Services before limit */
                         total: number;
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                         summary: components["schemas"]["CostSummary"];
                         pricing: components["schemas"]["CostPricing"];
                     };
@@ -12798,8 +12860,15 @@ export interface operations {
                 namespace?: components["parameters"]["ApmNamespace"];
                 /** @description deployment.environment(.name); omitted = all environments, present (also empty) = exact match */
                 environment?: components["parameters"]["ApmEnvironment"];
-                /** @description Case-insensitive substring of the service name */
+                /** @description Case-insensitive words, each found somewhere in the name, namespace, environment, language or version */
                 q?: string;
+                sort?: "name" | "environment" | "throughput" | "error_rate" | "p95" | "apdex" | "last_seen";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                /** @description Without one the answer is every service up to the server's maximum */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -12817,6 +12886,10 @@ export interface operations {
                         /** @example 60s */
                         step: string;
                         services: components["schemas"]["ApmService"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
+                        /** @description Every environment seen since `from`, whatever `environment`, `q` and the page narrowed the rows to. Optional, since older servers do not send it. */
+                        environments?: string[];
                     };
                 };
             };
@@ -12904,7 +12977,11 @@ export interface operations {
                 from?: components["parameters"]["From"];
                 /** @description RFC3339 or unix milliseconds. Default now. */
                 to?: components["parameters"]["To"];
-                sort?: "time" | "throughput" | "slowest" | "errors";
+                sort?: "time" | "throughput" | "avg" | "slowest" | "errors" | "error_rate" | "apdex" | "name";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 type?: components["schemas"]["ApmTransactionType"];
                 limit?: number;
             };
@@ -12926,6 +13003,8 @@ export interface operations {
                     "application/json": {
                         apdex_t_ms: number;
                         transactions: components["schemas"]["ApmTransaction"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -12992,6 +13071,10 @@ export interface operations {
                 /** @description Case-insensitive substring of the error type, message, service name or span name */
                 q?: components["parameters"]["ApmErrorQuery"];
                 sort?: components["parameters"]["ApmErrorSort"];
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path: {
@@ -13075,6 +13158,10 @@ export interface operations {
                 /** @description Case-insensitive substring of the error type, message, service name or span name */
                 q?: components["parameters"]["ApmErrorQuery"];
                 sort?: components["parameters"]["ApmErrorSort"];
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -13365,7 +13452,11 @@ export interface operations {
                 from?: components["parameters"]["From"];
                 /** @description RFC3339 or unix milliseconds. Default now. */
                 to?: components["parameters"]["To"];
-                sort?: "time" | "calls" | "slowest" | "errors";
+                sort?: "time" | "calls" | "slowest" | "errors" | "error_rate" | "max" | "statement" | "database";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 db_system?: string;
                 limit?: number;
             };
@@ -13386,6 +13477,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         queries: components["schemas"]["ApmDbQuery"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -13716,6 +13809,10 @@ export interface operations {
                 max_duration_ms?: number;
                 error?: boolean;
                 sort?: "timestamp" | "duration";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 limit?: number;
             };
             header?: never;
@@ -13732,6 +13829,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         traces: components["schemas"]["ApmTraceResult"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -13948,6 +14047,13 @@ export interface operations {
                 severity?: components["schemas"]["VulnSeverity"];
                 /** @description Only the findings of this host */
                 host_id?: string;
+                sort?: "severity" | "advisory" | "score" | "hosts";
+                /** @description Default and maximum 1000 */
+                limit?: number;
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -13963,9 +14069,12 @@ export interface operations {
                 content: {
                     "application/json": {
                         vulnerabilities: components["schemas"]["VulnGroup"][];
+                        /** @description Of the whole list, not of the page. Respects the filters. */
                         severity_counts: {
                             [key: string]: number;
                         };
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14608,6 +14717,12 @@ export interface operations {
     listRumApps: {
         parameters: {
             query?: {
+                sort?: "views" | "sessions" | "errors" | "last_seen" | "app" | "environment";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                limit?: number;
                 from?: string;
                 to?: string;
             };
@@ -14625,6 +14740,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         apps: components["schemas"]["RumApp"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14671,7 +14788,11 @@ export interface operations {
                 device_type?: string;
                 /** @description One browser name (`Chrome`, `Safari`, …). Page views keep it; vitals do not. */
                 browser?: string;
-                sort?: "views" | "slowest" | "avg";
+                sort?: "views" | "slowest" | "avg" | "ttfb" | "route";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 limit?: number;
                 from?: string;
                 to?: string;
@@ -14690,6 +14811,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         pages: components["schemas"]["RumPage"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14738,12 +14861,17 @@ export interface operations {
             query: {
                 app: string;
                 environment?: string;
-                /** @description The visits of one identity, as the application declared it through `identify()` (§3.7). The id lives on the spans rather than on the session rollup, so this narrows the rollup by the session ids those spans carry: it is bounded by the same window and by the trace retention, and costs nothing when it is not asked for. Empty for every session of an application that never identifies anyone. */
+                /** @description The visits of one identity, as the application declared it through `identify()` (§3.7). The id lives on the spans rather than on the session rollup, so this narrows the rollup by the session ids those spans carry: it is bounded by the same window and by the trace retention, and costs nothing when it is not asked for. Empty for every session of an application that never identifies anyone. It looks through that person's newest 2000 sessions, and pages stop there. */
                 user_id?: string;
                 /** @description One device kind (`desktop`, `mobile`, `tablet`). */
                 device_type?: string;
                 /** @description One browser name (`Chrome`, `Safari`, …). */
                 browser?: string;
+                sort?: "last_seen" | "started" | "duration" | "page_views" | "errors" | "entry" | "browser";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 limit?: number;
                 from?: string;
                 to?: string;
@@ -14762,6 +14890,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         sessions: components["schemas"]["RumSession"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14812,6 +14942,12 @@ export interface operations {
                 to?: string;
                 /** @description How long a version must have been absent for its return to count as a new release. */
                 gap?: string;
+                sort?: "last_seen" | "first_seen" | "version" | "crash_free" | "error_free" | "sessions" | "error_sessions";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -14828,6 +14964,8 @@ export interface operations {
                     "application/json": {
                         releases: components["schemas"]["RumRelease"][];
                         deployments: components["schemas"]["ApmDeployment"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -15256,6 +15394,12 @@ export interface operations {
     listDbInstances: {
         parameters: {
             query?: {
+                sort?: "time" | "calls" | "avg" | "aas" | "errors" | "statements" | "instance" | "host" | "wait" | "last_seen";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                limit?: number;
                 from?: string;
                 to?: string;
             };
@@ -15273,6 +15417,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         instances: components["schemas"]["DbInstance"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -15288,7 +15434,11 @@ export interface operations {
                 instance: string;
                 from?: string;
                 to?: string;
-                sort?: "time" | "calls" | "avg" | "rows" | "errors" | "reads";
+                sort?: "time" | "calls" | "avg" | "rows" | "rows_per_call" | "errors" | "reads" | "statement";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
                 db?: string;
                 /** @description case-insensitive substring of the statement */
                 q?: string;
@@ -15310,6 +15460,8 @@ export interface operations {
                         queries: components["schemas"]["DbQuery"][];
                         /** @description statement time of the whole instance in the range */
                         total_time_ms: number;
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -15379,6 +15531,82 @@ export interface operations {
             504: components["responses"]["Timeout"];
         };
     };
+    listDbActivityWaits: {
+        parameters: {
+            query: {
+                /** @description service.instance.id of the database instance */
+                instance: string;
+                from?: string;
+                to?: string;
+                sort?: "samples" | "type" | "event";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Wait events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        waits: components["schemas"]["DbWait"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    listDbActivityQueries: {
+        parameters: {
+            query: {
+                /** @description service.instance.id of the database instance */
+                instance: string;
+                from?: string;
+                to?: string;
+                sort?: "samples" | "statement" | "wait";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Statements by load */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        queries: components["schemas"]["DbActivityQuery"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     getDbSessions: {
         parameters: {
             query: {
@@ -15401,6 +15629,8 @@ export interface operations {
                     "application/json": {
                         sampled_at: components["schemas"]["NullableTimestamp"];
                         sessions: components["schemas"]["DbSession"][];
+                        /** @description The sample held more sessions than this. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -15450,6 +15680,13 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
+                sort?: "service" | "environment" | "type" | "total" | "samples" | "last_seen";
+                /** @description Default and maximum OPENLOG_API_MAX_ROWS */
+                limit?: number;
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -15465,6 +15702,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         services: components["schemas"]["ProfileService"][];
+                        /** @description There is another page. Optional */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -21063,6 +21302,8 @@ export interface operations {
                 plan?: string;
                 state?: "active" | "suspended" | "trial" | "flagged";
                 sort?: "created" | "name" | "ingest" | "members" | "last_ingest";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
                 limit?: number;
                 offset?: number;
             };

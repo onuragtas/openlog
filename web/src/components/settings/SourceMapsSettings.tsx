@@ -5,15 +5,25 @@ import { FileCode2, Loader2, Upload } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { deleteSourceMap, MAX_SOURCE_MAP_BYTES, scriptFromMapName, sourceMapsQuery, uploadSourceMap, type SourceMap } from "@/api/sourceMaps";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatBytes } from "@/lib/format";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
+
+const MAP_COLUMNS = {
+  script: (m: SourceMap) => m.script,
+  application: (m: SourceMap) => m.app,
+  size: (m: SourceMap) => m.size_bytes,
+  created_by: (m: SourceMap) => m.created_by_email,
+  uploaded: (m: SourceMap) => timeOf(m.updated_at),
+};
 
 export function SourceMapsSettings() {
   const { t } = useTranslation();
@@ -22,6 +32,7 @@ export function SourceMapsSettings() {
   const perms = usePermissions();
   const canManage = perms.writable && perms.can("source_maps.manage");
   const maps = useQuery(sourceMapsQuery());
+  const list = useLocalList(maps.data, MAP_COLUMNS, "uploaded", "desc");
   const fileInput = useRef<HTMLInputElement>(null);
   const [app, setApp] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -99,47 +110,50 @@ export function SourceMapsSettings() {
             <p className="mt-1 text-xs">{t("settings.sourceMaps.emptyHint")}</p>
           </EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.sourceMaps.columns.script")}</TableHead>
-                <TableHead>{t("settings.sourceMaps.application")}</TableHead>
-                <TableHead className="hidden md:table-cell text-right">{t("settings.sourceMaps.columns.size")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("settings.columns.createdBy")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.sourceMaps.columns.uploaded")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("settings.columns.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {maps.data.map((m: SourceMap) => (
-                <TableRow key={m.id}>
-                  <TableCell className="font-mono text-xs break-all">{m.script}</TableCell>
-                  <TableCell label={t("settings.sourceMaps.application")}>{m.app}</TableCell>
-                  <TableCell label={t("settings.sourceMaps.columns.size")} className="hidden md:table-cell text-right tabular-nums">
-                    {formatBytes(m.size_bytes, 0)}
-                  </TableCell>
-                  <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
-                    {m.created_by_email || "–"}
-                  </TableCell>
-                  <TableCell label={t("settings.sourceMaps.columns.uploaded")} className="hidden md:table-cell">
-                    <DateTimeText value={m.updated_at} relative />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canManage && (
-                      <ConfirmButton
-                        label={t("settings.sourceMaps.delete")}
-                        confirmLabel={t("settings.sourceMaps.confirmDelete")}
-                        pending={remove.isPending && remove.variables === m.id}
-                        onConfirm={() => remove.mutate(m.id)}
-                      />
-                    )}
-                  </TableCell>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="script" defaultDir="asc" {...list.head}>{t("settings.sourceMaps.columns.script")}</SortableHead>
+                  <SortableHead column="application" defaultDir="asc" {...list.head}>{t("settings.sourceMaps.application")}</SortableHead>
+                  <SortableHead column="size" className="hidden md:table-cell text-right" {...list.head}>{t("settings.sourceMaps.columns.size")}</SortableHead>
+                  <SortableHead column="created_by" defaultDir="asc" className="hidden lg:table-cell" {...list.head}>{t("settings.columns.createdBy")}</SortableHead>
+                  <SortableHead column="uploaded" className="hidden md:table-cell" {...list.head}>{t("settings.sourceMaps.columns.uploaded")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("settings.columns.actions")}</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((m: SourceMap) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="font-mono text-xs break-all">{m.script}</TableCell>
+                    <TableCell label={t("settings.sourceMaps.application")}>{m.app}</TableCell>
+                    <TableCell label={t("settings.sourceMaps.columns.size")} className="hidden md:table-cell text-right tabular-nums">
+                      {formatBytes(m.size_bytes, 0)}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
+                      {m.created_by_email || "–"}
+                    </TableCell>
+                    <TableCell label={t("settings.sourceMaps.columns.uploaded")} className="hidden md:table-cell">
+                      <DateTimeText value={m.updated_at} relative />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {canManage && (
+                        <ConfirmButton
+                          label={t("settings.sourceMaps.delete")}
+                          confirmLabel={t("settings.sourceMaps.confirmDelete")}
+                          pending={remove.isPending && remove.variables === m.id}
+                          onConfirm={() => remove.mutate(m.id)}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </div>
       <p className="text-xs text-muted-foreground">{t("settings.sourceMaps.note")}</p>

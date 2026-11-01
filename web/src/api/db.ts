@@ -16,7 +16,11 @@ export type DbWait = S["DbWait"];
 export type DbQueryDetail = S["DbQueryDetail"];
 export type DbActivity = S["DbActivity"];
 export type DbSession = S["DbSession"];
-export type DbQuerySort = "time" | "calls" | "avg" | "rows" | "errors" | "reads";
+export type DbActivityQuery = S["DbActivityQuery"];
+export type DbInstanceSort = "time" | "calls" | "avg" | "aas" | "errors" | "statements" | "instance" | "host" | "wait" | "last_seen";
+export type DbQuerySort = "time" | "calls" | "avg" | "rows" | "rows_per_call" | "errors" | "reads" | "statement";
+export type DbWaitSort = "samples" | "type" | "event";
+export type DbActivityQuerySort = "samples" | "statement" | "wait";
 
 const REFRESH_MS = 60_000;
 const rangeKey = (r: RangeSpec) => [r.range ?? "", r.from ?? "", r.to ?? ""];
@@ -36,13 +40,22 @@ export const dbInstancesQuery = (range: RangeSpec) =>
     refetchInterval: live(range),
   });
 
-export const dbQueriesQuery = (p: { instance: string; range: RangeSpec; sort: DbQuerySort; db?: string; q?: string }) =>
+/** One page of the instances, for the list. Anything that needs to find an instance by name reads dbInstancesQuery, which is all of them. */
+export const dbInstancesPageQuery = (range: RangeSpec, list: ListState<DbInstanceSort>) =>
   queryOptions({
-    queryKey: ["db", "queries", p.instance, p.sort, p.db ?? "", p.q ?? "", ...rangeKey(p.range)],
+    queryKey: ["db", "instances-page", ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/db/instances", { params: { query: { ...window(range), ...list } }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
+  });
+
+export const dbQueriesQuery = (p: { instance: string; range: RangeSpec; list: ListState<DbQuerySort>; db?: string; q?: string }) =>
+  queryOptions({
+    queryKey: ["db", "queries", p.instance, p.list, p.db ?? "", p.q ?? "", ...rangeKey(p.range)],
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET("/api/v1/db/queries", {
-          params: { query: { ...window(p.range), instance: p.instance, sort: p.sort, db: p.db || undefined, q: p.q || undefined, limit: 100 } },
+          params: { query: { ...window(p.range), ...p.list, instance: p.instance, db: p.db || undefined, q: p.q || undefined } },
           signal,
         }),
       ),
@@ -70,6 +83,23 @@ export const dbActivityQuery = (p: { instance: string; range: RangeSpec }) =>
     queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/db/activity", { params: { query: { ...window(p.range), instance: p.instance } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(p.range),
+  });
+
+/** The wait events of an instance, as a list of their own: sorting them should not read the charts again. */
+export const dbActivityWaitsQuery = (instance: string, range: RangeSpec, list: ListState<DbWaitSort>) =>
+  queryOptions({
+    queryKey: ["db", "activity-waits", instance, ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/db/activity/waits", { params: { query: { ...window(range), ...list, instance } }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
+  });
+
+export const dbActivityQueriesQuery = (instance: string, range: RangeSpec, list: ListState<DbActivityQuerySort>) =>
+  queryOptions({
+    queryKey: ["db", "activity-queries", instance, ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/db/activity/queries", { params: { query: { ...window(range), ...list, instance } }, signal })),
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
   });
 
 /** The latest session sample; refreshed every sampling interval while the tab is open. */

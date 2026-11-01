@@ -5,6 +5,7 @@
 // A profile type is never guessed. Nanoseconds and bytes do not add up, so the flame and function queries
 // stay disabled until a service *and* a type are chosen, and the services query is what offers the types.
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
@@ -12,6 +13,7 @@ import type { components } from "./schema.gen";
 type S = components["schemas"];
 
 export type ProfileService = S["ProfileService"];
+export type ProfileServiceSort = "service" | "environment" | "type" | "total" | "samples" | "last_seen";
 export type ProfileFunction = S["ProfileFunction"];
 export type FlameNode = S["FlameNode"];
 
@@ -27,10 +29,10 @@ function window(r: RangeSpec) {
 const live = (r: RangeSpec) => (r.range || (!r.from && !r.to) ? REFRESH_MS : false);
 
 /** What has been profiled in the range: one entry per service, environment and profile type. */
-export const profileServicesQuery = (range: RangeSpec) =>
+export const profileServicesQuery = (range: RangeSpec, list: ListState<ProfileServiceSort>) =>
   queryOptions({
-    queryKey: ["profiles", "services", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/profiles/services", { params: { query: window(range) }, signal })).services,
+    queryKey: ["profiles", "services", ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/profiles/services", { params: { query: { ...window(range), ...list } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, X } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import {
@@ -19,14 +19,16 @@ import {
 } from "@/api/alerts";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
 import { DateTimeText, FormError } from "@/components/settings/common";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { canEditOwned } from "@/lib/alerts";
 import { useNow } from "@/lib/hooks";
+import { timeOf, useLocalList } from "@/lib/list";
 import {
   DEFAULT_MONTHLY,
   monthlyRRule,
@@ -392,6 +394,16 @@ function MuteForm({ mute, rules, onDone }: { mute: AlertMute | null; rules: Aler
   );
 }
 
+// The server's `active` wins: `now` refreshes every 30 s, so a mute created in a later minute than the last refresh would otherwise show as
+// scheduled until the next tick.
+function muteStatus(m: AlertMute, now: number): "active" | "scheduled" | "ended" {
+  const s = parse(m.starts_at);
+  const e = parse(m.ends_at);
+  return m.active ? "active" : m.schedule ? (now < e ? "scheduled" : "ended") : now < s ? "scheduled" : now < e ? "active" : "ended";
+}
+
+const STATUS_RANK = { active: 0, scheduled: 1, ended: 2 };
+
 export function MutesManager() {
   const { t } = useTranslation();
   const me = useMe().data;
@@ -399,6 +411,15 @@ export function MutesManager() {
   const canWrite = usePermissions().can("alerts.write");
   const mutes = useQuery(alertMutesQuery());
   const rules = useQuery(alertRulesQuery());
+  const columns = useMemo(
+    () => ({
+      name: (m: AlertMute) => m.name,
+      window: (m: AlertMute) => timeOf(m.starts_at),
+      status: (m: AlertMute) => STATUS_RANK[muteStatus(m, now)],
+    }),
+    [now],
+  );
+  const list = useLocalList(mutes.data, columns, "status");
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AlertMute | "new" | null>(null);
   const remove = useMutation({ mutationFn: (id: string) => deleteAlertMute(id), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["alerts"] }) });
@@ -431,22 +452,18 @@ export function MutesManager() {
           <Table mobile="stack">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("alerts.mutes.columns.name")}</TableHead>
-                <TableHead>{t("alerts.mutes.columns.window")}</TableHead>
+                <SortableHead column="name" defaultDir="asc" {...list.head}>{t("alerts.mutes.columns.name")}</SortableHead>
+                <SortableHead column="window" {...list.head}>{t("alerts.mutes.columns.window")}</SortableHead>
                 <TableHead>{t("alerts.mutes.columns.scope")}</TableHead>
-                <TableHead>{t("alerts.mutes.columns.status")}</TableHead>
+                <SortableHead column="status" defaultDir="asc" {...list.head}>{t("alerts.mutes.columns.status")}</SortableHead>
                 <TableHead>
                   <span className="sr-only">{t("alerts.mutes.edit")}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {mutes.data.map((m) => {
-                const s = parse(m.starts_at);
-                const e = parse(m.ends_at);
-                // The server's `active` wins: `now` refreshes every 30 s, so a mute created in a later minute than the last
-                // refresh would otherwise show as scheduled until the next tick.
-                const status = m.active ? "active" : m.schedule ? (now < e ? "scheduled" : "ended") : now < s ? "scheduled" : now < e ? "active" : "ended";
+              {list.visible.map((m) => {
+                const status = muteStatus(m, now);
                 const scope = [
                   m.rule_ids.length ? m.rule_ids.map((id) => ruleName.get(id) ?? id).join(", ") : t("alerts.mutes.allRules"),
                   ...m.matchers.map((x) => `${x.label} ${t(`alerts.mutes.ops.${x.op}`)} ${x.value}`),
@@ -485,6 +502,7 @@ export function MutesManager() {
               })}
             </TableBody>
           </Table>
+          <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
         </div>
       )}
       <HolidayCalendarsManager />

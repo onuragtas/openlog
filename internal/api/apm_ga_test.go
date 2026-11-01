@@ -38,19 +38,19 @@ func TestTracePath(t *testing.T) {
 func TestParseInboxFilter(t *testing.T) {
 	p := &auth.Principal{UserID: "11111111-2222-3333-4444-555555555555"}
 	req := func(q string) *http.Request { return httptest.NewRequest(http.MethodGet, "/api/v1/apm/errors?"+q, nil) }
-	f, err := parseInboxFilter(req("status=resolved,ignored&assignee=me&q=+Shard+&sort=first_seen"), p)
+	f, err := parseInboxFilter(req("status=resolved,ignored&assignee=me&q=+Shard+"), p)
 	if err != nil || !f.statuses[apm.StatusResolved] || !f.statuses[apm.StatusIgnored] || f.statuses[apm.StatusUnresolved] ||
-		f.assignee == nil || *f.assignee != p.UserID || f.q != "shard" || f.sort != "first_seen" || !f.needsStateRows() {
+		f.assignee == nil || *f.assignee != p.UserID || f.q != "shard" || !f.needsStateRows() {
 		t.Fatalf("filter %+v %v", f, err)
 	}
 	f, err = parseInboxFilter(req("status=unresolved&assignee=none"), nil)
-	if err != nil || f.needsStateRows() || f.assignee == nil || *f.assignee != "" || f.sort != "count" {
+	if err != nil || f.needsStateRows() || f.assignee == nil || *f.assignee != "" {
 		t.Fatalf("unassigned filter %+v %v", f, err)
 	}
 	if !f.matchAssignee(apm.ErrorGroupState{}) || f.matchAssignee(apm.ErrorGroupState{AssigneeUserID: "x"}) {
 		t.Error("matchAssignee(none)")
 	}
-	for _, bad := range []string{"status=open", "assignee=me", "assignee=bob", "sort=name"} {
+	for _, bad := range []string{"status=open", "assignee=me", "assignee=bob"} {
 		if _, err := parseInboxFilter(req(bad), nil); err == nil {
 			t.Errorf("%s accepted", bad)
 		}

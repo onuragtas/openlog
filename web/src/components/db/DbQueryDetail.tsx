@@ -6,16 +6,20 @@ import { Link } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { dbQueryDetailQuery, type DbPlan } from "@/api/db";
+import { dbQueryDetailQuery, type DbPlan, type DbQueryDetail as DbQueryDetailData } from "@/api/db";
+import { ListPager } from "@/components/ListPager";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { dbSystemName, formatPlan, postgresPlanTree, type PlanNode } from "@/lib/db";
 import { formatDateTime, formatNumber, formatValue } from "@/lib/format";
+import { useLocalList } from "@/lib/list";
 import type { RangeSpec } from "@/lib/time";
+
+type DbCaller = DbQueryDetailData["callers"][number];
 
 function Kpi({ label, value }: { label: string; value: string }) {
   return (
@@ -71,6 +75,62 @@ function PlanView({ plan, system }: { plan: DbPlan; system: string }) {
         <pre className="max-h-96 overflow-auto rounded-lg bg-muted p-3 font-mono text-xs">{formatPlan(plan.format, plan.plan)}</pre>
       )}
     </div>
+  );
+}
+
+type CallerSort = "service" | "calls" | "avg" | "errors";
+
+const CALLER_SORTS: Record<CallerSort, (c: DbCaller) => string | number | null> = {
+  service: (c) => c.service_name,
+  calls: (c) => c.calls,
+  avg: (c) => c.avg_ms,
+  errors: (c) => c.errors,
+};
+
+/**
+ * Sorted here, because they arrive whole with the statement and are few: the services that run one statement. The server keeps the 50 busiest,
+ * so a statement sent by more than that would sort only those, and that many is not something this list has met.
+ */
+function Callers({ callers }: { callers: DbCaller[] }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.resolvedLanguage ?? "en";
+  const list = useLocalList(callers, CALLER_SORTS, "calls", "desc");
+  if (callers.length === 0) return <p className="text-sm text-muted-foreground">{t("db.query.noCallers")}</p>;
+  return (
+    <>
+      <Table mobile="stack">
+        <TableHeader>
+          <TableRow>
+            <SortableHead column="service" defaultDir="asc" {...list.head}>{t("db.columns.service")}</SortableHead>
+            <SortableHead column="calls" className="text-right" {...list.head}>{t("db.columns.calls")}</SortableHead>
+            <SortableHead column="avg" className="text-right" {...list.head}>{t("db.columns.clientAvg")}</SortableHead>
+            <SortableHead column="errors" className="text-right" {...list.head}>{t("db.columns.errors")}</SortableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {list.visible.map((c) => (
+            <TableRow key={`${c.service_name}/${c.environment}`} data-testid="db-caller">
+              <TableCell>
+                <Link to="/apm/services/$service" params={{ service: c.service_name }} search={{ tab: "databases" } as never} className="font-medium text-primary hover:underline">
+                  {c.service_name}
+                </Link>
+                {c.environment && <span className="ml-2 text-xs text-muted-foreground">{c.environment}</span>}
+              </TableCell>
+              <TableCell label={t("db.columns.calls")} className="text-right tabular-nums">
+                {formatNumber(c.calls, locale)}
+              </TableCell>
+              <TableCell label={t("db.columns.clientAvg")} className="text-right tabular-nums">
+                {c.avg_ms === null ? "–" : formatValue(c.avg_ms, "ms", locale)}
+              </TableCell>
+              <TableCell label={t("db.columns.errors")} className="text-right tabular-nums">
+                {formatNumber(c.errors, locale)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+    </>
   );
 }
 
@@ -147,41 +207,7 @@ export function DbQueryDetail({ instance, fingerprint, range }: { instance: stri
           <p className="text-sm text-muted-foreground">{t("db.query.callersDescription")}</p>
         </CardHeader>
         <CardContent>
-          {d.callers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("db.query.noCallers")}</p>
-          ) : (
-            <Table mobile="stack">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("db.columns.service")}</TableHead>
-                  <TableHead className="text-right">{t("db.columns.calls")}</TableHead>
-                  <TableHead className="text-right">{t("db.columns.clientAvg")}</TableHead>
-                  <TableHead className="text-right">{t("db.columns.errors")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {d.callers.map((c) => (
-                  <TableRow key={`${c.service_name}/${c.environment}`}>
-                    <TableCell>
-                      <Link to="/apm/services/$service" params={{ service: c.service_name }} search={{ tab: "databases" } as never} className="font-medium text-primary hover:underline">
-                        {c.service_name}
-                      </Link>
-                      {c.environment && <span className="ml-2 text-xs text-muted-foreground">{c.environment}</span>}
-                    </TableCell>
-                    <TableCell label={t("db.columns.calls")} className="text-right tabular-nums">
-                      {formatNumber(c.calls, locale)}
-                    </TableCell>
-                    <TableCell label={t("db.columns.clientAvg")} className="text-right tabular-nums">
-                      {c.avg_ms === null ? "–" : formatValue(c.avg_ms, "ms", locale)}
-                    </TableCell>
-                    <TableCell label={t("db.columns.errors")} className="text-right tabular-nums">
-                      {formatNumber(c.errors, locale)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          <Callers callers={d.callers} />
         </CardContent>
       </Card>
 

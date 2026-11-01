@@ -5503,10 +5503,10 @@ class DbActivity {
         m,
         'top_queries',
         path,
-        (v, p) => _list<DbActivityTopQueriesItem>(
+        (v, p) => _list<DbActivityQuery>(
           v,
           p,
-          (v, p) => DbActivityTopQueriesItem.fromJson(v, p),
+          (v, p) => DbActivityQuery.fromJson(v, p),
         ),
       ),
     );
@@ -5526,7 +5526,7 @@ class DbActivity {
   final String step;
   final List<DbActivitySeriesItem> series;
   final List<DbWait> waits;
-  final List<DbActivityTopQueriesItem> topQueries;
+  final List<DbActivityQuery> topQueries;
 }
 
 /// `DbActivitySeriesItem` of the openlog API contract.
@@ -5554,45 +5554,6 @@ class DbActivitySeriesItem {
 
   final String waitType;
   final List<List<double>> points;
-}
-
-/// `DbActivityTopQueriesItem` of the openlog API contract.
-class DbActivityTopQueriesItem {
-  const DbActivityTopQueriesItem({
-    required this.fingerprint,
-    required this.text,
-    required this.samples,
-    required this.avgActiveSessions,
-    required this.topWait,
-  });
-
-  factory DbActivityTopQueriesItem.fromJson(
-    Object? json, [
-    String path = 'DbActivityTopQueriesItem',
-  ]) {
-    final m = _obj(json, path);
-    return DbActivityTopQueriesItem(
-      fingerprint: _req(m, 'fingerprint', path, _str),
-      text: _req(m, 'text', path, _str),
-      samples: _req(m, 'samples', path, _int),
-      avgActiveSessions: _req(m, 'avg_active_sessions', path, _num),
-      topWait: _req(m, 'top_wait', path, _str),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'fingerprint': fingerprint,
-    'text': text,
-    'samples': samples,
-    'avg_active_sessions': avgActiveSessions,
-    'top_wait': topWait,
-  };
-
-  final String fingerprint;
-  final String text;
-  final int samples;
-  final double avgActiveSessions;
-  final String topWait;
 }
 
 /// `DbQueryDetail` of the openlog API contract.
@@ -7760,6 +7721,8 @@ class ApmErrorInbox {
     required this.groups,
     required this.counts,
     required this.truncated,
+    this.capped,
+    this.hasMore,
     required this.workflow,
   });
 
@@ -7784,6 +7747,8 @@ class ApmErrorInbox {
         (v, p) => ApmErrorInboxCounts.fromJson(v, p),
       ),
       truncated: _req(m, 'truncated', path, _bool),
+      capped: _opt(m, 'capped', path, _bool),
+      hasMore: _opt(m, 'has_more', path, _bool),
       workflow: _req(m, 'workflow', path, _bool),
     );
   }
@@ -7793,6 +7758,8 @@ class ApmErrorInbox {
     'groups': [for (final e in groups) e.toJson()],
     'counts': counts.toJson(),
     'truncated': truncated,
+    'capped': ?capped,
+    'has_more': ?hasMore,
     'workflow': workflow,
   };
 
@@ -7800,6 +7767,8 @@ class ApmErrorInbox {
   final List<ApmErrorGroup> groups;
   final ApmErrorInboxCounts counts;
   final bool truncated;
+  final bool? capped;
+  final bool? hasMore;
   final bool workflow;
 }
 
@@ -12009,6 +11978,45 @@ class DbWait {
   final String event;
   final int samples;
   final double share;
+}
+
+/// `DbActivityQuery` of the openlog API contract.
+class DbActivityQuery {
+  const DbActivityQuery({
+    required this.fingerprint,
+    required this.text,
+    required this.samples,
+    required this.avgActiveSessions,
+    required this.topWait,
+  });
+
+  factory DbActivityQuery.fromJson(
+    Object? json, [
+    String path = 'DbActivityQuery',
+  ]) {
+    final m = _obj(json, path);
+    return DbActivityQuery(
+      fingerprint: _req(m, 'fingerprint', path, _str),
+      text: _req(m, 'text', path, _str),
+      samples: _req(m, 'samples', path, _int),
+      avgActiveSessions: _req(m, 'avg_active_sessions', path, _num),
+      topWait: _req(m, 'top_wait', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'fingerprint': fingerprint,
+    'text': text,
+    'samples': samples,
+    'avg_active_sessions': avgActiveSessions,
+    'top_wait': topWait,
+  };
+
+  final String fingerprint;
+  final String text;
+  final int samples;
+  final double avgActiveSessions;
+  final String topWait;
 }
 
 /// `DbQuery` of the openlog API contract.
@@ -17633,7 +17641,7 @@ class ApmAgentsResponse {
 
 /// `ApmTracePage` of the openlog API contract.
 class ApmTracePage {
-  const ApmTracePage({required this.traces});
+  const ApmTracePage({required this.traces, this.hasMore});
 
   factory ApmTracePage.fromJson(Object? json, [String path = 'ApmTracePage']) {
     final m = _obj(json, path);
@@ -17648,14 +17656,17 @@ class ApmTracePage {
           (v, p) => ApmTraceResult.fromJson(v, p),
         ),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'traces': [for (final e in traces) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<ApmTraceResult> traces;
+  final bool? hasMore;
 }
 
 /// `ApmTransactionPage` of the openlog API contract.
@@ -17663,6 +17674,7 @@ class ApmTransactionPage {
   const ApmTransactionPage({
     required this.apdexTMs,
     required this.transactions,
+    this.hasMore,
   });
 
   factory ApmTransactionPage.fromJson(
@@ -17682,21 +17694,24 @@ class ApmTransactionPage {
           (v, p) => ApmTransaction.fromJson(v, p),
         ),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'apdex_t_ms': apdexTMs,
     'transactions': [for (final e in transactions) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final double apdexTMs;
   final List<ApmTransaction> transactions;
+  final bool? hasMore;
 }
 
 /// `ApmDbQueryPage` of the openlog API contract.
 class ApmDbQueryPage {
-  const ApmDbQueryPage({required this.queries});
+  const ApmDbQueryPage({required this.queries, this.hasMore});
 
   factory ApmDbQueryPage.fromJson(
     Object? json, [
@@ -17710,14 +17725,17 @@ class ApmDbQueryPage {
         path,
         (v, p) => _list<ApmDbQuery>(v, p, (v, p) => ApmDbQuery.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'queries': [for (final e in queries) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<ApmDbQuery> queries;
+  final bool? hasMore;
 }
 
 /// `ApmDeploymentPage` of the openlog API contract.
@@ -18277,7 +18295,12 @@ class SavedViewPage {
 
 /// `ServicePage` of the openlog API contract.
 class ServicePage {
-  const ServicePage({required this.step, required this.services});
+  const ServicePage({
+    required this.step,
+    required this.services,
+    this.hasMore,
+    this.environments,
+  });
 
   factory ServicePage.fromJson(Object? json, [String path = 'ServicePage']) {
     final m = _obj(json, path);
@@ -18289,21 +18312,32 @@ class ServicePage {
         path,
         (v, p) => _list<ApmService>(v, p, (v, p) => ApmService.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
+      environments: _opt(
+        m,
+        'environments',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
     );
   }
 
   Map<String, Object?> toJson() => {
     'step': step,
     'services': [for (final e in services) e.toJson()],
+    'has_more': ?hasMore,
+    'environments': ?environments,
   };
 
   final String step;
   final List<ApmService> services;
+  final bool? hasMore;
+  final List<String>? environments;
 }
 
 /// `RumAppPage` of the openlog API contract.
 class RumAppPage {
-  const RumAppPage({required this.apps});
+  const RumAppPage({required this.apps, this.hasMore});
 
   factory RumAppPage.fromJson(Object? json, [String path = 'RumAppPage']) {
     final m = _obj(json, path);
@@ -18314,19 +18348,22 @@ class RumAppPage {
         path,
         (v, p) => _list<RumApp>(v, p, (v, p) => RumApp.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'apps': [for (final e in apps) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<RumApp> apps;
+  final bool? hasMore;
 }
 
 /// `RumPageList` of the openlog API contract.
 class RumPageList {
-  const RumPageList({required this.pages});
+  const RumPageList({required this.pages, this.hasMore});
 
   factory RumPageList.fromJson(Object? json, [String path = 'RumPageList']) {
     final m = _obj(json, path);
@@ -18337,14 +18374,17 @@ class RumPageList {
         path,
         (v, p) => _list<RumPage>(v, p, (v, p) => RumPage.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'pages': [for (final e in pages) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<RumPage> pages;
+  final bool? hasMore;
 }
 
 /// `RumVitalList` of the openlog API contract.
@@ -18382,7 +18422,7 @@ class RumVitalList {
 
 /// `RumSessionPage` of the openlog API contract.
 class RumSessionPage {
-  const RumSessionPage({required this.sessions});
+  const RumSessionPage({required this.sessions, this.hasMore});
 
   factory RumSessionPage.fromJson(
     Object? json, [
@@ -18396,14 +18436,17 @@ class RumSessionPage {
         path,
         (v, p) => _list<RumSession>(v, p, (v, p) => RumSession.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'sessions': [for (final e in sessions) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<RumSession> sessions;
+  final bool? hasMore;
 }
 
 /// `RumSessionDetail` of the openlog API contract.
@@ -18437,7 +18480,11 @@ class RumSessionDetail {
 
 /// `RumReleaseList` of the openlog API contract.
 class RumReleaseList {
-  const RumReleaseList({required this.releases, required this.deployments});
+  const RumReleaseList({
+    required this.releases,
+    required this.deployments,
+    this.hasMore,
+  });
 
   factory RumReleaseList.fromJson(
     Object? json, [
@@ -18458,16 +18505,19 @@ class RumReleaseList {
         (v, p) =>
             _list<ApmDeployment>(v, p, (v, p) => ApmDeployment.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'releases': [for (final e in releases) e.toJson()],
     'deployments': [for (final e in deployments) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<RumRelease> releases;
   final List<ApmDeployment> deployments;
+  final bool? hasMore;
 }
 
 /// `RumFunnelResponse` of the openlog API contract.
@@ -18505,6 +18555,7 @@ class CostHostPage {
   const CostHostPage({
     required this.hosts,
     required this.total,
+    this.hasMore,
     required this.summary,
     required this.pricing,
   });
@@ -18519,6 +18570,7 @@ class CostHostPage {
         (v, p) => _list<CostHost>(v, p, (v, p) => CostHost.fromJson(v, p)),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
       summary: _req(m, 'summary', path, (v, p) => CostSummary.fromJson(v, p)),
       pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
     );
@@ -18527,12 +18579,14 @@ class CostHostPage {
   Map<String, Object?> toJson() => {
     'hosts': [for (final e in hosts) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
     'summary': summary.toJson(),
     'pricing': pricing.toJson(),
   };
 
   final List<CostHost> hosts;
   final int total;
+  final bool? hasMore;
   final CostSummary summary;
   final CostPricing pricing;
 }
@@ -18542,6 +18596,7 @@ class CostServicePage {
   const CostServicePage({
     required this.services,
     required this.total,
+    this.hasMore,
     required this.summary,
     required this.pricing,
   });
@@ -18560,6 +18615,7 @@ class CostServicePage {
             _list<CostService>(v, p, (v, p) => CostService.fromJson(v, p)),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
       summary: _req(m, 'summary', path, (v, p) => CostSummary.fromJson(v, p)),
       pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
     );
@@ -18568,12 +18624,14 @@ class CostServicePage {
   Map<String, Object?> toJson() => {
     'services': [for (final e in services) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
     'summary': summary.toJson(),
     'pricing': pricing.toJson(),
   };
 
   final List<CostService> services;
   final int total;
+  final bool? hasMore;
   final CostSummary summary;
   final CostPricing pricing;
 }
@@ -18711,7 +18769,7 @@ class FleetRolloutPage {
 
 /// `ProfileServicePage` of the openlog API contract.
 class ProfileServicePage {
-  const ProfileServicePage({required this.services});
+  const ProfileServicePage({required this.services, this.hasMore});
 
   factory ProfileServicePage.fromJson(
     Object? json, [
@@ -18729,14 +18787,17 @@ class ProfileServicePage {
           (v, p) => ProfileService.fromJson(v, p),
         ),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'services': [for (final e in services) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<ProfileService> services;
+  final bool? hasMore;
 }
 
 /// `ProfileFunctionPage` of the openlog API contract.
@@ -18843,7 +18904,7 @@ class DashboardPageList {
 
 /// `HostPage` of the openlog API contract.
 class HostPage {
-  const HostPage({required this.hosts});
+  const HostPage({required this.hosts, this.hasMore});
 
   factory HostPage.fromJson(Object? json, [String path = 'HostPage']) {
     final m = _obj(json, path);
@@ -18854,14 +18915,17 @@ class HostPage {
         path,
         (v, p) => _list<Host>(v, p, (v, p) => Host.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'hosts': [for (final e in hosts) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<Host> hosts;
+  final bool? hasMore;
 }
 
 /// `ContainerPage` of the openlog API contract.
@@ -19154,7 +19218,11 @@ class JobMonitorPage {
 
 /// `VulnPage` of the openlog API contract.
 class VulnPage {
-  const VulnPage({required this.vulnerabilities, required this.severityCounts});
+  const VulnPage({
+    required this.vulnerabilities,
+    required this.severityCounts,
+    this.hasMore,
+  });
 
   factory VulnPage.fromJson(Object? json, [String path = 'VulnPage']) {
     final m = _obj(json, path);
@@ -19171,21 +19239,24 @@ class VulnPage {
         path,
         (v, p) => _map<int>(v, p, _int),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'vulnerabilities': [for (final e in vulnerabilities) e.toJson()],
     'severity_counts': {for (final e in severityCounts.entries) e.key: e.value},
+    'has_more': ?hasMore,
   };
 
   final List<VulnGroup> vulnerabilities;
   final Map<String, int> severityCounts;
+  final bool? hasMore;
 }
 
 /// `DbInstancePage` of the openlog API contract.
 class DbInstancePage {
-  const DbInstancePage({required this.instances});
+  const DbInstancePage({required this.instances, this.hasMore});
 
   factory DbInstancePage.fromJson(
     Object? json, [
@@ -19199,19 +19270,26 @@ class DbInstancePage {
         path,
         (v, p) => _list<DbInstance>(v, p, (v, p) => DbInstance.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'instances': [for (final e in instances) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<DbInstance> instances;
+  final bool? hasMore;
 }
 
 /// `DbQueryPage` of the openlog API contract.
 class DbQueryPage {
-  const DbQueryPage({required this.queries, required this.totalTimeMs});
+  const DbQueryPage({
+    required this.queries,
+    required this.totalTimeMs,
+    this.hasMore,
+  });
 
   factory DbQueryPage.fromJson(Object? json, [String path = 'DbQueryPage']) {
     final m = _obj(json, path);
@@ -19223,21 +19301,24 @@ class DbQueryPage {
         (v, p) => _list<DbQuery>(v, p, (v, p) => DbQuery.fromJson(v, p)),
       ),
       totalTimeMs: _req(m, 'total_time_ms', path, _num),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'queries': [for (final e in queries) e.toJson()],
     'total_time_ms': totalTimeMs,
+    'has_more': ?hasMore,
   };
 
   final List<DbQuery> queries;
   final double totalTimeMs;
+  final bool? hasMore;
 }
 
 /// `DbSessionPage` of the openlog API contract.
 class DbSessionPage {
-  const DbSessionPage({this.sampledAt, required this.sessions});
+  const DbSessionPage({this.sampledAt, required this.sessions, this.hasMore});
 
   factory DbSessionPage.fromJson(
     Object? json, [
@@ -19252,16 +19333,19 @@ class DbSessionPage {
         path,
         (v, p) => _list<DbSession>(v, p, (v, p) => DbSession.fromJson(v, p)),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     if (sampledAt != null) 'sampled_at': sampledAt!.toUtc().toIso8601String(),
     'sessions': [for (final e in sessions) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final DateTime? sampledAt;
   final List<DbSession> sessions;
+  final bool? hasMore;
 }
 
 /// `AlertChannel` of the openlog API contract.
@@ -19634,6 +19718,7 @@ class ApmTransaction {
 /// `ApmDbQuery` of the openlog API contract.
 class ApmDbQuery {
   const ApmDbQuery({
+    this.services,
     required this.dbSystem,
     required this.dbName,
     required this.dbOperation,
@@ -19652,6 +19737,7 @@ class ApmDbQuery {
   factory ApmDbQuery.fromJson(Object? json, [String path = 'ApmDbQuery']) {
     final m = _obj(json, path);
     return ApmDbQuery(
+      services: _opt(m, 'services', path, (v, p) => _list<String>(v, p, _str)),
       dbSystem: _req(m, 'db_system', path, _str),
       dbName: _req(m, 'db_name', path, _str),
       dbOperation: _req(m, 'db_operation', path, _str),
@@ -19669,6 +19755,7 @@ class ApmDbQuery {
   }
 
   Map<String, Object?> toJson() => {
+    'services': ?services,
     'db_system': dbSystem,
     'db_name': dbName,
     'db_operation': dbOperation,
@@ -19684,6 +19771,7 @@ class ApmDbQuery {
     'time_share': timeShare,
   };
 
+  final List<String>? services;
   final String dbSystem;
   final String dbName;
   final String dbOperation;

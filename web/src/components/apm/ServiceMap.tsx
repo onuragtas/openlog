@@ -23,14 +23,15 @@ import { Link } from "@tanstack/react-router";
 import { Box, Container, Database, Globe, List, Maximize, MessageSquare, Network, RotateCcw, Server } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { ApmMap, ApmMapNode, ApmMapPath } from "@/api/apm";
+import type { ApmMap, ApmMapEdge, ApmMapNode, ApmMapPath } from "@/api/apm";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { formatMs, formatRate, formatRpm, parseServiceNodeId } from "@/lib/apm";
+import { useLocalList } from "@/lib/list";
 import {
   clearLayout,
-  CONNECTIONS_CAP,
   elementState,
   initialMapView,
   layoutMap,
@@ -52,6 +53,7 @@ const ERROR_EDGE = 0.05;
 
 type NodeData = { node: ApmMapNode; focused: boolean; label: string; locale: string; typeLabel: string; state: ElementState; countsLabel: string; showCounts: boolean };
 type MapNode = Node<NodeData, "apm">;
+type ConnectionSort = "source" | "target" | "throughput" | "error_rate" | "avg" | "p95";
 
 const ICONS = { service: Box, db: Database, external: Globe, messaging: MessageSquare } as const;
 
@@ -150,7 +152,6 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
   const [view, setView] = useState<"map" | "list">("map");
   const [centeredOn, setCenteredOn] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
-  const [showAllConnections, setShowAllConnections] = useState(false);
   const [showCounts, setShowCounts] = useState(loadShowCounts);
   const hasCounts = useMemo(() => data.nodes.some((n) => n.type === "service" && (n.host_count > 0 || n.container_count > 0)), [data.nodes]);
   const toggleCounts = () =>
@@ -165,6 +166,19 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
   const showList = mobile && view === "list";
   const opts = useMemo(() => mapRenderOptions(data.nodes.length, data.edges.length), [data.nodes.length, data.edges.length]);
   const highlight = useMemo(() => pathSets(path), [path]);
+  // The map needs every edge whatever the table shows, so the browser holds them all and sorts them itself.
+  const connectionSort = useMemo<Record<ConnectionSort, (e: ApmMapEdge) => string | number | null | undefined>>(
+    () => ({
+      source: (e) => names.get(e.source) ?? e.source,
+      target: (e) => names.get(e.target) ?? e.target,
+      throughput: (e) => e.throughput,
+      error_rate: (e) => e.error_rate,
+      avg: (e) => e.avg_ms,
+      p95: (e) => e.p95_ms,
+    }),
+    [names],
+  );
+  const connections = useLocalList<ApmMapEdge, ConnectionSort>(data.edges, connectionSort, "throughput", "desc");
 
   // Saved layout of this key (re-read when the key changes, e.g. another scope or user).
   const [layout, setLayout] = useState<{ key: string | undefined; positions: SavedLayout }>(() => ({ key: layoutKey, positions: layoutKey ? loadLayout(layoutKey) : {} }));
@@ -282,8 +296,6 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
 
   if (data.nodes.length === 0) return <EmptyState>{t("apm.map.empty")}</EmptyState>;
 
-  const connections = showAllConnections ? data.edges : data.edges.slice(0, CONNECTIONS_CAP);
-
   return (
     <div className="flex flex-col gap-4">
       {mobile && (
@@ -374,16 +386,16 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
         <Table data-testid="map-connections">
           <TableHeader>
             <TableRow>
-              <TableHead>{t("apm.map.source")}</TableHead>
-              <TableHead>{t("apm.map.target")}</TableHead>
-              <TableHead className="text-right">{t("apm.metrics.throughput")}</TableHead>
-              <TableHead className="text-right">{t("apm.metrics.errorRate")}</TableHead>
-              <TableHead className="text-right">{t("apm.metrics.avg")}</TableHead>
-              <TableHead className="text-right">{t("apm.metrics.p95")}</TableHead>
+              <SortableHead column="source" defaultDir="asc" {...connections.head}>{t("apm.map.source")}</SortableHead>
+              <SortableHead column="target" defaultDir="asc" {...connections.head}>{t("apm.map.target")}</SortableHead>
+              <SortableHead column="throughput" className="text-right" {...connections.head}>{t("apm.metrics.throughput")}</SortableHead>
+              <SortableHead column="error_rate" className="text-right" {...connections.head}>{t("apm.metrics.errorRate")}</SortableHead>
+              <SortableHead column="avg" className="text-right" {...connections.head}>{t("apm.metrics.avg")}</SortableHead>
+              <SortableHead column="p95" className="text-right" {...connections.head}>{t("apm.metrics.p95")}</SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {connections.map((e) => (
+            {connections.visible.map((e) => (
               <TableRow key={e.id} data-state={highlight?.edges.has(e.id) ? "selected" : undefined}>
                 <TableCell>
                   <NodeRef id={e.source} name={names.get(e.source) ?? e.source} />
@@ -399,13 +411,7 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
             ))}
           </TableBody>
         </Table>
-        {data.edges.length > CONNECTIONS_CAP && (
-          <div className="flex justify-center border-t p-2">
-            <Button variant="ghost" size="sm" aria-expanded={showAllConnections} onClick={() => setShowAllConnections((s) => !s)}>
-              {showAllConnections ? t("apm.map.showFewerConnections") : t("apm.map.showAllConnections", { count: data.edges.length })}
-            </Button>
-          </div>
-        )}
+        <ListPager list={connections} count={connections.visible.length} hasMore={connections.hasMore} />
       </div>
     </div>
   );

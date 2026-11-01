@@ -14,6 +14,28 @@ function renderWithClient(ui: ReactElement) {
 }
 
 describe("ApiKeysSettings", () => {
+  it("sorts by a heading it can be clicked on, with a key never used last either way", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderWithClient(<ApiKeysSettings />);
+    await screen.findByText("grafana");
+    const names = () => within(screen.getByRole("table")).getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0]!.textContent!);
+
+    const initial = names();
+    expect(initial).toEqual([...initial].sort((a, b) => a.localeCompare(b)));
+    expect(initial.length).toBeGreaterThan(1);
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveAttribute("aria-sort", "ascending");
+
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    expect(names()).toEqual([...initial].reverse());
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveAttribute("aria-sort", "descending");
+
+    // The actions of a row stay with their row after it moved.
+    const row = screen.getByText("grafana").closest("tr")!;
+    expect(within(row).getByRole("button", { name: "Revoke" })).toBeInTheDocument();
+    expect(screen.queryByTestId("list-pager")).toBeNull();
+  });
+
   it("creates a read-only key by default", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();

@@ -155,6 +155,8 @@ func TestEveryEndpointIsTenantScoped(t *testing.T) {
 		"/api/v1/db/queries?instance=db1%3A5432&sort=avg&db=shop&q=orders",
 		"/api/v1/db/queries/42?instance=db1%3A5432",
 		"/api/v1/db/activity?instance=db1%3A5432",
+		"/api/v1/db/activity/waits?instance=db1%3A5432",
+		"/api/v1/db/activity/queries?instance=db1%3A5432",
 		"/api/v1/db/sessions?instance=db1%3A5432&at=1757757600000",
 		"/api/v1/db/lookup?db_system=postgresql&statement=SELECT%20%3F",
 		// Service level objectives (slos.go, slo.md)

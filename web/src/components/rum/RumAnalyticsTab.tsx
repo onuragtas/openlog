@@ -5,7 +5,7 @@
 // empty retention table reads as "nobody came back".
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Users } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   analyticsAcquisitionQuery,
@@ -20,11 +20,14 @@ import {
   type AnalyticsGrain,
   type AnalyticsSourceBy,
 } from "@/api/rum";
+import { ListPager } from "@/components/ListPager";
 import { ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { SortableHead } from "@/components/ui/table";
 import { formatNumber } from "@/lib/format";
+import { useLocalList } from "@/lib/list";
 import { formatShare } from "@/lib/rum";
 import { cn } from "@/lib/utils";
 
@@ -131,24 +134,45 @@ function RetentionTable({ cohorts, grain }: { cohorts: AnalyticsCohort[]; grain:
 
 const SOURCE_BYS: AnalyticsSourceBy[] = ["referrer", "source", "medium", "campaign"];
 
-/** One named thing per row with its counts. These read as lists, so a table beats a chart and shows every number. */
-function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameLabel: string; rows: { name: string; values: number[]; previous?: (number | undefined)[] }[]; columns: string[] }) {
+type BreakdownRow = { name: string; values: number[]; previous?: (number | undefined)[] };
+type BreakdownSort = "name" | `value${number}`;
+
+/**
+ * One named thing per row with its counts. These read as lists, so a table beats a chart and shows every number.
+ *
+ * Sorted and paged here and not on the server, because a list with a comparison is two lists merged after they are read: the server takes the top
+ * 200 of each period and adds what only the previous one had, so a page cut there would need both read again, and would have to place those added
+ * rows anyway. Holding them all means such a row is sorted with the rest at its zero and stays reachable. It also means a sort covers those rows
+ * and no others: a value outside the top 200 of both periods is not in the list.
+ */
+function Breakdown({ testId, nameLabel, rows, columns, resetKey }: { testId: string; nameLabel: string; rows: BreakdownRow[]; columns: string[]; resetKey: string }) {
   const { t, i18n } = useTranslation();
+  const read = useMemo(() => {
+    const out: Record<string, (r: BreakdownRow) => string | number | undefined> = { name: (r) => r.name };
+    columns.forEach((_, i) => {
+      out[`value${i}`] = (r) => r.values[i];
+    });
+    return out as Record<BreakdownSort, (r: BreakdownRow) => string | number | undefined>;
+  }, [columns]);
+  const list = useLocalList<BreakdownRow, BreakdownSort>(rows, read, "value0", "desc");
+  const { toFirstPage } = list;
+  // Another dimension or period is another list, and its first page is the one that exists.
+  useEffect(toFirstPage, [resetKey, toFirstPage]);
   if (rows.length === 0) return <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">{t("rum.analytics.noRows")}</p>;
   return (
     <div className="overflow-x-auto rounded-xl border bg-card p-3">
       <table className="w-full text-sm" data-testid={testId}>
         <thead>
           <tr className="text-xs text-muted-foreground">
-            <th scope="col" className="px-2 py-1 text-left font-normal">{nameLabel}</th>
-            {columns.map((c) => (
-              <th key={c} scope="col" className="px-2 py-1 text-right font-normal">{c}</th>
+            <SortableHead<BreakdownSort> column="name" defaultDir="asc" scope="col" className="h-auto px-2 py-1 font-normal" {...list.head}>{nameLabel}</SortableHead>
+            {columns.map((c, i) => (
+              <SortableHead<BreakdownSort> key={c} column={`value${i}`} scope="col" className="h-auto px-2 py-1 text-right font-normal" {...list.head}>{c}</SortableHead>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.name} className="border-t">
+          {list.visible.map((r) => (
+            <tr key={r.name} className="border-t" data-testid={`${testId}-row`}>
               <th scope="row" className="px-2 py-1.5 text-left font-mono text-xs font-normal break-all">{r.name}</th>
               {r.values.map((v, i) => (
                 <td key={i} className="px-2 py-1.5 text-right tabular-nums">
@@ -160,6 +184,7 @@ function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameL
           ))}
         </tbody>
       </table>
+      <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
     </div>
   );
 }
@@ -167,6 +192,11 @@ function Breakdown({ testId, nameLabel, rows, columns }: { testId: string; nameL
 function EventsSection({ app, days, environment }: { app: string; days: number; environment?: string }) {
   const { t } = useTranslation();
   const events = useQuery(analyticsEventsQuery(app, days, environment));
+  const columns = useMemo(() => [t("rum.analytics.count"), t("rum.analytics.sessions"), t("rum.analytics.users")], [t]);
+  const rows = useMemo(
+    () => (events.data?.events ?? []).map((e) => ({ name: e.name, values: [e.count, e.sessions, e.users], previous: [e.previous_count, e.previous_sessions, e.previous_users] })),
+    [events.data],
+  );
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-medium">{t("rum.analytics.events")}</h2>
@@ -178,8 +208,9 @@ function EventsSection({ app, days, environment }: { app: string; days: number; 
         <Breakdown
           testId="analytics-events"
           nameLabel={t("rum.analytics.eventName")}
-          columns={[t("rum.analytics.count"), t("rum.analytics.sessions"), t("rum.analytics.users")]}
-          rows={events.data.events.map((e) => ({ name: e.name, values: [e.count, e.sessions, e.users], previous: [e.previous_count, e.previous_sessions, e.previous_users] }))}
+          columns={columns}
+          rows={rows}
+          resetKey={String(days)}
         />
       )}
     </section>
@@ -190,6 +221,11 @@ function AcquisitionSection({ app, days, environment }: { app: string; days: num
   const { t } = useTranslation();
   const [by, setBy] = useState<AnalyticsSourceBy>("referrer");
   const sources = useQuery(analyticsAcquisitionQuery(app, by, days, environment));
+  const columns = useMemo(() => [t("rum.analytics.sessions"), t("rum.analytics.users")], [t]);
+  const rows = useMemo(
+    () => (sources.data?.sources ?? []).map((s) => ({ name: s.value || t("rum.analytics.direct"), values: [s.sessions, s.users], previous: [s.previous_sessions, s.previous_users] })),
+    [sources.data, t],
+  );
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -215,8 +251,9 @@ function AcquisitionSection({ app, days, environment }: { app: string; days: num
         <Breakdown
           testId="analytics-sources"
           nameLabel={t(`rum.analytics.sourceBy.${by}`)}
-          columns={[t("rum.analytics.sessions"), t("rum.analytics.users")]}
-          rows={sources.data.sources.map((s) => ({ name: s.value || t("rum.analytics.direct"), values: [s.sessions, s.users], previous: [s.previous_sessions, s.previous_users] }))}
+          columns={columns}
+          rows={rows}
+          resetKey={`${by}/${days}`}
         />
       )}
     </section>
@@ -238,10 +275,16 @@ function AudienceSection({ app, days, environment }: { app: string; days: number
   const { t, i18n } = useTranslation();
   const [by, setBy] = useState<AnalyticsAudienceBy>("country");
   const audience = useQuery(analyticsAudienceQuery(app, by, days, environment));
-  const name = (value: string) => {
-    if (value === "") return t("rum.analytics.unknown");
-    return by === "country" ? countryName(value, i18n.language) : value;
-  };
+  const columns = useMemo(() => [t("rum.analytics.sessions"), t("rum.analytics.users")], [t]);
+  const rows = useMemo(
+    () =>
+      (audience.data?.rows ?? []).map((r) => ({
+        name: r.value === "" ? t("rum.analytics.unknown") : by === "country" ? countryName(r.value, i18n.language) : r.value,
+        values: [r.sessions, r.users],
+        previous: [r.previous_sessions, r.previous_users],
+      })),
+    [audience.data, by, i18n.language, t],
+  );
   return (
     <section className="flex flex-col gap-2">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -268,8 +311,9 @@ function AudienceSection({ app, days, environment }: { app: string; days: number
           <Breakdown
             testId="analytics-audience"
             nameLabel={t(`rum.analytics.audienceBy.${by}`)}
-            columns={[t("rum.analytics.sessions"), t("rum.analytics.users")]}
-            rows={audience.data.rows.map((r) => ({ name: name(r.value), values: [r.sessions, r.users], previous: [r.previous_sessions, r.previous_users] }))}
+            columns={columns}
+            rows={rows}
+            resetKey={`${by}/${days}`}
           />
           {by === "country" && audience.data.rows.length > 0 && audience.data.rows.every((r) => r.value === "") && (
             <p className="text-xs text-muted-foreground">{t("rum.analytics.noCountry")}</p>

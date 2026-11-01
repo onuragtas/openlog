@@ -8,17 +8,19 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Flame } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { profileFlameQuery, profileFunctionsQuery, profileServicesQuery, type ProfileService } from "@/api/profiles";
+import { profileFlameQuery, profileFunctionsQuery, profileServicesQuery, type ProfileService, type ProfileServiceSort } from "@/api/profiles";
 import { PageHeader } from "@/components/AppShell";
+import { ListPager } from "@/components/ListPager";
 import { FlameGraph } from "@/components/profiles/FlameGraph";
 import { FunctionsTable } from "@/components/profiles/FunctionsTable";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatRelative } from "@/lib/format";
 import { formatValue } from "@/lib/profile-format";
 import { useNow } from "@/lib/hooks";
+import { useListState } from "@/lib/list";
 import { apiTimeMs } from "@/lib/rum";
 import type { ProfilesSearch } from "@/router";
 
@@ -45,11 +47,12 @@ function ProfileServices({ search }: { search: ProfilesSearch }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const now = useNow();
-  const services = useQuery(profileServicesQuery(rangeOf(search)));
+  const list = useListState<ProfileServiceSort>("samples");
+  const services = useQuery(profileServicesQuery(rangeOf(search), list.state));
 
   if (services.isPending) return <LoadingState />;
   if (services.isError) return <ErrorState error={services.error} onRetry={() => void services.refetch()} />;
-  if (services.data.length === 0)
+  if (services.data.services.length === 0 && list.state.offset === 0)
     return (
       <EmptyState icon={<Flame className="size-5" aria-hidden="true" />}>
         <p>{t("profiles.empty")}</p>
@@ -75,16 +78,16 @@ function ProfileServices({ search }: { search: ProfilesSearch }) {
       <Table mobile="stack" data-testid="profile-services">
         <TableHeader>
           <TableRow>
-            <TableHead>{t("profiles.services.columns.service")}</TableHead>
-            <TableHead className="hidden sm:table-cell">{t("profiles.services.columns.environment")}</TableHead>
-            <TableHead>{t("profiles.services.columns.type")}</TableHead>
-            <TableHead className="text-right">{t("profiles.services.columns.total")}</TableHead>
-            <TableHead className="hidden text-right md:table-cell">{t("profiles.services.columns.samples")}</TableHead>
-            <TableHead className="hidden md:table-cell">{t("profiles.services.columns.lastSeen")}</TableHead>
+            <SortableHead column="service" defaultDir="asc" {...list.head}>{t("profiles.services.columns.service")}</SortableHead>
+            <SortableHead column="environment" defaultDir="asc" className="hidden sm:table-cell" {...list.head}>{t("profiles.services.columns.environment")}</SortableHead>
+            <SortableHead column="type" defaultDir="asc" {...list.head}>{t("profiles.services.columns.type")}</SortableHead>
+            <SortableHead column="total" className="text-right" {...list.head}>{t("profiles.services.columns.total")}</SortableHead>
+            <SortableHead column="samples" className="hidden text-right md:table-cell" {...list.head}>{t("profiles.services.columns.samples")}</SortableHead>
+            <SortableHead column="last_seen" className="hidden md:table-cell" {...list.head}>{t("profiles.services.columns.lastSeen")}</SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {services.data.map((s) => (
+          {services.data.services.map((s) => (
             <TableRow key={`${s.service}-${s.environment}-${s.type}`} className="cursor-pointer" onClick={() => open(s)}>
               <TableCell className="font-medium">{s.service}</TableCell>
               <TableCell className="hidden sm:table-cell">{s.environment || "–"}</TableCell>
@@ -98,6 +101,7 @@ function ProfileServices({ search }: { search: ProfilesSearch }) {
           ))}
         </TableBody>
       </Table>
+      <ListPager list={list} count={services.data.services.length} hasMore={services.data.has_more ?? false} />
     </div>
   );
 }

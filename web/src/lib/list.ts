@@ -1,5 +1,5 @@
 // The sort and page of a list whose rows live on the server (api.md "Lists").
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { SortDir } from "@/components/ui/table";
 
 export interface ListState<S extends string> {
@@ -24,18 +24,24 @@ export function useListState<S extends string>(initialSort: S, initialDir: SortD
 
 export type ListControls<S extends string> = ReturnType<typeof useListState<S>>;
 
+/** A timestamp as something to sort by: as text, two of them with a different number of fractional digits compare wrongly. */
+export function timeOf(value: string | null | undefined): number | null {
+  const ms = value ? Date.parse(value.replace(/(\.\d{3})\d+/, "$1")) : NaN;
+  return Number.isNaN(ms) ? null : ms;
+}
+
 /**
  * Sorting and paging of rows that have all been fetched, for a list short enough that the browser holds every row: a list of API
  * keys is not going to outgrow a page of the server's. Anything that can must use useListState and let the server do it.
  */
-export function useLocalList<T, S extends string>(rows: readonly T[], read: Record<S, (row: T) => string | number | null | undefined>, initialSort: S, initialDir: SortDir = "asc", initialLimit = 50) {
+export function useLocalList<T, S extends string>(rows: readonly T[] | undefined, read: Record<S, (row: T) => string | number | null | undefined>, initialSort: NoInfer<S>, initialDir: SortDir = "asc", initialLimit = 50) {
   const list = useListState<S>(initialSort, initialDir, initialLimit);
   const { sort, dir, limit, offset } = list.state;
   const sorted = useMemo(() => {
     const value = read[sort];
     const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
     // Stable, and with what has no value last in either direction: a blank is not the smallest of anything.
-    return [...rows].sort((a, b) => {
+    return [...(rows ?? [])].sort((a, b) => {
       const x = value(a);
       const y = value(b);
       if (x === null || x === undefined || x === "") return y === null || y === undefined || y === "" ? 0 : 1;
@@ -44,6 +50,11 @@ export function useLocalList<T, S extends string>(rows: readonly T[], read: Reco
       return dir === "asc" ? c : -c;
     });
   }, [rows, read, sort, dir]);
+  const { setOffset } = list;
+  // Removing the last row of the last page must not leave an empty page with a pager that can only go back.
+  useEffect(() => {
+    if (offset > 0 && offset >= sorted.length) setOffset(Math.floor((sorted.length - 1) / limit) * limit);
+  }, [offset, limit, sorted.length, setOffset]);
   const visible = useMemo(() => sorted.slice(offset, offset + limit), [sorted, offset, limit]);
   return { ...list, visible, total: sorted.length, hasMore: offset + limit < sorted.length };
 }

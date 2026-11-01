@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -95,12 +94,11 @@ type inboxFilter struct {
 	statuses map[apm.ErrorStatus]bool // empty: all
 	assignee *string                  // nil: any, "": unassigned, else a user id
 	q        string
-	sort     string
 }
 
 func parseInboxFilter(r *http.Request, p *auth.Principal) (inboxFilter, error) {
 	qp := r.URL.Query()
-	f := inboxFilter{statuses: map[apm.ErrorStatus]bool{}, q: strings.ToLower(strings.TrimSpace(qp.Get("q"))), sort: qp.Get("sort")}
+	f := inboxFilter{statuses: map[apm.ErrorStatus]bool{}, q: strings.ToLower(strings.TrimSpace(qp.Get("q")))}
 	if v := qp.Get("status"); v != "" && v != "all" {
 		for _, part := range strings.Split(v, ",") {
 			st := apm.ErrorStatus(strings.TrimSpace(part))
@@ -125,13 +123,6 @@ func parseInboxFilter(r *http.Request, p *auth.Principal) (inboxFilter, error) {
 			return f, badRequest("assignee must be any, none, me or a user id")
 		}
 		f.assignee = &v
-	}
-	switch f.sort {
-	case "":
-		f.sort = "count"
-	case "count", "last_seen", "first_seen":
-	default:
-		return f, badRequest("sort must be count, last_seen or first_seen")
 	}
 	if len(f.q) > 256 {
 		return f, badRequest("q is at most 256 bytes")
@@ -276,7 +267,7 @@ func (s *Server) apmErrorInbox(w http.ResponseWriter, r *http.Request, sc *query
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 50, 500)
+	l, err := apmInboxList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -302,7 +293,7 @@ func (s *Server) apmErrorInbox(w http.ResponseWriter, r *http.Request, sc *query
 	}
 	counts := map[uint64]float64{}
 	var order []uint64
-	truncated := false
+	capped := false
 	for rows.Next() {
 		var k apm.ServiceKey
 		var id uint64
@@ -312,7 +303,7 @@ func (s *Server) apmErrorInbox(w http.ResponseWriter, r *http.Request, sc *query
 			return err
 		}
 		if len(order) == maxInboxCandidates {
-			truncated = true
+			capped = true
 			continue
 		}
 		counts[id] = c
@@ -399,30 +390,9 @@ func (s *Server) apmErrorInbox(w http.ResponseWriter, r *http.Request, sc *query
 			FirstSeen: optTime(&m.first), LastSeen: optTime(&m.last), LastTraceID: m.traceID, LastSpanName: m.spanName,
 			Sparkline: [][2]float64{}, errorWorkflowJSON: workflowJSON(st)})
 	}
-	sort.SliceStable(groups, func(i, j int) bool {
-		a, b := groups[i], groups[j]
-		switch filter.sort {
-		case "last_seen":
-			if *a.LastSeen != *b.LastSeen {
-				return *a.LastSeen > *b.LastSeen
-			}
-		case "first_seen":
-			if *a.FirstSeen != *b.FirstSeen {
-				return *a.FirstSeen > *b.FirstSeen
-			}
-		default:
-			if a.Count != b.Count {
-				return a.Count > b.Count
-			}
-			if a.TotalCount != b.TotalCount {
-				return a.TotalCount > b.TotalCount
-			}
-		}
-		return a.GroupID < b.GroupID
-	})
-	if len(groups) > limit {
-		groups, truncated = groups[:limit], true
-	}
+	// The status, the assignee and the comments live in PostgreSQL, so the sort happens here, over what was gathered above: the
+	// maxInboxCandidates groups most frequent in the range, plus at most 500 from the workflow store. A group past those is in no sort.
+	groups, more := sortPage(groups, l, inboxKeys, inboxTie)
 	byID := map[uint64]*errorGroupJSON{}
 	var sparkIDs []string
 	for _, g := range groups {
@@ -459,7 +429,7 @@ func (s *Server) apmErrorInbox(w http.ResponseWriter, r *http.Request, sc *query
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"groups": groups, "step": formatStep(step), "counts": statusCounts,
-		"truncated": truncated, "workflow": workflow})
+		"truncated": capped || more, "capped": capped, "has_more": more, "workflow": workflow})
 	return nil
 }
 

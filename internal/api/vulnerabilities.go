@@ -19,6 +19,21 @@ import (
 // maxVulnRows bounds a listing.
 const maxVulnRows = 1000
 
+// vulnerabilitiesList starts critical first and then with the advisory that affects the most hosts: the order a person works down.
+var vulnerabilitiesList = listSpec{
+	columns: map[string]string{
+		"severity": "multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)",
+		"score":    "sc",
+		"hosts":    "host_count",
+		"advisory": "id",
+	},
+	sort:     "severity",
+	asc:      map[string]bool{"severity": true, "advisory": true},
+	tiebreak: []string{"host_count DESC", "id"},
+	limit:    maxVulnRows,
+	maxLimit: maxVulnRows,
+}
+
 // SetVulnerabilities enables /api/v1/vulnerabilities/* with the catalog behind them. Must be called before Run.
 func (s *Server) SetVulnerabilities(catalog vuln.Catalog) {
 	s.vulnCatalog = catalog
@@ -67,6 +82,10 @@ type vulnFindingJSON struct {
 // wrong with my fleet", not "what is wrong with host 7".
 func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	noStore(w)
+	l, err := vulnerabilitiesList.parse(r, s.cfg.MaxRows)
+	if err != nil {
+		return err
+	}
 	q := sc.From(query.HostVulnerabilities).Final().Columns(
 		"vuln_id AS id",
 		"any(cve) AS cve_id",
@@ -78,18 +97,20 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 		"arraySlice(arraySort(groupUniqArray(package)), 1, 20) AS pkgs",
 		"toInt64(toUnixTimestamp64Milli(min(first_seen))) AS first_ms",
 		"toInt64(toUnixTimestamp64Milli(max(last_seen))) AS last_ms",
-	).Where("resolved_at = toDateTime(0)").GroupBy("vuln_id").Limit(maxVulnRows)
+	).Where("resolved_at = toDateTime(0)").GroupBy("vuln_id").OrderBy(vulnerabilitiesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
+	// The counters are of the whole list, so they are their own statement: the rows below are one page of it.
+	cq := sc.From(query.HostVulnerabilities).Final().Columns("severity", "uniqExact(vuln_id) AS n").Where("resolved_at = toDateTime(0)").GroupBy("severity")
 	if sev := r.URL.Query().Get("severity"); sev != "" {
 		if !knownSeverity(sev) {
 			return &apiError{http.StatusBadRequest, "invalid_argument", "severity must be one of " + strings.Join(vuln.Severities, ", ")}
 		}
 		q.Where("severity = {severity:String}").Param("severity", sev)
+		cq.Where("severity = {severity:String}").Param("severity", sev)
 	}
 	if hostID := r.URL.Query().Get("host_id"); hostID != "" {
 		q.Where("host_id = {host_id:String}").Param("host_id", hostID)
+		cq.Where("host_id = {host_id:String}").Param("host_id", hostID)
 	}
-	// Critical first, then the advisory that affects the most hosts: the order a person works down.
-	q.OrderBy("multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)", "host_count DESC", "id")
 
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
@@ -97,7 +118,6 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 	}
 	defer rows.Close()
 	out := []vulnGroupJSON{}
-	counts := map[string]uint64{}
 	for rows.Next() {
 		var (
 			g               vulnGroupJSON
@@ -113,7 +133,6 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 			g.Packages = []string{}
 		}
 		g.FirstSeen, g.LastSeen = formatMillis(firstMs), formatMillis(lastMs)
-		counts[g.Severity]++
 		out = append(out, g)
 	}
 	if err := rows.Err(); err != nil {
@@ -121,9 +140,30 @@ func (s *Server) listVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 	}
 	severities := map[string]uint64{}
 	for _, sev := range vuln.Severities {
-		severities[sev] = counts[sev]
+		severities[sev] = 0
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"vulnerabilities": out, "severity_counts": severities})
+	countRows, err := sc.Query(r.Context(), cq)
+	if err != nil {
+		return err
+	}
+	defer countRows.Close()
+	for countRows.Next() {
+		var (
+			sev string
+			n   uint64
+		)
+		if err := countRows.Scan(&sev, &n); err != nil {
+			return err
+		}
+		if _, known := severities[sev]; known {
+			severities[sev] = n
+		}
+	}
+	if err := countRows.Err(); err != nil {
+		return err
+	}
+	out, more := page(out, l)
+	writeJSON(w, http.StatusOK, map[string]any{"vulnerabilities": out, "severity_counts": severities, "has_more": more})
 	return nil
 }
 

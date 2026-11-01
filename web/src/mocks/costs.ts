@@ -4,6 +4,7 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import type { CostContainer, CostHost, CostPricing, CostService, CostSummary } from "@/api/costs";
 import { authenticate } from "./account";
 import { HOST_IDS } from "./fixtures";
+import { pageOf } from "./list";
 
 const API = "*/api/v1";
 
@@ -150,9 +151,19 @@ const PRICE_TABLE = {
 export const costHandlers = [
   http.get(`${API}/costs/summary`, authed(() => HttpResponse.json({ summary: SUMMARY, pricing: COST_PRICING, from: Date.now() - 86_400_000, to: Date.now() }))),
 
-  http.get(`${API}/costs/hosts`, authed(() => HttpResponse.json({ hosts: HOSTS, total: HOSTS.length, summary: SUMMARY, pricing: COST_PRICING }))),
+  http.get(`${API}/costs/hosts`, authed(({ request }) => {
+    const list = pageOf(new URL(request.url), HOSTS, {
+      host: (h) => h.host_name || h.host_id, instance: (h) => h.instance_type, cost: (h) => (h.priced ? h.total : null), idle: (h) => (h.priced ? h.idle_share : null),
+    }, { sort: "cost", asc: ["host", "instance"], limit: 100 });
+    return HttpResponse.json({ hosts: list.rows, has_more: list.has_more, total: HOSTS.length, summary: SUMMARY, pricing: COST_PRICING });
+  })),
 
-  http.get(`${API}/costs/services`, authed(() => HttpResponse.json({ services: SERVICES, total: SERVICES.length, summary: SUMMARY, pricing: COST_PRICING }))),
+  http.get(`${API}/costs/services`, authed(({ request }) => {
+    const list = pageOf(new URL(request.url), SERVICES, {
+      service: (s) => s.service_name, environment: (s) => s.environment, containers: (s) => s.containers, cost: (s) => s.total,
+    }, { sort: "cost", asc: ["service", "environment"], limit: 100 });
+    return HttpResponse.json({ services: list.rows, has_more: list.has_more, total: SERVICES.length, summary: SUMMARY, pricing: COST_PRICING });
+  })),
 
   http.get(
     `${API}/costs/containers`,

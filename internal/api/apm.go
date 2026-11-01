@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -397,23 +398,28 @@ func (s *Server) apmServices(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err != nil {
 		return err
 	}
+	l, err := apmServicesList.parse(r, s.cfg.MaxRows)
+	if err != nil {
+		return err
+	}
 	qp := r.URL.Query()
 	ns, env := optionalParam(qp, "namespace"), optionalParam(qp, "environment")
+	search := qp.Get("q")
 	idCols := []string{"service_name", "service_namespace", "deployment_environment"}
 
+	// The environment and the search are applied to the rows below and not here, so that this statement also says which environments
+	// there are to choose from. It stops at MaxRows, in name order, and the sort, the search and the page are only complete up to that.
 	meta := sc.From(query.ApmServices).Columns(cols(idCols, []string{"max(last_seen) AS m_last", "argMaxMerge(service_version) AS m_ver", "argMaxMerge(sdk_language) AS m_lang"})...).
 		Where("last_seen >= fromUnixTimestamp64Nano({t_seen:Int64})").Param("t_seen", from.UnixNano()).
 		GroupBy(idCols...).OrderBy(idCols...).Limit(s.cfg.MaxRows)
-	applyScope(meta, ns, env)
-	if q := qp.Get("q"); q != "" {
-		meta.Where("positionCaseInsensitiveUTF8(service_name, {q:String}) > 0").Param("q", q)
-	}
+	applyScope(meta, ns, nil)
 	rows, err := sc.Query(r.Context(), meta)
 	if err != nil {
 		return err
 	}
 	services := []*apmServiceJSON{}
 	byKey := map[apm.ServiceKey]*apmServiceJSON{}
+	environments := []string{}
 	for rows.Next() {
 		sv := &apmServiceJSON{Sparkline: [][2]float64{}}
 		var last time.Time
@@ -422,6 +428,12 @@ func (s *Server) apmServices(w http.ResponseWriter, r *http.Request, sc *query.S
 			return err
 		}
 		sv.LastSeen = formatTime(last)
+		if sv.Environment != "" && !slices.Contains(environments, sv.Environment) {
+			environments = append(environments, sv.Environment)
+		}
+		if (env != nil && sv.Environment != *env) || !serviceMatches(sv, search) {
+			continue
+		}
 		services = append(services, sv)
 		byKey[sv.key()] = sv
 	}
@@ -482,11 +494,13 @@ func (s *Server) apmServices(w http.ResponseWriter, r *http.Request, sc *query.S
 			sv.redJSON = aggs[sv.key()].red(minutes, tMs)
 		}
 	}
+	services, more := sortPage(services, l, serviceKeys, serviceTie)
 	out := make([]map[string]any, 0, len(services))
 	for _, sv := range services {
 		out = append(out, serviceMap(sv))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"services": out, "step": formatStep(step)})
+	sort.Strings(environments)
+	writeJSON(w, http.StatusOK, map[string]any{"services": out, "step": formatStep(step), "has_more": more, "environments": environments})
 	return nil
 }
 
@@ -778,19 +792,13 @@ func (s *Server) apmTransactions(w http.ResponseWriter, r *http.Request, sc *que
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 100, 1000)
+	l, err := apmTransactionsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	sortBy := r.URL.Query().Get("sort")
-	switch sortBy {
-	case "":
-		sortBy = "time"
-	case "time", "throughput", "slowest", "errors":
-	default:
-		return badRequest("sort must be time, throughput, slowest or errors")
-	}
 	tMs, _ := s.apdexTMs(s.apmSettings(r), f.key())
+	// A p95 and an Apdex come out of histograms, so the sort happens in Go over what this reads: the MaxRows transactions that consumed
+	// the most time. Past that many in a range, a transaction that took little time is not in the list under any sort.
 	q := f.apply(minuteRange(sc.From(query.ApmTransactions1m).Columns(cols([]string{"transaction_type", "transaction_name"}, txAggColumns)...), from, to)).
 		GroupBy("transaction_type", "transaction_name").OrderBy("a_dsum DESC").Limit(s.cfg.MaxRows)
 	if typ := r.URL.Query().Get("type"); typ != "" {
@@ -818,33 +826,15 @@ func (s *Server) apmTransactions(w http.ResponseWriter, r *http.Request, sc *que
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	// A share of every transaction read above and not of the page, so a row says the same on any page and under any sort. Past the
+	// MaxRows cap the rest of the service's time is missing from the whole, but that rest is by then the smallest part of it.
 	for i := range out {
 		if totalTime > 0 {
 			out[i].TimeShare = out[i].TimeConsumedMs / totalTime
 		}
 	}
-	val := func(p *float64) float64 {
-		if p == nil {
-			return -1
-		}
-		return *p
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		a, b := out[i], out[j]
-		switch sortBy {
-		case "throughput":
-			return a.Requests > b.Requests
-		case "slowest":
-			return val(a.P95Ms) > val(b.P95Ms)
-		case "errors":
-			return a.Errors > b.Errors
-		}
-		return a.TimeConsumedMs > b.TimeConsumedMs
-	})
-	if len(out) > limit {
-		out = out[:limit]
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"transactions": out, "apdex_t_ms": tMs})
+	out, more := sortPage(out, l, transactionKeys, transactionTie)
+	writeJSON(w, http.StatusOK, map[string]any{"transactions": out, "apdex_t_ms": tMs, "has_more": more})
 	return nil
 }
 
@@ -953,18 +943,13 @@ func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 100, 1000)
+	l, err := apmDatabasesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	sortBy := r.URL.Query().Get("sort")
-	order := map[string]string{"": "a_dsum DESC", "time": "a_dsum DESC", "calls": "a_req DESC", "slowest": "a_avg DESC", "errors": "a_err DESC"}[sortBy]
-	if order == "" {
-		return badRequest("sort must be time, calls, slowest or errors")
-	}
 	q := f.apply(minuteRange(sc.From(query.ApmDBQueries1m).Columns(cols([]string{"db_system", "db_name", "db_statement_normalized", "anyLast(db_operation) AS a_op"},
 		callAggColumns, []string{"max(duration_max_ms) AS a_max", "sum(duration_sum_ms) / greatest(sum(calls), 1e-9) AS a_avg"})...), from, to)).
-		GroupBy("db_system", "db_name", "db_statement_normalized").OrderBy(order).Limit(limit)
+		GroupBy("db_system", "db_name", "db_statement_normalized").OrderBy(apmDatabasesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	if sys := r.URL.Query().Get("db_system"); sys != "" {
 		q.Where("db_system = {db_system:String}").Param("db_system", sys)
 	}
@@ -975,7 +960,6 @@ func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.
 	defer rows.Close()
 	minutes := rangeMinutes(from, to)
 	out := []apmDBQueryJSON{}
-	var totalTime float64
 	for rows.Next() {
 		var d apmDBQueryJSON
 		var avg float64
@@ -986,18 +970,24 @@ func (s *Server) apmDatabases(w http.ResponseWriter, r *http.Request, sc *query.
 		red := build().red(minutes, 0)
 		d.Calls, d.Throughput, d.Errors, d.ErrorRate, d.AvgMs, d.P95Ms = red.Requests, red.Throughput, red.Errors, red.ErrorRate, red.AvgMs, red.P95Ms
 		d.TimeConsumedMs = build().durSum
-		totalTime += d.TimeConsumedMs
 		out = append(out, d)
 	}
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	out, more := page(out, l)
+	// A share of the page and not of the service's database time, since the rest was not read. Over a page it still says which of
+	// these matter, but a row's share changes with the sort and the page it lands on.
+	var totalTime float64
+	for _, d := range out {
+		totalTime += d.TimeConsumedMs
 	}
 	for i := range out {
 		if totalTime > 0 {
 			out[i].TimeShare = out[i].TimeConsumedMs / totalTime
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"queries": out})
+	writeJSON(w, http.StatusOK, map[string]any{"queries": out, "has_more": more})
 	return nil
 }
 
@@ -1319,14 +1309,14 @@ func (s *Server) apmTraces(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 50, 500)
+	l, err := apmTracesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
 	qp := r.URL.Query()
 	q := spanRange(sc.From(query.Spans).Columns("trace_id", "span_id", "timestamp", "duration_ns", "is_error", "http_status_code",
 		"service_name", "service_namespace", "deployment_environment", "transaction_type", "transaction_name"), from, to).
-		Where("is_entry").Limit(limit)
+		Where("is_entry").OrderBy(apmTracesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	service := qp.Get("service")
 	if service != "" {
 		(svcFilter{name: service, ns: optionalParam(qp, "namespace"), env: optionalParam(qp, "environment")}).apply(q)
@@ -1376,14 +1366,6 @@ func (s *Server) apmTraces(w http.ResponseWriter, r *http.Request, sc *query.Sco
 		n := strconv.Itoa(i)
 		q.Where("attributes[{attr_key_"+n+":String}] = {attr_value_"+n+":String}").Param("attr_key_"+n, k).Param("attr_value_"+n, vals[0])
 	}
-	switch qp.Get("sort") {
-	case "", "timestamp":
-		q.OrderBy("timestamp DESC")
-	case "duration":
-		q.OrderBy("duration_ns DESC")
-	default:
-		return badRequest("sort must be timestamp or duration")
-	}
 	if service == "" {
 		q.LimitBy(1, "trace_id")
 	}
@@ -1413,6 +1395,7 @@ func (s *Server) apmTraces(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"traces": out})
+	out, more := page(out, l)
+	writeJSON(w, http.StatusOK, map[string]any{"traces": out, "has_more": more})
 	return nil
 }

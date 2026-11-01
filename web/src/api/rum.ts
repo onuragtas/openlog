@@ -3,6 +3,7 @@
 // (api/queries.ts). Browser errors deliberately have no endpoint of their own — they are APM error groups of
 // the same application (rum.md §7), so the UI links to the error inbox instead.
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
@@ -91,8 +92,11 @@ export const analyticsRetentionQuery = (app: string, grain: AnalyticsGrain, envi
     placeholderData: keepPreviousData,
   });
 
+export type RumAppSort = "views" | "sessions" | "errors" | "last_seen" | "app" | "environment";
 /** `slowest` orders by total time consumed, the same reasoning as APM's "most time consuming". */
-export type RumPageSort = "views" | "slowest" | "avg";
+export type RumPageSort = "views" | "slowest" | "avg" | "ttfb" | "route";
+export type RumSessionSort = "last_seen" | "started" | "duration" | "page_views" | "errors" | "entry" | "browser";
+export type RumReleaseSort = "last_seen" | "first_seen" | "version" | "crash_free" | "error_free" | "sessions" | "error_sessions";
 
 const REFRESH_MS = 60_000;
 
@@ -105,10 +109,10 @@ function window(r: RangeSpec) {
 
 const live = (r: RangeSpec) => (r.range || (!r.from && !r.to) ? REFRESH_MS : false);
 
-export const rumAppsQuery = (range: RangeSpec) =>
+export const rumAppsQuery = (range: RangeSpec, list: ListState<RumAppSort>) =>
   queryOptions({
-    queryKey: ["rum", "apps", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/apps", { params: { query: window(range) }, signal })).apps,
+    queryKey: ["rum", "apps", ...rangeKey(range), list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/apps", { params: { query: { ...window(range), ...list } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
@@ -135,11 +139,11 @@ export interface RumFacets {
   browser?: string;
 }
 
-export const rumPagesQuery = (range: RangeSpec, app: string, sort: RumPageSort, environment?: string, facets: RumFacets = {}) =>
+export const rumPagesQuery = (range: RangeSpec, app: string, list: ListState<RumPageSort>, environment?: string, facets: RumFacets = {}) =>
   queryOptions({
-    queryKey: ["rum", "pages", app, environment ?? "", sort, facets.device_type ?? "", facets.browser ?? "", ...rangeKey(range)],
+    queryKey: ["rum", "pages", app, environment ?? "", list, facets.device_type ?? "", facets.browser ?? "", ...rangeKey(range)],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/rum/pages", { params: { query: { app, environment, sort, ...facets, ...window(range) } }, signal })).pages,
+      unwrap(await api.GET("/api/v1/rum/pages", { params: { query: { app, environment, ...list, ...facets, ...window(range) } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
@@ -156,11 +160,11 @@ export const rumVitalsQuery = (range: RangeSpec, app: string, route?: string, en
     refetchInterval: live(range),
   });
 
-export const rumSessionsQuery = (range: RangeSpec, app: string, environment?: string, facets: RumFacets = {}, userId?: string) =>
+export const rumSessionsQuery = (range: RangeSpec, app: string, list: ListState<RumSessionSort>, environment?: string, facets: RumFacets = {}, userId?: string) =>
   queryOptions({
-    queryKey: ["rum", "sessions", app, environment ?? "", facets.device_type ?? "", facets.browser ?? "", userId ?? "", ...rangeKey(range)],
+    queryKey: ["rum", "sessions", app, environment ?? "", list, facets.device_type ?? "", facets.browser ?? "", userId ?? "", ...rangeKey(range)],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/rum/sessions", { params: { query: { app, environment, user_id: userId, ...facets, ...window(range) } }, signal })).sessions,
+      unwrap(await api.GET("/api/v1/rum/sessions", { params: { query: { app, environment, user_id: userId, ...list, ...facets, ...window(range) } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
@@ -187,10 +191,10 @@ export const rumSessionQuery = (range: RangeSpec, sessionId: string) =>
  * older than a week is therefore listed with no sessions against it, which is a gap in the data rather
  * than a quiet week.
  */
-export const rumReleasesQuery = (range: RangeSpec, app: string, environment?: string) =>
+export const rumReleasesQuery = (range: RangeSpec, app: string, list: ListState<RumReleaseSort>, environment?: string) =>
   queryOptions({
-    queryKey: ["rum", "releases", app, environment ?? "", ...rangeKey(range)],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/releases", { params: { query: { app, environment, ...window(range) } }, signal })),
+    queryKey: ["rum", "releases", app, environment ?? "", list, ...rangeKey(range)],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/rum/releases", { params: { query: { app, environment, ...list, ...window(range) } }, signal })),
     enabled: app !== "",
     placeholderData: keepPreviousData,
     refetchInterval: live(range),

@@ -6,13 +6,15 @@ import { Globe, Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { browserKeysQuery, createBrowserKey, revokeBrowserKey, updateBrowserKey, type BrowserKey, type BrowserKeyInput } from "@/api/browserKeys";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
@@ -221,6 +223,14 @@ function KeyValue({ value }: { value: string }) {
   );
 }
 
+const KEY_COLUMNS = {
+  name: (k: BrowserKey) => k.name,
+  application: (k: BrowserKey) => k.service_name,
+  sample_rate: (k: BrowserKey) => k.sample_rate,
+  last_used: (k: BrowserKey) => timeOf(k.last_used_at),
+  status: (k: BrowserKey) => (k.revoked_at ? 1 : 0),
+};
+
 export function BrowserKeysSettings() {
   const { t } = useTranslation();
   const id = useId();
@@ -228,6 +238,7 @@ export function BrowserKeysSettings() {
   const perms = usePermissions();
   const canManage = perms.writable && perms.can("browser_keys.manage");
   const keys = useQuery(browserKeysQuery());
+  const list = useLocalList(keys.data, KEY_COLUMNS, "name");
   const [draft, setDraft] = useState<Draft>(newDraft);
   const [editing, setEditing] = useState<{ id: string; draft: Draft } | null>(null);
   const [created, setCreated] = useState<{ name: string; key: string } | null>(null);
@@ -285,70 +296,73 @@ export function BrowserKeysSettings() {
         ) : keys.data.length === 0 ? (
           <EmptyState icon={<Globe className="size-5" aria-hidden="true" />}>{t("settings.browserKeys.empty")}</EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.columns.name")}</TableHead>
-                <TableHead>{t("settings.columns.key")}</TableHead>
-                <TableHead>{t("settings.browserKeys.application")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("settings.browserKeys.scope")}</TableHead>
-                <TableHead className="hidden md:table-cell text-right">{t("settings.browserKeys.sampleRate")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.lastUsed")}</TableHead>
-                <TableHead>{t("settings.columns.status")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("settings.columns.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.data.map((k) => (
-                <TableRow key={k.id}>
-                  <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell label={t("settings.columns.key")}>
-                    {k.key !== "" ? (
-                      <KeyValue value={k.key} />
-                    ) : (
-                      <>
-                        <code className="font-mono text-xs">{k.prefix}</code>
-                        <span aria-hidden="true">…</span>
-                      </>
-                    )}
-                  </TableCell>
-                  <TableCell label={t("settings.browserKeys.application")}>
-                    {k.service_name}
-                    {k.environment !== "" && <span className="text-muted-foreground"> · {k.environment}</span>}
-                  </TableCell>
-                  <TableCell label={t("settings.browserKeys.scope")} className="hidden break-all lg:table-cell">
-                    {k.kind === "mobile" ? k.app_ids.join(", ") : k.origins.join(", ")}
-                  </TableCell>
-                  <TableCell label={t("settings.browserKeys.sampleRate")} className="hidden md:table-cell text-right tabular-nums">
-                    {Math.round(k.sample_rate * 100)}%
-                  </TableCell>
-                  <TableCell label={t("settings.columns.lastUsed")} className="hidden md:table-cell">
-                    <DateTimeText value={k.last_used_at} relative />
-                  </TableCell>
-                  <TableCell className="max-md:w-auto">
-                    {k.revoked_at ? <Badge variant="muted">{t("settings.revoked")}</Badge> : <Badge variant="success">{t("settings.active")}</Badge>}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {canManage && !k.revoked_at && (
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => setEditing({ id: k.id, draft: draftOf(k) })}>
-                          {t("settings.browserKeys.edit")}
-                        </Button>
-                        <ConfirmButton
-                          label={t("settings.revoke")}
-                          confirmLabel={t("settings.confirmRevoke")}
-                          pending={revoke.isPending && revoke.variables === k.id}
-                          onConfirm={() => revoke.mutate(k.id)}
-                        />
-                      </div>
-                    )}
-                  </TableCell>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("settings.columns.name")}</SortableHead>
+                  <TableHead>{t("settings.columns.key")}</TableHead>
+                  <SortableHead column="application" defaultDir="asc" {...list.head}>{t("settings.browserKeys.application")}</SortableHead>
+                  <TableHead className="hidden lg:table-cell">{t("settings.browserKeys.scope")}</TableHead>
+                  <SortableHead column="sample_rate" className="hidden md:table-cell text-right" {...list.head}>{t("settings.browserKeys.sampleRate")}</SortableHead>
+                  <SortableHead column="last_used" className="hidden md:table-cell" {...list.head}>{t("settings.columns.lastUsed")}</SortableHead>
+                  <SortableHead column="status" defaultDir="asc" {...list.head}>{t("settings.columns.status")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("settings.columns.actions")}</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((k) => (
+                  <TableRow key={k.id}>
+                    <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell label={t("settings.columns.key")}>
+                      {k.key !== "" ? (
+                        <KeyValue value={k.key} />
+                      ) : (
+                        <>
+                          <code className="font-mono text-xs">{k.prefix}</code>
+                          <span aria-hidden="true">…</span>
+                        </>
+                      )}
+                    </TableCell>
+                    <TableCell label={t("settings.browserKeys.application")}>
+                      {k.service_name}
+                      {k.environment !== "" && <span className="text-muted-foreground"> · {k.environment}</span>}
+                    </TableCell>
+                    <TableCell label={t("settings.browserKeys.scope")} className="hidden break-all lg:table-cell">
+                      {k.kind === "mobile" ? k.app_ids.join(", ") : k.origins.join(", ")}
+                    </TableCell>
+                    <TableCell label={t("settings.browserKeys.sampleRate")} className="hidden md:table-cell text-right tabular-nums">
+                      {Math.round(k.sample_rate * 100)}%
+                    </TableCell>
+                    <TableCell label={t("settings.columns.lastUsed")} className="hidden md:table-cell">
+                      <DateTimeText value={k.last_used_at} relative />
+                    </TableCell>
+                    <TableCell className="max-md:w-auto">
+                      {k.revoked_at ? <Badge variant="muted">{t("settings.revoked")}</Badge> : <Badge variant="success">{t("settings.active")}</Badge>}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {canManage && !k.revoked_at && (
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setEditing({ id: k.id, draft: draftOf(k) })}>
+                            {t("settings.browserKeys.edit")}
+                          </Button>
+                          <ConfirmButton
+                            label={t("settings.revoke")}
+                            confirmLabel={t("settings.confirmRevoke")}
+                            pending={revoke.isPending && revoke.variables === k.id}
+                            onConfirm={() => revoke.mutate(k.id)}
+                          />
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </div>
 

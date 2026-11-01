@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   alertChannelsQuery,
@@ -14,6 +14,7 @@ import {
   type AlertChannelType,
 } from "@/api/alerts";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
+import { ListPager } from "@/components/ListPager";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { SecretReveal } from "@/components/settings/SecretReveal";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
@@ -21,7 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeLabel } from "./badges";
 import { Field } from "./fields";
@@ -306,6 +308,15 @@ export function ChannelsManager() {
   const { t } = useTranslation();
   const canManage = usePermissions().can("alerts.manage");
   const q = useQuery(alertChannelsQuery());
+  const columns = useMemo(
+    () => ({
+      name: (c: AlertChannel) => c.name,
+      type: (c: AlertChannel) => t(`alerts.channels.types.${c.type}`),
+      last: (c: AlertChannel) => timeOf(c.last_delivery?.at),
+    }),
+    [t],
+  );
+  const list = useLocalList(q.data?.channels, columns, "name");
   const [editing, setEditing] = useState<AlertChannel | "new" | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);
   return (
@@ -341,21 +352,22 @@ export function ChannelsManager() {
           <Table mobile="stack">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("alerts.channels.columns.name")}</TableHead>
-                <TableHead>{t("alerts.channels.columns.type")}</TableHead>
+                <SortableHead column="name" defaultDir="asc" {...list.head}>{t("alerts.channels.columns.name")}</SortableHead>
+                <SortableHead column="type" defaultDir="asc" {...list.head}>{t("alerts.channels.columns.type")}</SortableHead>
                 <TableHead>{t("alerts.channels.columns.destination")}</TableHead>
-                <TableHead>{t("alerts.channels.columns.last")}</TableHead>
+                <SortableHead column="last" {...list.head}>{t("alerts.channels.columns.last")}</SortableHead>
                 <TableHead>
                   <span className="sr-only">{t("alerts.channels.test")}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {q.data.channels.map((c) => (
+              {list.visible.map((c) => (
                 <ChannelRow key={c.id} channel={c} canManage={canManage} onEdit={() => setEditing(c)} />
               ))}
             </TableBody>
           </Table>
+          <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
         </div>
       )}
     </div>

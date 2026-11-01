@@ -26,6 +26,10 @@ type listSpec struct {
 	maxLimit int
 }
 
+// wholeList is the limit of a list that answered with all of its rows before it had pages. An older client sends no limit and expects
+// them still, and OPENLOG_API_MAX_ROWS remains what bounds it.
+const wholeList = 1 << 30
+
 // listRequest is one request's sort and page.
 type listRequest struct {
 	sort   string

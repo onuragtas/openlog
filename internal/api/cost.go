@@ -1,8 +1,10 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/onuragtas/openlog/internal/api/query"
@@ -435,8 +437,47 @@ func (s *Server) costSummary(w http.ResponseWriter, r *http.Request, sc *query.S
 	return nil
 }
 
+// The cost lists are computed in Go from every host of the window, so their sort and page are complete. A host with no price has no cost
+// and no idle share to compare, whatever the zeroes in its row say.
+var costHostKeys = map[string]func(cost.HostCost) rowKey{
+	"host":     func(h cost.HostCost) rowKey { return textKey(cmp.Or(h.HostName, h.HostID)) },
+	"instance": func(h cost.HostCost) rowKey { return textKey(h.InstanceType) },
+	"cost":     func(h cost.HostCost) rowKey { return pricedKey(h, h.Total) },
+	"idle":     func(h cost.HostCost) rowKey { return pricedKey(h, h.IdleShare) },
+}
+
+func pricedKey(h cost.HostCost, v float64) rowKey {
+	if !h.Priced {
+		return rowKey{blank: true}
+	}
+	return numKey(v)
+}
+
+var costHostsList = listSpec{
+	columns:  columnsOf(costHostKeys),
+	sort:     "cost",
+	asc:      map[string]bool{"host": true, "instance": true},
+	limit:    100,
+	maxLimit: wholeList,
+}
+
+var costServiceKeys = map[string]func(cost.ServiceCost) rowKey{
+	"service":     func(c cost.ServiceCost) rowKey { return textKey(c.ServiceName) },
+	"environment": func(c cost.ServiceCost) rowKey { return textKey(c.Environment) },
+	"containers":  func(c cost.ServiceCost) rowKey { return numKey(float64(c.Containers)) },
+	"cost":        func(c cost.ServiceCost) rowKey { return numKey(c.Total) },
+}
+
+var costServicesList = listSpec{
+	columns:  columnsOf(costServiceKeys),
+	sort:     "cost",
+	asc:      map[string]bool{"service": true, "environment": true},
+	limit:    100,
+	maxLimit: wholeList,
+}
+
 func (s *Server) costHosts(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
-	limit, err := s.limit(r)
+	l, err := costHostsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -444,18 +485,16 @@ func (s *Server) costHosts(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
-	hosts := res.Hosts
-	if len(hosts) > limit {
-		hosts = hosts[:limit]
-	}
+	total := len(res.Hosts)
+	hosts, more := sortPage(res.Hosts, l, costHostKeys, func(a, b cost.HostCost) int { return strings.Compare(a.HostID, b.HostID) })
 	writeJSON(w, http.StatusOK, map[string]any{
-		"hosts": hosts, "total": len(res.Hosts), "summary": res.Summary, "pricing": s.pricing(),
+		"hosts": hosts, "total": total, "has_more": more, "summary": res.Summary, "pricing": s.pricing(),
 	})
 	return nil
 }
 
 func (s *Server) costServices(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
-	limit, err := s.limit(r)
+	l, err := costServicesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -463,12 +502,12 @@ func (s *Server) costServices(w http.ResponseWriter, r *http.Request, sc *query.
 	if err != nil {
 		return err
 	}
-	services := res.Services
-	if len(services) > limit {
-		services = services[:limit]
-	}
+	total := len(res.Services)
+	services, more := sortPage(res.Services, l, costServiceKeys, func(a, b cost.ServiceCost) int {
+		return cmp.Or(strings.Compare(a.ServiceName, b.ServiceName), strings.Compare(a.ServiceNamespace, b.ServiceNamespace), strings.Compare(a.Environment, b.Environment))
+	})
 	writeJSON(w, http.StatusOK, map[string]any{
-		"services": services, "total": len(res.Services), "summary": res.Summary, "pricing": s.pricing(),
+		"services": services, "total": total, "has_more": more, "summary": res.Summary, "pricing": s.pricing(),
 	})
 	return nil
 }

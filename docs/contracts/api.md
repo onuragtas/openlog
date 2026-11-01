@@ -656,7 +656,9 @@ are only returned once by `POST /api/v1/license-keys`, and a key the user pastes
 
 ## Hosts
 
-### `GET /api/v1/hosts?limit=&usage=`
+### `GET /api/v1/hosts?q=&sort=&dir=&limit=&offset=&usage=`
+`sort`: `name` (default), `os`, `agent`, `last_seen`, `cpu`, `memory`, `disk`, `load`. `q` is words that must all appear in the name, id, OS, architecture, agent version or a `key=value` resource attribute. A host with no usage figure sorts last in either direction. The list is sorted and searched in Go, because the usage lives in another table and the attributes are a map, so both are complete up to `OPENLOG_API_MAX_ROWS` hosts. The response carries `has_more` (see [Lists](#lists)).
+
 Hosts seen in the last 24h, ordered by `host_name`, each with how busy it is right now.
 ```json
 {"hosts": [{"host_id": "…", "host_name": "web-1", "os_description": "Ubuntu 24.04 LTS", "arch": "amd64",
@@ -779,11 +781,15 @@ fit; the host total stays exact) and `priced`.
 ### `GET /api/v1/costs/summary?from=&to=`
 `{"summary": CostSummary, "pricing": {…}, "from": 1757757600000, "to": 1757761200000}`.
 
-### `GET /api/v1/costs/hosts?from=&to=&limit=`
+### `GET /api/v1/costs/hosts?from=&to=&sort=&dir=&limit=&offset=`
+`sort`: `cost` (default), `idle`, `host`, `instance`. A host without a price has no cost and no idle share, and sorts last in either direction. The response carries `has_more` (see [Lists](#lists)).
+
 Hosts ordered by cost, most expensive first: `{"hosts": [CostHost…], "total": 12, "summary": CostSummary, "pricing": {…}}`.
 `total` counts hosts before `limit`.
 
-### `GET /api/v1/costs/services?from=&to=&limit=`
+### `GET /api/v1/costs/services?from=&to=&sort=&dir=&limit=&offset=`
+`sort`: `cost` (default), `containers`, `service`, `environment`. The response carries `has_more` (see [Lists](#lists)).
+
 `{"services": [{"service_name", "service_namespace", "environment", "total", "hosts": ["…"], "containers": 3}…],
 "total": 8, "summary": CostSummary, "pricing": {…}}`, ordered by cost. The same service name in two environments is
 two rows.
@@ -1265,8 +1271,8 @@ counts are weighted by the sampling probability (apm.md §4).
 
 **RED object** (`ApmRed`): `{"requests", "throughput", "errors", "error_rate", "avg_ms", "p50_ms", "p95_ms", "p99_ms", "apdex"}`.
 
-### `GET /api/v1/apm/services?from=&to=&step=&namespace=&environment=&q=`
-Services with spans since `from` (`q`: case-insensitive substring of the name), ordered by name:
+### `GET /api/v1/apm/services?from=&to=&step=&namespace=&environment=&q=&sort=&dir=&limit=&offset=`
+Services with spans since `from` (`q`: case-insensitive words, each found somewhere in the name, namespace, environment, language or version), ordered by name. `sort` = `name` (default) | `environment` | `throughput` | `error_rate` | `p95` | `apdex` | `last_seen`, see [Lists](#lists). Without `limit` the answer is every service, up to `OPENLOG_API_MAX_ROWS` in name order. The sort, the search and the page happen after that read, so they are complete only up to it. `environments` lists every environment seen, whatever `environment`, `q` and the page narrowed the rows to:
 ```json
 {"step": "60s", "services": [{"service_name": "orders", "service_namespace": "shop", "environment": "prod",
   "language": "go", "version": "1.4.2", "last_seen": "…", "apdex_t_ms": 500, "requests": 5400, "throughput": 90,
@@ -1323,9 +1329,9 @@ list stays cheap and registry checks run only where commands are shown; `upgrade
 `{"step": "60s", "apdex_t_ms": 500, "totals": ApmRed, "series": [{"t": 1757757600000, …ApmRed}]}`; `transaction`/`type`
 restrict to one transaction. Buckets without requests are omitted.
 
-### `GET /api/v1/apm/services/{service_name}/transactions?sort=&type=&limit=`
-`sort` = `time` (default: most time consumed) | `throughput` | `slowest` (p95) | `errors`; `limit` default 100, max 1000.
-`{"apdex_t_ms": 500, "transactions": [{"transaction_type": "web", "transaction_name": "GET /orders/{id}", "time_consumed_ms", "time_share", "max_ms", …ApmRed}]}`
+### `GET /api/v1/apm/services/{service_name}/transactions?sort=&dir=&type=&limit=&offset=`
+`sort` = `time` (default: most time consumed) | `throughput` | `avg` | `slowest` (p95) | `errors` | `error_rate` | `apdex` | `name`; `limit` default 100, max 1000, see [Lists](#lists). The p95 and the Apdex come out of histograms, so the server reads the `OPENLOG_API_MAX_ROWS` transactions that consumed the most time, sorts those and cuts the page: past that many in a range, the order is complete only up to them. `time_share` is of every transaction read, so a row says the same on any page.
+`{"apdex_t_ms": 500, "has_more": false, "transactions": [{"transaction_type": "web", "transaction_name": "GET /orders/{id}", "time_consumed_ms", "time_share", "max_ms", …ApmRed}]}`
 
 ### `GET /api/v1/apm/services/{service_name}/transaction?name=&type=`
 `name` required.
@@ -1336,14 +1342,14 @@ restrict to one transaction. Buckets without requests are omitted.
 ```
 `histogram` lists the non-empty latency buckets (apm.md §4.1); `slowest` the 10 slowest entry spans in the range.
 
-### `GET /api/v1/apm/services/{service_name}/errors?limit=&status=&assignee=&q=&sort=` · `GET /api/v1/apm/errors?service=&namespace=&environment=&…`
+### `GET /api/v1/apm/services/{service_name}/errors?limit=&offset=&status=&assignee=&q=&sort=&dir=` · `GET /api/v1/apm/errors?service=&namespace=&environment=&…`
 Error inbox ([apm.md](apm.md) §3.4): groups with occurrences in the range (and, for resolved/ignored/assignee
 filters, groups with a matching workflow state), most frequent first (`limit` default 50, max 500). The second form
 spans every service. `status` = `all` (default) or a comma-separated list of `unresolved`, `resolved`, `ignored`;
 `assignee` = `any` (default), `none`, `me`, or a user id; `q` substring of type/message/service/span name (≤ 256
-bytes); `sort` = `count` (default), `last_seen`, `first_seen`. Response adds `counts` per status (after `assignee`
-and `q`), `truncated` and `workflow` (`false` without PostgreSQL: every group unresolved, no mutations). Resolved
-groups are checked for regressions (and reopened) on every read.
+bytes); `sort` = `count` (default), `last_seen`, `first_seen`, `type`, `service`, `status`, `assignee`, `comments`, see [Lists](#lists). Response adds `counts` per status (after `assignee`
+and `q`), `truncated` (the candidates were capped, or there is another page), `capped`, `has_more` and `workflow` (`false` without PostgreSQL: every group unresolved, no mutations). Resolved
+groups are checked for regressions (and reopened) on every read. The workflow fields live in PostgreSQL, so the server gathers the 2000 groups most frequent in the range and at most 500 from the workflow store, sorts those and cuts the page: `capped` says the first of those was hit, and a group past it is in no sort or page.
 ```json
 {"step": "60s", "groups": [{"group_id": "9f3c2a71d4b84e0f", "error_type": "*errors.errorString",
   "message": "order <n>: inventory shard <n> unavailable", "count": 12, "total_count": 480, "first_seen": "…",
@@ -1384,9 +1390,9 @@ admin/owner (`204`, else `404`; audit `apm.error_group.comment_delete`).
 `{"at", "window_seconds", "apdex_t_ms", "before": {"from", "to", …ApmRed}, "after": {"from", "to", …ApmRed}, "new_error_groups": [{"group_id", "error_type", "message", "first_seen", "total_count"}]}`
 (`after` ends at now at the latest; new groups = first seen in `after`, top 20 by total count).
 
-### `GET /api/v1/apm/services/{service_name}/databases?sort=&db_system=&limit=`
-`sort` = `time` (default) | `calls` | `slowest` (avg) | `errors`.
-`{"queries": [{"db_system": "postgresql", "db_name": "orders", "db_operation": "SELECT", "statement": "SELECT … WHERE id = ?", "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms", "max_ms", "time_consumed_ms", "time_share"}]}`
+### `GET /api/v1/apm/services/{service_name}/databases?sort=&dir=&db_system=&limit=&offset=`
+`sort` = `time` (default) | `calls` | `slowest` (avg) | `errors` | `error_rate` | `max` | `statement` | `database`, see [Lists](#lists). `time_share` is of the page.
+`{"has_more": false, "queries": [{"db_system": "postgresql", "db_name": "orders", "db_operation": "SELECT", "statement": "SELECT … WHERE id = ?", "calls", "throughput", "errors", "error_rate", "avg_ms", "p95_ms", "max_ms", "time_consumed_ms", "time_share"}]}`
 
 ### `GET /api/v1/apm/db-queries?sort=&q=&service=&db_system=&environment=&limit=`
 The same rows across every service, with `"services": ["orders", "billing"]` on each: what the **Databases** screen shows when there is no connection to the
@@ -1445,12 +1451,12 @@ Node `type` ∈ `service`, `db`, `external`, `messaging`; dependency node RED is
 Without `service`, `namespace`/`environment` filter the whole map (sources and trace-linked targets). `service`
 restricts the map to edges touching that service.
 
-### `GET /api/v1/apm/traces?service=&namespace=&environment=&transaction=&type=&min_duration_ms=&max_duration_ms=&error=&attr.<key>=&sort=&limit=`
-Entry spans in the range (`sort` = `timestamp` (default, newest first) | `duration`; `limit` default 50, max 500). Without
+### `GET /api/v1/apm/traces?service=&namespace=&environment=&transaction=&type=&min_duration_ms=&max_duration_ms=&error=&attr.<key>=&sort=&dir=&limit=&offset=`
+Entry spans in the range (`sort` = `timestamp` (default, newest first) | `duration`; `limit` default 50, max 500). It pages with `offset` and not with a `cursor` as `POST /traces/query` does, so a span arriving between two pages moves the rest by one. A transaction name or a status has no sort here. Without
 `service`, one row per trace. `error` = `true`|`false`. `attr.<key>=<value>`: exact match on a span attribute (at most 10;
 key ≤ 256 bytes, one value ≤ 1024 bytes; `400` otherwise). Open results with `GET /traces/{trace_id}` and correlated
 logs with `GET /logs?trace_id=`.
-`{"traces": [{"trace_id", "span_id", "timestamp", "duration_ms", "is_error", "http_status_code", "service_name", "service_namespace", "environment", "transaction_type", "transaction_name"}]}`
+`{"has_more": false, "traces": [{"trace_id", "span_id", "timestamp", "duration_ms", "is_error", "http_status_code", "service_name", "service_namespace", "environment", "transaction_type", "transaction_name"}]}`
 
 ## Fleet (agent updates)
 
@@ -1817,8 +1823,9 @@ links to `GET /api/v1/apm/errors?service=<app>`. A parallel inbox would mean two
 For the same reason a browser application **appears under APM as a service** — with errors but no
 transactions, throughput or Apdex, because page views are deliberately not entry spans.
 
-### `GET /api/v1/rum/apps?from=&to=`
-`{"apps": [{"app", "environment", "views", "sessions", "errors", "last_seen"}]}`.
+### `GET /api/v1/rum/apps?from=&to=&sort=&dir=&limit=&offset=`
+`{"apps": [{"app", "environment", "views", "sessions", "errors", "last_seen"}], "has_more"}`. `sort`: `views` (default), `sessions`, `errors`,
+`last_seen`, `app`, `environment`. With no `limit` this is every application, up to `OPENLOG_API_MAX_ROWS`.
 
 ### `GET /api/v1/rum/overview?app=&environment=&from=&to=&step=`
 The five vitals, the page view series and the totals:
@@ -1835,19 +1842,21 @@ assessment is defined on, against the published thresholds ([rum.md](rum.md) §2
 settings. All five vitals are always returned, so a browser that reported none shows as "no data" rather than
 disappearing.
 
-### `GET /api/v1/rum/pages?app=&environment=&sort=&limit=&from=&to=`
+### `GET /api/v1/rum/pages?app=&environment=&sort=&dir=&limit=&offset=&from=&to=`
 `{"pages": [{"route", "views", "avg_ms", "p50_ms", "p75_ms", "p95_ms", "max_ms", "ttfb_avg_ms", "lcp_p75",
-"errors"}]}`. `sort` is `views` (default), `slowest` (by total time consumed, like APM's "most time
-consuming") or `avg`. `route` is the normalized route ([rum.md](rum.md) §4), never a raw URL: the query
+"errors"}], "has_more"}`. `sort` is `views` (default), `slowest` (by total time consumed, like APM's "most time
+consuming"), `avg`, `ttfb` or `route`. The percentiles and `lcp_p75` can't be sorted on: they are worked out after the page is
+read. `limit` ≤ 1000. `route` is the normalized route ([rum.md](rum.md) §4), never a raw URL: the query
 string and fragment never reach storage.
 
 ### `GET /api/v1/rum/vitals?app=&environment=&route=&from=&to=`
 `{"from", "to", "vitals": [ … as above … ]}`, optionally for one route.
 
-### `GET /api/v1/rum/sessions?app=&environment=&limit=&from=&to=`
+### `GET /api/v1/rum/sessions?app=&environment=&sort=&dir=&limit=&offset=&from=&to=`
 `{"sessions": [{"session_id", "app", "environment", "started_at", "ended_at", "duration_ms", "page_views",
 "errors", "entry_route", "exit_route", "device_type", "browser_name", "browser_version", "os_name",
-"trace_id"}]}`, newest first. A session is a visit, not a person ([rum.md](rum.md) §1.1).
+"trace_id"}], "has_more"}`, newest first. `sort`: `last_seen` (default), `started`, `duration`, `page_views`, `errors`, `entry`, `browser`. With
+`user_id`, the list is that person's newest 2000 sessions in the range, and pages stop there. A session is a visit, not a person ([rum.md](rum.md) §1.1).
 
 ### `GET /api/v1/rum/sessions/{session_id}?from=&to=`
 `{"session": {…}, "events": [{"timestamp", "event", "name", "route", "duration_ms", "trace_id", "span_id",
@@ -1856,9 +1865,11 @@ string and fragment never reach storage.
 bounded by the **trace** retention: an older session still has its summary and `trace_id`, but no events.
 `404` when the session is unknown.
 
-### `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=`
+### `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=&sort=&dir=&limit=&offset=`
 `{"releases": [{"version", "sessions", "error_sessions", "crashed_sessions", "capturing_sessions", "error_free_rate",
-"crash_free_rate", "session_crash_free_rate", "first_seen", "last_seen"}], "deployments": […]}`
+"crash_free_rate", "session_crash_free_rate", "first_seen", "last_seen"}], "deployments": […], "has_more"}`. `sort` pages `releases`: `last_seen` (default),
+`first_seen`, `version` (by its numbers, so 1.10 is after 1.9), `crash_free` (a null rate is last either way), `error_free`, `sessions`, `error_sessions`.
+`limit` is 200 by default and at most 1000. `deployments` is all of them on every page
 ([rum.md](rum.md) §2.7, [mobile-crash.md](mobile-crash.md) §5). Sessions come from an hourly rollup that reaches 30 days, so a
 range starts at its first whole hour.
 
@@ -1894,7 +1905,9 @@ background. The identifier on raw spans expires with the 7-day trace retention.
 At most 90 days, like the three below.
 
 ### `GET /api/v1/analytics/events?app=&environment=&name=&param=&from=&to=`
-`{"events": [{"name", "count", "sessions", "users"}]}`, most frequent first, at most 200. With `name` and `param`
+`{"events": [{"name", "count", "sessions", "users"}]}`, most frequent first, at most 200. Unlike the lists above these three analytics lists (events,
+audience, acquisition) have no pages: with `days`, a row only the previous period has is added at the end, so a list holds up to 200 rows per period and a client
+sorts and pages what it holds. With `name` and `param`
 together, `name` in each row is a value of that parameter of that event. `(other)` holds what is past the key's bound on
 distinct event names ([analytics.md](analytics.md) §4). `users` is 0 unless the key is in `visitors` mode.
 
@@ -1990,7 +2003,9 @@ The feed URL is configurable ([config.md](config.md#vulnerabilities-api-allinone
 download inside the network, and an empty value disables downloading entirely for an air-gapped
 installation, which fills the catalog itself and still gets matching.
 
-### `GET /api/v1/vulnerabilities?severity=&host_id=`
+### `GET /api/v1/vulnerabilities?severity=&host_id=&sort=&dir=&limit=&offset=`
+`sort`: `severity` (default, the most serious first, then the most hosts), `advisory`, `score`, `hosts`. `limit` defaults to and stops at 1000. `severity_counts` is of the whole list and not of the page, and the response carries `has_more` (see [Lists](#lists)).
+
 The open findings grouped by advisory, most serious first and, within a severity, the advisory affecting the
 most hosts first. `severity_counts` is the fleet summary the header shows.
 ```json
@@ -2180,7 +2195,7 @@ statement statistics per interval, the sampled sessions with their waits and blo
 plans. Telemetry reads (any role, API keys too). An instance is addressed by its `service.instance.id`
 (`instance=`), a statement by its fingerprint. `from`/`to` default to the last hour.
 
-### `GET /api/v1/db/instances?from=&to=`
+### `GET /api/v1/db/instances?from=&to=&sort=&dir=&limit=&offset=`
 ```json
 {"instances": [{"instance": "db1.internal:5432", "db_system": "postgresql", "host_id": "h-1", "host_name": "db1",
                 "server_address": "db1.internal", "server_port": 5432, "calls": 423200, "throughput": 117.6,
@@ -2188,11 +2203,13 @@ plans. Telemetry reads (any role, API keys too). An instance is addressed by its
                 "avg_active_sessions": 3.4, "top_wait": "Lock", "last_seen": "…"}]}
 ```
 `avg_active_sessions` is the samples of the range divided by its sampling instants (`null` without session
-sampling); `top_wait` is `CPU` when most samples were not waiting.
+sampling); `top_wait` is `CPU` when most samples were not waiting. `sort`: `time` (default), `calls`, `avg`, `aas`, `errors`, `statements`, `instance`,
+`host`, `wait`, `last_seen`; a missing value is last either way. With no `limit` this is every instance. It is sorted after merging statement
+statistics and session samples, which are read up to 500 instances each, so it is complete only up to those. `has_more` says whether there is another page.
 
-### `GET /api/v1/db/queries?instance=&from=&to=&sort=&db=&q=&limit=`
-`sort`: `time` (default), `calls`, `avg`, `rows`, `errors`, `reads`; `q` is a case-insensitive substring of the
-statement; `limit` ≤ 200.
+### `GET /api/v1/db/queries?instance=&from=&to=&sort=&dir=&db=&q=&limit=&offset=`
+`sort`: `time` (default), `calls`, `avg`, `rows`, `rows_per_call`, `errors`, `reads`, `statement`; `q` is a case-insensitive substring of the
+statement; `limit` ≤ 1000. The response has `has_more`, and `time_share` is of the whole instance and not of the page.
 ```json
 {"total_time_ms": 1000000,
  "queries": [{"fingerprint": "696841490555676800", "query_id": "-4242", "text": "UPDATE orders SET amount = ? WHERE id = ?",
@@ -2224,9 +2241,18 @@ Average active sessions per wait type per step, the top wait events and the stat
                   "top_wait": "Lock:transactionid"}]}
 ```
 
+### `GET /api/v1/db/activity/waits?instance=&from=&to=&sort=&dir=&limit=&offset=`
+Every wait event of the range, where `/db/activity` holds the top 20: `{"waits": [{"type", "event", "samples", "share"}], "has_more"}`. `sort`: `samples`
+(default), `type`, `event`. `share` is of all the instance's samples in the range, where in `/db/activity` it is of the 20.
+
+### `GET /api/v1/db/activity/queries?instance=&from=&to=&sort=&dir=&limit=&offset=`
+Every statement the samples caught, where `/db/activity` holds the top 20: `{"queries": [{"fingerprint", "text", "samples", "avg_active_sessions",
+"top_wait"}], "has_more"}`. `sort`: `samples` (default), `statement`, `wait`.
+
 ### `GET /api/v1/db/sessions?instance=&at=`
 The latest sampling instant at or before `at` (unix ms, default now) within the last 5 minutes. `blocks` counts
-the sessions waiting for this one, directly or through a chain.
+the sessions waiting for this one, directly or through a chain. It has no pages, because a blocking chain can only be drawn over the whole sample: it holds the
+1000 longest running sessions, and `has_more` is true when the sample had more.
 ```json
 {"sampled_at": "…",
  "sessions": [{"session_id": "4700", "state": "idle in transaction", "wait_type": "Client", "wait_event": "ClientRead",
@@ -2250,7 +2276,9 @@ A **profile type is required** wherever values are summed, and is deliberately n
 nanoseconds and bytes do not add up, so a chart over an unstated type would be a number with no unit. Every
 response repeats the `unit` the profile's own `ValueType` declared, so a chart never hard-codes "ns".
 
-### `GET /api/v1/profiles/services?from=&to=`
+### `GET /api/v1/profiles/services?from=&to=&sort=&dir=&limit=&offset=`
+`sort`: `samples` (default), `total`, `last_seen`, `service`, `environment`, `type`. With no `limit` it answers with everything up to `OPENLOG_API_MAX_ROWS`, and the response carries `has_more` (see [Lists](#lists)).
+
 `{"services": [{"service", "environment", "type", "unit", "samples", "total", "last_seen"}]}`.
 
 One entry per service, environment and profile type — this is what tells a caller which types the other two
@@ -2609,9 +2637,9 @@ enforcement (suspension, limits, trials, flags) additionally needs `OPENLOG_SAAS
 ### `GET /api/v1/operator/me`
 Any session. `{"operator": bool, "saas_mode": bool}` (the UI shows the console only for operators).
 
-### `GET /api/v1/operator/orgs?q=&plan=&state=&sort=&limit=&offset=`
+### `GET /api/v1/operator/orgs?q=&plan=&state=&sort=&dir=&limit=&offset=`
 `q`: name, tenant id, organization id or member e-mail substring. `plan`: effective plan id. `state`: `active`,
-`suspended`, `trial`, `flagged`. `sort`: `created` (default, newest first), `name`, `ingest`, `members`, `last_ingest`.
+`suspended`, `trial`, `flagged`. `sort`: `created` (default, newest first), `name`, `ingest`, `members`, `last_ingest`. `dir`: `asc` or `desc`, the column's own direction when absent.
 `limit` 1–200 (50). Response `{"organizations": [OperatorOrg], "total", "saas_mode"}` with `id`, `tenant_id`, `name`,
 `created_at`, `plan_id`, `plan_assigned`, `state`, `suspended_at`, `suspend_reason`, `trial_plan_id`, `trial_ends_at`,
 `support_access_until`, `members`, `active_hosts` and `ingest_bytes` / `quota_level` (latest quota evaluation of the

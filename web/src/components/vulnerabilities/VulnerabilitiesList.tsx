@@ -1,13 +1,16 @@
 // The fleet's open vulnerability findings, grouped by advisory (docs/contracts/api.md "Vulnerabilities",
 // D-142). Router-free: the page passes the callbacks.
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { VulnGroup, VulnSeverity } from "@/api/vulnerabilities";
-import { vulnerabilitiesQuery, vulnerabilityCatalogQuery } from "@/api/vulnerabilities";
+import { vulnerabilitiesQuery, vulnerabilityCatalogQuery, type VulnSort } from "@/api/vulnerabilities";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useListState } from "@/lib/list";
 import { advisoryLabel, formatScore, packagesText, SEVERITIES, severityBadgeVariant, totalCount } from "@/lib/vulnerabilities";
 
 export interface VulnerabilitiesListProps {
@@ -19,7 +22,11 @@ export interface VulnerabilitiesListProps {
 export function VulnerabilitiesList({ severity, onSeverity, onOpen }: VulnerabilitiesListProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const q = useQuery(vulnerabilitiesQuery(severity));
+  const list = useListState<VulnSort>("severity", "asc");
+  const q = useQuery(vulnerabilitiesQuery(severity, list.state));
+  const { toFirstPage } = list;
+  // Another severity is another list, so page three of this one means nothing there.
+  useEffect(toFirstPage, [severity, toFirstPage]);
   // The catalog status is what tells "nothing is vulnerable" apart from "the feed never synced"; a server
   // that does not offer it (static auth mode) simply shows neither.
   const catalog = useQuery({ ...vulnerabilityCatalogQuery(), throwOnError: false });
@@ -49,47 +56,50 @@ export function VulnerabilitiesList({ severity, onSeverity, onOpen }: Vulnerabil
       </div>
 
       <div className="rounded-xl border bg-card">
-        {groups.length === 0 ? (
+        {groups.length === 0 && list.state.offset === 0 ? (
           <EmptyState>
             <p>{synced ? t("vulnerabilities.empty") : t("vulnerabilities.emptyNoFeed")}</p>
             <p className="mt-1 text-xs">{synced ? t("vulnerabilities.emptyHint") : t("vulnerabilities.emptyNoFeedHint")}</p>
           </EmptyState>
         ) : (
-          <Table mobile="stack" data-testid="vulnerabilities-list">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("vulnerabilities.columns.advisory")}</TableHead>
-                <TableHead>{t("vulnerabilities.columns.severity")}</TableHead>
-                <TableHead className="text-right">{t("vulnerabilities.columns.score")}</TableHead>
-                <TableHead className="text-right">{t("vulnerabilities.columns.hosts")}</TableHead>
-                <TableHead>{t("vulnerabilities.columns.packages")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.map((g) => (
-                <TableRow key={g.vuln_id} className="cursor-pointer" data-testid="vulnerability-row" onClick={() => onOpen(g)}>
-                  <TableCell className="max-w-96">
-                    <button type="button" className="block truncate text-left font-medium hover:underline" onClick={() => onOpen(g)}>
-                      {advisoryLabel(g)}
-                    </button>
-                    {g.summary && <p className="truncate text-xs text-muted-foreground">{g.summary}</p>}
-                  </TableCell>
-                  <TableCell className="max-md:w-auto">
-                    <Badge variant={severityBadgeVariant(g.severity)}>{t(`vulnerabilities.severity.${g.severity}`)}</Badge>
-                  </TableCell>
-                  <TableCell label={t("vulnerabilities.columns.score")} className="text-right font-mono tabular-nums">
-                    {formatScore(g.score)}
-                  </TableCell>
-                  <TableCell label={t("vulnerabilities.columns.hosts")} className="text-right font-mono tabular-nums">
-                    {g.hosts}
-                  </TableCell>
-                  <TableCell label={t("vulnerabilities.columns.packages")} className="max-w-72 truncate font-mono text-xs">
-                    {packagesText(g.packages)}
-                  </TableCell>
+          <>
+            <Table mobile="stack" data-testid="vulnerabilities-list">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="advisory" defaultDir="asc" {...list.head}>{t("vulnerabilities.columns.advisory")}</SortableHead>
+                  <SortableHead column="severity" defaultDir="asc" {...list.head}>{t("vulnerabilities.columns.severity")}</SortableHead>
+                  <SortableHead column="score" className="text-right" {...list.head}>{t("vulnerabilities.columns.score")}</SortableHead>
+                  <SortableHead column="hosts" className="text-right" {...list.head}>{t("vulnerabilities.columns.hosts")}</SortableHead>
+                  <TableHead>{t("vulnerabilities.columns.packages")}</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {groups.map((g) => (
+                  <TableRow key={g.vuln_id} className="cursor-pointer" data-testid="vulnerability-row" onClick={() => onOpen(g)}>
+                    <TableCell className="max-w-96">
+                      <button type="button" className="block truncate text-left font-medium hover:underline" onClick={() => onOpen(g)}>
+                        {advisoryLabel(g)}
+                      </button>
+                      {g.summary && <p className="truncate text-xs text-muted-foreground">{g.summary}</p>}
+                    </TableCell>
+                    <TableCell className="max-md:w-auto">
+                      <Badge variant={severityBadgeVariant(g.severity)}>{t(`vulnerabilities.severity.${g.severity}`)}</Badge>
+                    </TableCell>
+                    <TableCell label={t("vulnerabilities.columns.score")} className="text-right font-mono tabular-nums">
+                      {formatScore(g.score)}
+                    </TableCell>
+                    <TableCell label={t("vulnerabilities.columns.hosts")} className="text-right font-mono tabular-nums">
+                      {g.hosts}
+                    </TableCell>
+                    <TableCell label={t("vulnerabilities.columns.packages")} className="max-w-72 truncate font-mono text-xs">
+                      {packagesText(g.packages)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={groups.length} hasMore={q.data.has_more ?? false} />
+          </>
         )}
       </div>
     </div>

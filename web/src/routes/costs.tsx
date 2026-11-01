@@ -1,13 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import { type CostHost, costHostsQuery, type CostService, costServicesQuery, costSummaryQuery, costTrendQuery, formatMoney, formatShare } from "@/api/costs";
+import { type CostHost, type CostHostSort, costHostsQuery, type CostService, type CostServiceSort, costServicesQuery, costSummaryQuery, costTrendQuery, formatMoney, formatShare } from "@/api/costs";
 import { PageHeader } from "@/components/AppShell";
+import { ListPager } from "@/components/ListPager";
 import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { type ListControls, useListState } from "@/lib/list";
 import type { ChartSeriesInput } from "@/lib/series";
 import type { RangeSpec } from "@/lib/time";
 
@@ -18,8 +20,10 @@ export function CostsView({ range }: { range: RangeSpec }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const summary = useQuery(costSummaryQuery(range));
-  const hosts = useQuery(costHostsQuery(range));
-  const services = useQuery(costServicesQuery(range));
+  const hostList = useListState<CostHostSort>("cost");
+  const serviceList = useListState<CostServiceSort>("cost");
+  const hosts = useQuery(costHostsQuery(range, hostList.state));
+  const services = useQuery(costServicesQuery(range, serviceList.state));
   const trend = useQuery(costTrendQuery(range));
 
   if (summary.isPending) return <LoadingState />;
@@ -133,7 +137,7 @@ export function CostsView({ range }: { range: RangeSpec }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-0">
-            <ServiceTable services={services.data?.services ?? []} money={money} isPending={services.isPending} />
+            <ServiceTable services={services.data?.services ?? []} list={serviceList} hasMore={services.data?.has_more ?? false} money={money} isPending={services.isPending} />
           </CardContent>
         </Card>
 
@@ -144,7 +148,7 @@ export function CostsView({ range }: { range: RangeSpec }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-0">
-            <HostTable hosts={hosts.data?.hosts ?? []} money={money} locale={locale} isPending={hosts.isPending} />
+            <HostTable hosts={hosts.data?.hosts ?? []} list={hostList} hasMore={hosts.data?.has_more ?? false} money={money} locale={locale} isPending={hosts.isPending} />
           </CardContent>
         </Card>
       </div>
@@ -152,90 +156,96 @@ export function CostsView({ range }: { range: RangeSpec }) {
   );
 }
 
-function ServiceTable({ services, money, isPending }: { services: CostService[]; money: (v: number) => string; isPending: boolean }) {
+function ServiceTable({ services, list, hasMore, money, isPending }: { services: CostService[]; list: ListControls<CostServiceSort>; hasMore: boolean; money: (v: number) => string; isPending: boolean }) {
   const { t } = useTranslation();
   if (isPending) return <LoadingState />;
-  if (services.length === 0) return <EmptyState>{t("costs.byService.empty")}</EmptyState>;
+  if (services.length === 0 && list.state.offset === 0) return <EmptyState>{t("costs.byService.empty")}</EmptyState>;
   return (
-    <Table mobile="stack">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t("costs.columns.service")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("costs.columns.environment")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("costs.columns.containers")}</TableHead>
-          <TableHead>{t("costs.columns.cost")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {services.map((s) => (
-          <TableRow key={`${s.service_name}|${s.service_namespace}|${s.environment}`}>
-            <TableCell className="font-medium">
-              <Link
-                to="/apm/services/$service"
-                params={{ service: s.service_name }}
-                search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, ns: s.service_namespace || undefined, env: s.environment || undefined })}
-                className="hover:underline"
-              >
-                {s.service_name}
-              </Link>
-            </TableCell>
-            <TableCell label={t("costs.columns.environment")} className="hidden text-muted-foreground md:table-cell">
-              {s.environment || "–"}
-            </TableCell>
-            <TableCell label={t("costs.columns.containers")} className="hidden tabular-nums md:table-cell">
-              {s.containers}
-            </TableCell>
-            <TableCell label={t("costs.columns.cost")} className="tabular-nums">
-              {money(s.total)}
-            </TableCell>
+    <>
+      <Table mobile="stack">
+        <TableHeader>
+          <TableRow>
+            <SortableHead column="service" defaultDir="asc" {...list.head}>{t("costs.columns.service")}</SortableHead>
+            <SortableHead column="environment" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("costs.columns.environment")}</SortableHead>
+            <SortableHead column="containers" className="hidden md:table-cell" {...list.head}>{t("costs.columns.containers")}</SortableHead>
+            <SortableHead column="cost" {...list.head}>{t("costs.columns.cost")}</SortableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {services.map((s) => (
+            <TableRow key={`${s.service_name}|${s.service_namespace}|${s.environment}`}>
+              <TableCell className="font-medium">
+                <Link
+                  to="/apm/services/$service"
+                  params={{ service: s.service_name }}
+                  search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, ns: s.service_namespace || undefined, env: s.environment || undefined })}
+                  className="hover:underline"
+                >
+                  {s.service_name}
+                </Link>
+              </TableCell>
+              <TableCell label={t("costs.columns.environment")} className="hidden text-muted-foreground md:table-cell">
+                {s.environment || "–"}
+              </TableCell>
+              <TableCell label={t("costs.columns.containers")} className="hidden tabular-nums md:table-cell">
+                {s.containers}
+              </TableCell>
+              <TableCell label={t("costs.columns.cost")} className="tabular-nums">
+                {money(s.total)}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <ListPager list={list} count={services.length} hasMore={hasMore} />
+    </>
   );
 }
 
-function HostTable({ hosts, money, locale, isPending }: { hosts: CostHost[]; money: (v: number) => string; locale: string; isPending: boolean }) {
+function HostTable({ hosts, list, hasMore, money, locale, isPending }: { hosts: CostHost[]; list: ListControls<CostHostSort>; hasMore: boolean; money: (v: number) => string; locale: string; isPending: boolean }) {
   const { t } = useTranslation();
   if (isPending) return <LoadingState />;
-  if (hosts.length === 0) return <EmptyState>{t("costs.byHost.empty")}</EmptyState>;
+  if (hosts.length === 0 && list.state.offset === 0) return <EmptyState>{t("costs.byHost.empty")}</EmptyState>;
   return (
-    <Table mobile="stack">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t("costs.columns.host")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("costs.columns.instance")}</TableHead>
-          <TableHead>{t("costs.columns.cost")}</TableHead>
-          <TableHead>{t("costs.columns.idle")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {hosts.map((h) => (
-          <TableRow key={h.host_id}>
-            <TableCell className="font-medium">
-              <Link to="/hosts/$hostId" params={{ hostId: h.host_id }} search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })} className="hover:underline">
-                {h.host_name || h.host_id}
-              </Link>
-            </TableCell>
-            <TableCell label={t("costs.columns.instance")} className="hidden font-mono text-xs text-muted-foreground md:table-cell">
-              {h.instance_type || (h.priced ? t("costs.source.fallback") : "–")}
-              {h.region ? ` · ${h.region}` : ""}
-            </TableCell>
-            <TableCell label={t("costs.columns.cost")} className="tabular-nums">
-              {h.priced ? money(h.total) : <span className="text-muted-foreground">{t("costs.notPriced")}</span>}
-            </TableCell>
-            <TableCell label={t("costs.columns.idle")} className="tabular-nums">
-              {h.priced ? formatShare(h.idle_share, locale) : "–"}
-              {h.oversubscribed && (
-                <span className="ml-1 text-muted-foreground" title={t("costs.oversubscribed")}>
-                  *
-                </span>
-              )}
-            </TableCell>
+    <>
+      <Table mobile="stack">
+        <TableHeader>
+          <TableRow>
+            <SortableHead column="host" defaultDir="asc" {...list.head}>{t("costs.columns.host")}</SortableHead>
+            <SortableHead column="instance" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("costs.columns.instance")}</SortableHead>
+            <SortableHead column="cost" {...list.head}>{t("costs.columns.cost")}</SortableHead>
+            <SortableHead column="idle" {...list.head}>{t("costs.columns.idle")}</SortableHead>
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {hosts.map((h) => (
+            <TableRow key={h.host_id}>
+              <TableCell className="font-medium">
+                <Link to="/hosts/$hostId" params={{ hostId: h.host_id }} search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })} className="hover:underline">
+                  {h.host_name || h.host_id}
+                </Link>
+              </TableCell>
+              <TableCell label={t("costs.columns.instance")} className="hidden font-mono text-xs text-muted-foreground md:table-cell">
+                {h.instance_type || (h.priced ? t("costs.source.fallback") : "–")}
+                {h.region ? ` · ${h.region}` : ""}
+              </TableCell>
+              <TableCell label={t("costs.columns.cost")} className="tabular-nums">
+                {h.priced ? money(h.total) : <span className="text-muted-foreground">{t("costs.notPriced")}</span>}
+              </TableCell>
+              <TableCell label={t("costs.columns.idle")} className="tabular-nums">
+                {h.priced ? formatShare(h.idle_share, locale) : "–"}
+                {h.oversubscribed && (
+                  <span className="ml-1 text-muted-foreground" title={t("costs.oversubscribed")}>
+                    *
+                  </span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <ListPager list={list} count={hosts.length} hasMore={hasMore} />
+    </>
   );
 }
 

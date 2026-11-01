@@ -570,8 +570,8 @@ const apmServicesRoute = createRoute({
 
 export const APM_TABS = ["overview", "transactions", "errors", "databases", "map", "traces"] as const;
 export type ApmTab = (typeof APM_TABS)[number];
-const TX_SORTS = ["time", "throughput", "slowest", "errors"] as const;
-const DB_SORTS = ["time", "calls", "slowest", "errors"] as const;
+const TX_SORTS = ["time", "throughput", "avg", "slowest", "errors", "error_rate", "apdex", "name"] as const;
+const DB_SORTS = ["time", "calls", "slowest", "errors", "error_rate", "max", "statement", "database"] as const;
 
 export interface ApmServiceSearch {
   tab?: ApmTab;
@@ -599,7 +599,7 @@ export interface ApmServiceSearch {
 }
 
 export const ERROR_STATUS_PARAMS = ["unresolved", "resolved", "ignored", "all"] as const;
-export const ERROR_SORT_PARAMS = ["count", "last_seen", "first_seen"] as const;
+export const ERROR_SORT_PARAMS = ["count", "last_seen", "first_seen", "type", "service", "status", "assignee", "comments"] as const;
 
 const oneOf =<T extends string>(values: readonly T[], v: unknown): T | undefined => ((values as readonly string[]).includes(String(v)) ? (v as T) : undefined);
 

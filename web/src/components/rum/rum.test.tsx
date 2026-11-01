@@ -2,12 +2,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { login } from "@/api/account";
 import i18n from "@/i18n";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { MOCK_RUM_APP, MOCK_RUM_SESSION_ID } from "@/mocks/rum";
+import { server } from "@/mocks/server";
 import { RumAnalyticsTab } from "./RumAnalyticsTab";
 import { RumApps } from "./RumApps";
 import { RumOverviewTab } from "./RumOverviewTab";
@@ -49,6 +51,20 @@ afterEach(async () => {
   await i18n.changeLanguage("en");
 });
 
+/** Answers a list with this body and keeps what each request asked. */
+function spyOn(url: string, body: Record<string, unknown>) {
+  const asked: Record<string, string>[] = [];
+  server.use(
+    http.get(url, ({ request }) => {
+      asked.push(Object.fromEntries(new URL(request.url).searchParams));
+      return HttpResponse.json(body as never);
+    }),
+  );
+  return asked;
+}
+
+const last = <T,>(items: T[]) => items[items.length - 1];
+
 describe("RUM", () => {
   it("lists browser applications and opens one", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
@@ -79,19 +95,110 @@ describe("RUM", () => {
     expect(within(cards[2]!).getAllByText("0.31")).toHaveLength(2);
   });
 
-  it("sorts pages by the measure the user picks", async () => {
+  it("sorts pages on the server by their headings, and pages with offset", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
-    const onSort = vi.fn();
-    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={onSort} facets={{}} onFacets={vi.fn()} />);
+    const page = { route: "/", views: 1, avg_ms: 1, p50_ms: 1, p75_ms: 1, p95_ms: 1, max_ms: 1, ttfb_avg_ms: 1, lcp_p75: 1, errors: 0 };
+    const asked = spyOn("*/api/v1/rum/pages", { pages: [page], has_more: true });
+    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} facets={{}} onFacets={vi.fn()} />);
 
-    const table = await screen.findByTestId("rum-pages");
-    const routes = within(table).getAllByTestId("rum-page-row");
-    expect(routes).toHaveLength(3);
-    expect(within(routes[0]!).getByText("/")).toBeInTheDocument();
+    await screen.findByTestId("rum-page-row");
+    expect(last(asked)).toMatchObject({ sort: "views", dir: "desc", offset: "0" });
+    expect(screen.queryByLabelText("Sort by")).toBeNull();
 
-    await user.selectOptions(screen.getByLabelText("Sort by"), "slowest");
-    expect(onSort).toHaveBeenCalledWith("slowest");
+    // What the dropdown offered is all on a heading now, and what the server can't order is not pretending.
+    await user.click(screen.getByRole("button", { name: "Total time" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "slowest", dir: "desc" }));
+    await user.click(screen.getByRole("button", { name: "Average" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "avg", dir: "desc" }));
+    await user.click(screen.getByRole("button", { name: "Route" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "route", dir: "asc" }));
+    expect(screen.queryByRole("button", { name: "p75" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "LCP p75" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "route", offset: "50" }));
+  });
+
+  it("opens the pages on the sort a link asked for", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const asked = spyOn("*/api/v1/rum/pages", { pages: [], has_more: false });
+    renderWithClient(<RumPagesTab range={range} app={MOCK_RUM_APP} initialSort="slowest" facets={{}} onFacets={vi.fn()} />);
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "slowest", dir: "desc" }));
+  });
+
+  it("sorts and pages browser applications on the server", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const asked = spyOn("*/api/v1/rum/apps", { apps: [{ app: "a", environment: "", views: 1, sessions: 1, errors: 0, last_seen: "" }], has_more: true });
+    renderWithClient(<RumApps range={range} onOpen={vi.fn()} />);
+    await screen.findByTestId("rum-app-row");
+    await user.click(screen.getByRole("button", { name: "Errors" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "errors", dir: "desc" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "errors", offset: "50" }));
+  });
+
+  it("sorts and pages sessions on the server, one person's as well", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const session = { session_id: MOCK_RUM_SESSION_ID, app: MOCK_RUM_APP, environment: "", started_at: "", ended_at: "", duration_ms: 1, page_views: 1, errors: 0, entry_route: "/", exit_route: "/",
+      device_type: "", browser_name: "", browser_version: "", os_name: "", trace_id: "", user_id: "", country: "" };
+    const asked = spyOn("*/api/v1/rum/sessions", { sessions: [session], has_more: true });
+    renderWithClient(<RumSessionsTab range={range} app={MOCK_RUM_APP} onOpen={vi.fn()} facets={{}} onFacets={vi.fn()} userId="u1" onUser={vi.fn()} />);
+    await screen.findByTestId("rum-session-row");
+    await user.click(screen.getByRole("button", { name: "Duration" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "duration", dir: "desc", user_id: "u1" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "duration", offset: "50", user_id: "u1" }));
+  });
+
+  it("sorts and pages versions on the server, and keeps the deployments", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const release = { version: "1.0", sessions: 1, error_sessions: 0, crashed_sessions: 0, capturing_sessions: 0, error_free_rate: 1, session_crash_free_rate: null, crash_free_rate: 1, first_seen: "", last_seen: "" };
+    const deployment = { timestamp: "", t: 1, service_namespace: "", environment: "", version: "1.0", previous_version: "", initial: true, rollback: false };
+    const asked = spyOn("*/api/v1/rum/releases", { releases: [release], deployments: [deployment], has_more: true });
+    renderWithClient(<RumReleasesTab range={range} app={MOCK_RUM_APP} />);
+    await screen.findByTestId("rum-release-row");
+    await user.click(screen.getByRole("button", { name: "Crash-free" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "crash_free", dir: "desc" }));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(last(asked)).toMatchObject({ sort: "crash_free", offset: "50" }));
+    expect(screen.getByTestId("rum-deployments")).toBeInTheDocument();
+  });
+
+  it("sorts an analytics list in the browser, with what only the previous period had still reachable", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    // Sixty current names, then what stopped altogether: the server adds those at the end with a zero (compareRows).
+    const events = Array.from({ length: 60 }, (_, i) => ({ name: `e${String(i).padStart(2, "0")}`, count: 1000 - i, sessions: i + 1, users: 1, previous_count: 1, previous_sessions: 1, previous_users: 1 }));
+    events.push({ name: "stopped", count: 0, sessions: 0, users: 0, previous_count: 5000, previous_sessions: 900, previous_users: 500 });
+    const asked = spyOn("*/api/v1/analytics/events", { events });
+    renderWithClient(<RumAnalyticsTab app={MOCK_RUM_APP} />);
+    const table = await screen.findByTestId("analytics-events");
+    const names = () => within(table).getAllByTestId("analytics-events-row").map((r) => within(r).getByRole("rowheader").textContent);
+    expect(names()).toHaveLength(50);
+    expect(names()[0]).toBe("e00");
+    expect(names()).not.toContain("stopped");
+    const section = table.closest("div")!;
+
+    // It is on the last page of the largest first, at its zero, with its fall still showing.
+    await user.click(within(section).getByRole("button", { name: "Next" }));
+    expect(names()).toHaveLength(11);
+    expect(names()[10]).toBe("stopped");
+    expect(within(table).getAllByTestId("analytics-events-row")[10]).toHaveTextContent("−5,000");
+
+    // A new order goes back to the first page, where the zero now leads.
+    await user.click(within(table).getByRole("button", { name: "Count" }));
+    expect(names()[0]).toBe("stopped");
+    await user.click(within(table).getByRole("button", { name: "Event" }));
+    await user.click(within(section).getByRole("button", { name: "Next" }));
+    expect(names()).toContain("stopped");
+    // Sorting and paging asked the server nothing, and it was not told how.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.sort).toBeUndefined();
+    expect(asked[0]!.offset).toBeUndefined();
   });
 
   it("shows each vital's spread and how far the p75 is from the threshold", async () => {
@@ -113,7 +220,7 @@ describe("RUM", () => {
   it("opens a page and asks for the vitals of that route alone", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();
-    renderWithRouter(<RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={vi.fn()} />);
+    renderWithRouter(<RumPagesTab range={range} app={MOCK_RUM_APP} facets={{}} onFacets={vi.fn()} />);
 
     const table = await screen.findByTestId("rum-pages");
     await user.click(within(table).getByRole("button", { name: "Details of /checkout" }));
@@ -215,7 +322,7 @@ describe("RUM", () => {
     const user = userEvent.setup();
     const onFacets = vi.fn();
     const { rerender } = renderWithClient(
-      <RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{}} onFacets={onFacets} />,
+      <RumPagesTab range={range} app={MOCK_RUM_APP} facets={{}} onFacets={onFacets} />,
     );
     await screen.findByTestId("rum-pages");
 
@@ -225,7 +332,7 @@ describe("RUM", () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     rerender(
       <QueryClientProvider client={client}>
-        <RumPagesTab range={range} app={MOCK_RUM_APP} sort="views" onSort={vi.fn()} facets={{ device_type: "mobile" }} onFacets={onFacets} />
+        <RumPagesTab range={range} app={MOCK_RUM_APP} facets={{ device_type: "mobile" }} onFacets={onFacets} />
       </QueryClientProvider>,
     );
 

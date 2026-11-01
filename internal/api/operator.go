@@ -19,7 +19,7 @@ import (
 // docs/operations/saas.md, D-105, D-106).
 //
 //	GET    /api/v1/operator/me                                   whether the caller is an operator (any session)
-//	GET    /api/v1/operator/orgs?q=&plan=&state=&sort=&limit=&offset=   organizations (superadmin)
+//	GET    /api/v1/operator/orgs?q=&plan=&state=&sort=&dir=&limit=&offset=   organizations (superadmin)
 //	GET    /api/v1/operator/orgs/{org}                           organization detail
 //	POST   /api/v1/operator/orgs/{org}/suspend|unsuspend|trial|reset-quota-notifications|force-logout|resend-verification
 //	POST   /api/v1/operator/orgs/{org}/support-sessions          open a read-only support view (needs owner grant)
@@ -208,7 +208,7 @@ func (s *Server) operatorMe(w http.ResponseWriter, _ *http.Request, p *auth.Prin
 
 func (s *Server) operatorListOrgs(w http.ResponseWriter, r *http.Request, _ *auth.Principal) error {
 	q := r.URL.Query()
-	f := operator.OrgFilter{Query: q.Get("q"), PlanID: q.Get("plan"), State: q.Get("state"), Sort: q.Get("sort"), DefaultPlan: s.saas.d.Catalog.Default}
+	f := operator.OrgFilter{Query: q.Get("q"), PlanID: q.Get("plan"), State: q.Get("state"), Sort: q.Get("sort"), Dir: q.Get("dir"), DefaultPlan: s.saas.d.Catalog.Default}
 	for name, dst := range map[string]*int{"limit": &f.Limit, "offset": &f.Offset} {
 		if v := q.Get(name); v != "" {
 			n, err := strconv.Atoi(v)

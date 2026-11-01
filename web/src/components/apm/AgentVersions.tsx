@@ -3,18 +3,20 @@
 // the upgrade command instead.
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpCircle, ExternalLink, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { apmAgentsQuery, type ApmAgentStatus, type ApmAgentUpgrade, type ApmServiceAgents } from "@/api/apm";
+import { ListPager } from "@/components/ListPager";
 import { CopyCommand } from "@/components/onboarding/CopyCommand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { AGENT_UPDATES_DOCS, agentProduct, attentionAgents, dismissNotice, isNoticeDismissed, noticeKey, outdatedVersions, serviceKey, type AgentVersionRow } from "@/lib/agent-versions";
 import type { ServiceScope } from "@/lib/apm";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useLocalList } from "@/lib/list";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 
 const STATUS_VARIANT: Record<ApmAgentStatus, "destructive" | "warning" | "success" | "muted" | "outline"> = {
@@ -153,52 +155,78 @@ export function AgentUpgradeNotice({ scope, range }: { scope: ServiceScope; rang
   );
 }
 
-/** Services × agents × versions (/apm/agents). renderService renders the service cell (a link on the page). */
+type AgentVersionSort = "service" | "environment" | "agent" | "version" | "instances" | "status" | "last_seen";
+
+// Worst first when largest first: alphabetical would put "ok" ahead of "outdated".
+const STATUS_RANK: Record<ApmAgentStatus, number> = { unsupported: 4, outdated: 3, unknown: 2, third_party: 1, ok: 0 };
+
+const AGENT_VERSION_SORT: Record<AgentVersionSort, (r: AgentVersionRow) => string | number | null> = {
+  service: (r) => r.service_name,
+  environment: (r) => r.environment,
+  agent: (r) => r.product,
+  version: (r) => r.version,
+  instances: (r) => r.instances,
+  status: (r) => STATUS_RANK[r.status],
+  last_seen: (r) => parseTimeParam(r.last_seen),
+};
+
+/**
+ * Services × agents × versions (/apm/agents). renderService renders the service cell (a link on the page). The endpoint answers a tree of
+ * services, agents and versions that the page filters and exports whole, and a row here is a leaf of it, so the sorting and the paging
+ * happen in the browser. The server stops reading at 10000 rows of that tree, and past that the list is complete only up to there.
+ */
 export function AgentVersionsTable({ rows, renderService }: { rows: AgentVersionRow[]; renderService?: (row: AgentVersionRow) => ReactNode }) {
   const { t, i18n } = useTranslation();
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
+  const list = useLocalList<AgentVersionRow, AgentVersionSort>(rows, AGENT_VERSION_SORT, "service", "asc");
+  const { toFirstPage } = list;
+  // The page's filters hand over other rows, so page five of them would usually show nothing.
+  useEffect(toFirstPage, [rows, toFirstPage]);
   return (
-    <Table data-testid="agent-versions">
-      <TableHeader>
-        <TableRow>
-          <TableHead>{t("apm.agents.columns.service")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("apm.agents.columns.environment")}</TableHead>
-          <TableHead>{t("apm.agents.columns.agent")}</TableHead>
-          <TableHead>{t("apm.agents.columns.version")}</TableHead>
-          <TableHead className="hidden text-right sm:table-cell">{t("apm.agents.columns.instances")}</TableHead>
-          <TableHead>{t("apm.agents.columns.status")}</TableHead>
-          <TableHead className="hidden lg:table-cell">{t("apm.agents.columns.lastSeen")}</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map((r) => {
-          const seen = parseTimeParam(r.last_seen) ?? 0;
-          return (
-            <TableRow key={`${serviceKey(r)}|${r.kind}|${r.product}|${r.version}`}>
-              <TableCell className="max-w-[14rem]">
-                <div className="truncate font-medium">{renderService ? renderService(r) : r.service_name}</div>
-                {r.service_namespace && <div className="truncate text-xs text-muted-foreground">{r.service_namespace}</div>}
-              </TableCell>
-              <TableCell className="hidden md:table-cell">{r.environment || "–"}</TableCell>
-              <TableCell>
-                <div className="text-sm">{r.product}</div>
-                <div className="text-xs text-muted-foreground">{t(`apm.agents.kinds.${r.kind}`)}</div>
-              </TableCell>
-              <TableCell className="font-mono text-sm">{r.version || "–"}</TableCell>
-              <TableCell className="hidden text-right font-mono tabular-nums sm:table-cell">{r.instances}</TableCell>
-              <TableCell>
-                <AgentStatusBadge status={r.status} />
-              </TableCell>
-              <TableCell className="hidden whitespace-nowrap lg:table-cell">
-                <time dateTime={r.last_seen} title={formatDateTime(seen, locale)}>
-                  {formatRelative(seen, now, locale)}
-                </time>
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <>
+      <Table data-testid="agent-versions">
+        <TableHeader>
+          <TableRow>
+            <SortableHead column="service" defaultDir="asc" {...list.head}>{t("apm.agents.columns.service")}</SortableHead>
+            <SortableHead column="environment" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("apm.agents.columns.environment")}</SortableHead>
+            <SortableHead column="agent" defaultDir="asc" {...list.head}>{t("apm.agents.columns.agent")}</SortableHead>
+            <SortableHead column="version" {...list.head}>{t("apm.agents.columns.version")}</SortableHead>
+            <SortableHead column="instances" className="hidden text-right sm:table-cell" {...list.head}>{t("apm.agents.columns.instances")}</SortableHead>
+            <SortableHead column="status" {...list.head}>{t("apm.agents.columns.status")}</SortableHead>
+            <SortableHead column="last_seen" className="hidden lg:table-cell" {...list.head}>{t("apm.agents.columns.lastSeen")}</SortableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {list.visible.map((r) => {
+            const seen = parseTimeParam(r.last_seen) ?? 0;
+            return (
+              <TableRow key={`${serviceKey(r)}|${r.kind}|${r.product}|${r.version}`}>
+                <TableCell className="max-w-[14rem]">
+                  <div className="truncate font-medium">{renderService ? renderService(r) : r.service_name}</div>
+                  {r.service_namespace && <div className="truncate text-xs text-muted-foreground">{r.service_namespace}</div>}
+                </TableCell>
+                <TableCell className="hidden md:table-cell">{r.environment || "–"}</TableCell>
+                <TableCell>
+                  <div className="text-sm">{r.product}</div>
+                  <div className="text-xs text-muted-foreground">{t(`apm.agents.kinds.${r.kind}`)}</div>
+                </TableCell>
+                <TableCell className="font-mono text-sm">{r.version || "–"}</TableCell>
+                <TableCell className="hidden text-right font-mono tabular-nums sm:table-cell">{r.instances}</TableCell>
+                <TableCell>
+                  <AgentStatusBadge status={r.status} />
+                </TableCell>
+                <TableCell className="hidden whitespace-nowrap lg:table-cell">
+                  <time dateTime={r.last_seen} title={formatDateTime(seen, locale)}>
+                    {formatRelative(seen, now, locale)}
+                  </time>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+      <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+    </>
   );
 }

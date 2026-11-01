@@ -25,7 +25,8 @@ export function Table({ className, mobile = "scroll", ...props }: ComponentProps
 
 export function TableHeader({ className, ...props }: ComponentProps<"thead">) {
   const layout = useContext(LayoutContext);
-  return <thead data-slot="table-header" className={cn("[&_tr]:border-b", layout === "stack" && "max-md:sr-only", className)} {...props} />;
+  // Cards have no column to head, so the headings go, except the ones that sort: on a phone they are the only way to reorder the list.
+  return <thead data-slot="table-header" className={cn("[&_tr]:border-b", layout === "stack" && "max-md:block max-md:[&:not(:has([data-sortable]))]:sr-only", className)} {...props} />;
 }
 
 export function TableBody({ className, ...props }: ComponentProps<"tbody">) {
@@ -54,7 +55,7 @@ export function TableHead({ className, ...props }: ComponentProps<"th">) {
   return (
     <th
       data-slot="table-head"
-      className={cn("h-9 px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground", layout === "scroll" && STICKY_FIRST, className)}
+      className={cn(layout === "stack" && !("data-sortable" in props) && "max-md:sr-only", layout === "stack" && "max-md:h-7 max-md:px-1", "h-9 px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground", layout === "scroll" && STICKY_FIRST, className)}
       {...props}
     />
   );
@@ -98,7 +99,7 @@ export function SortableHead<S extends string>({
   const active = sort === column;
   const Icon = !active ? ChevronsUpDown : dir === "asc" ? ChevronUp : ChevronDown;
   return (
-    <TableHead aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"} className={className} {...props}>
+    <TableHead data-sortable="" aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"} className={className} {...props}>
       <button
         type="button"
         className={cn("inline-flex items-center gap-1 hover:text-foreground", active && "text-foreground")}

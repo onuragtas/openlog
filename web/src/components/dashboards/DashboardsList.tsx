@@ -17,6 +17,7 @@ import {
 import { PageHeader } from "@/components/AppShell";
 import { ConfirmButton } from "@/components/settings/ConfirmButton";
 import { DateTimeText, FormError } from "@/components/settings/common";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,8 +25,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadJson, exportFileName, parseImport } from "@/lib/dashboards";
+import { timeOf, useLocalList } from "@/lib/list";
 import { useIsMobile } from "@/lib/media";
 import { ReadOnlyNotice } from "@/components/ReadOnly";
 import { usePermissions } from "@/lib/org-writable";
@@ -37,6 +39,14 @@ export interface DashboardsListProps {
   onOpenDashboard: (id: string) => void;
 }
 
+const DASHBOARD_COLUMNS = {
+  name: (d: DashboardSummary) => d.name,
+  visibility: (d: DashboardSummary) => d.visibility,
+  widgets: (d: DashboardSummary) => d.widget_count,
+  owner: (d: DashboardSummary) => d.created_by_email,
+  updated: (d: DashboardSummary) => timeOf(d.updated_at),
+};
+
 export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: DashboardsListProps) {
   const { t } = useTranslation();
   const mobile = useIsMobile();
@@ -44,6 +54,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
   const [text, setText] = useState(q);
   const debounced = useDebounced(text, 250);
   const list = useQuery(dashboardsQuery(debounced.trim()));
+  const paged = useLocalList(list.data, DASHBOARD_COLUMNS, "name");
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const perms = usePermissions();
@@ -68,7 +79,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
     );
   }
 
-  const rows = list.data ?? [];
+  const rows = paged.visible;
   const actions = (d: DashboardSummary) => (
     <div className="flex flex-wrap items-center gap-1">
       {canCreate && (
@@ -122,34 +133,39 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
         <LoadingState />
       ) : list.isError ? (
         <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-      ) : rows.length === 0 ? (
+      ) : paged.total === 0 ? (
         <EmptyState icon={<LayoutDashboard className="size-5" aria-hidden="true" />}>{debounced ? t("dashboards.noMatches") : t("dashboards.empty")}</EmptyState>
       ) : mobile ? (
-        <ul className="flex flex-col gap-2" data-testid="dashboard-cards">
-          {rows.map((d) => (
-            <li key={d.id} className="flex min-w-0 flex-col gap-1.5 rounded-xl border bg-card p-3" data-testid="dashboard-row">
-              <div className="flex min-w-0 items-center justify-between gap-2">
-                <span className="min-w-0 truncate">{nameLink(d)}</span>
-                <Badge variant={d.visibility === "private" ? "outline" : "muted"}>{t(`dashboards.visibility.${d.visibility}`)}</Badge>
-              </div>
-              {d.description && <p className="text-sm text-muted-foreground">{d.description}</p>}
-              <p className="text-xs text-muted-foreground">
-                {t("dashboards.counts", { pages: d.page_count, widgets: d.widget_count })} · <DateTimeText value={d.updated_at} relative />
-              </p>
-              {actions(d)}
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-2" data-testid="dashboard-cards">
+            {rows.map((d) => (
+              <li key={d.id} className="flex min-w-0 flex-col gap-1.5 rounded-xl border bg-card p-3" data-testid="dashboard-row">
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">{nameLink(d)}</span>
+                  <Badge variant={d.visibility === "private" ? "outline" : "muted"}>{t(`dashboards.visibility.${d.visibility}`)}</Badge>
+                </div>
+                {d.description && <p className="text-sm text-muted-foreground">{d.description}</p>}
+                <p className="text-xs text-muted-foreground">
+                  {t("dashboards.counts", { pages: d.page_count, widgets: d.widget_count })} · <DateTimeText value={d.updated_at} relative />
+                </p>
+                {actions(d)}
+              </li>
+            ))}
+          </ul>
+          <div className="rounded-xl border bg-card">
+            <ListPager list={paged} count={rows.length} hasMore={paged.hasMore} />
+          </div>
+        </>
       ) : (
         <div className="rounded-xl border bg-card">
           <Table mobile="stack">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("dashboards.columns.name")}</TableHead>
-                <TableHead>{t("dashboards.columns.visibility")}</TableHead>
-                <TableHead>{t("dashboards.columns.widgets")}</TableHead>
-                <TableHead>{t("dashboards.columns.owner")}</TableHead>
-                <TableHead>{t("dashboards.columns.updated")}</TableHead>
+                <SortableHead column="name" defaultDir="asc" {...paged.head}>{t("dashboards.columns.name")}</SortableHead>
+                <SortableHead column="visibility" defaultDir="asc" {...paged.head}>{t("dashboards.columns.visibility")}</SortableHead>
+                <SortableHead column="widgets" {...paged.head}>{t("dashboards.columns.widgets")}</SortableHead>
+                <SortableHead column="owner" defaultDir="asc" {...paged.head}>{t("dashboards.columns.owner")}</SortableHead>
+                <SortableHead column="updated" {...paged.head}>{t("dashboards.columns.updated")}</SortableHead>
                 <TableHead>
                   <span className="sr-only">{t("dashboards.columns.actions")}</span>
                 </TableHead>
@@ -179,6 +195,7 @@ export function DashboardsList({ q = "", onSearchChange, onOpenDashboard }: Dash
               ))}
             </TableBody>
           </Table>
+          <ListPager list={paged} count={rows.length} hasMore={paged.hasMore} />
         </div>
       )}
       <CreateDashboardSheet open={creating} onOpenChange={setCreating} onCreated={(id) => (invalidate(), onOpenDashboard(id))} />

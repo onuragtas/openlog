@@ -1,33 +1,24 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { Search } from "lucide-react";
-import { useId, useMemo } from "react";
+import { useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
-import { hostsQuery } from "@/api/queries";
-import type { Host } from "@/api/types";
+import { hostListQuery, type HostSort } from "@/api/queries";
 import { AttributeChips } from "@/components/AttributeChips";
 import { PageHeader } from "@/components/AppShell";
+import { ListPager } from "@/components/ListPager";
 import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatLoad, UsageBar } from "@/components/hosts/UsageBar";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useListState } from "@/lib/list";
 import { parseTimeParam } from "@/lib/time";
+import { useDebounced } from "@/lib/use-debounced";
 
 const route = getRouteApi("/app/hosts");
-
-export function filterHosts(hosts: Host[], q: string): Host[] {
-  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return hosts;
-  return hosts.filter((h) => {
-    const text = [h.host_name, h.host_id, h.os_description, h.arch, h.agent_version, ...Object.entries(h.resource_attributes).map(([k, v]) => `${k}=${v}`)]
-      .join(" ")
-      .toLowerCase();
-    return terms.every((t) => text.includes(t));
-  });
-}
 
 export function HostsPage() {
   const { t, i18n } = useTranslation();
@@ -36,9 +27,14 @@ export function HostsPage() {
   const id = useId();
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
-  const query = useQuery(hostsQuery());
   const q = search.q ?? "";
-  const hosts = useMemo(() => filterHosts(query.data ?? [], q), [query.data, q]);
+  // Searched on the server, since the page holds only some of the hosts.
+  const debounced = useDebounced(q, 250);
+  const list = useListState<HostSort>("name", "asc");
+  const query = useQuery(hostListQuery(list.state, debounced));
+  const { toFirstPage } = list;
+  useEffect(toFirstPage, [debounced, toFirstPage]);
+  const hosts = query.data?.hosts ?? [];
 
   return (
     <div>
@@ -67,86 +63,91 @@ export function HostsPage() {
           <LoadingState />
         ) : query.isError ? (
           <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-        ) : query.data.length === 0 ? (
-          <EmptyState>
-            <p>{t("hosts.empty")}</p>
-            <AddDataLink target="linux" label={t("addData.empty.hosts")} />
-          </EmptyState>
-        ) : hosts.length === 0 ? (
-          <EmptyState>{t("hosts.noMatch", { q })}</EmptyState>
+        ) : hosts.length === 0 && list.state.offset === 0 ? (
+          debounced ? (
+            <EmptyState>{t("hosts.noMatch", { q: debounced })}</EmptyState>
+          ) : (
+            <EmptyState>
+              <p>{t("hosts.empty")}</p>
+              <AddDataLink target="linux" label={t("addData.empty.hosts")} />
+            </EmptyState>
+          )
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("hosts.columns.name")}</TableHead>
-                <TableHead>{t("hosts.columns.os")}</TableHead>
-                <TableHead className="w-28">{t("hosts.columns.cpu")}</TableHead>
-                <TableHead className="w-28">{t("hosts.columns.memory")}</TableHead>
-                <TableHead className="w-28">{t("hosts.columns.disk")}</TableHead>
-                <TableHead className="hidden lg:table-cell text-right">{t("hosts.columns.load")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("hosts.columns.agent")}</TableHead>
-                <TableHead>{t("hosts.columns.lastSeen")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("hosts.columns.attributes")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {hosts.map((h) => {
-                const seen = parseTimeParam(h.last_seen) ?? 0;
-                return (
-                  <TableRow
-                    key={h.host_id}
-                    className="cursor-pointer"
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("a")) return;
-                      void navigate({ to: "/hosts/$hostId", params: { hostId: h.host_id }, search: (prev) => ({ range: prev.range, from: prev.from, to: prev.to }) });
-                    }}
-                  >
-                    <TableCell className="font-medium">
-                      <Link
-                        to="/hosts/$hostId"
-                        params={{ hostId: h.host_id }}
-                        search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })}
-                        className="hover:underline"
-                        aria-label={t("hosts.open", { name: h.host_name })}
-                      >
-                        {h.host_name || h.host_id}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {h.os_description}
-                      <div className="font-mono text-xs opacity-70">{h.arch}</div>
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.cpu")}>
-                      <UsageBar label={t("hosts.columns.cpu")} share={h.usage?.cpu} />
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.memory")}>
-                      <UsageBar label={t("hosts.columns.memory")} share={h.usage?.memory} />
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.disk")}>
-                      <UsageBar label={t("hosts.columns.disk")} share={h.usage?.disk} />
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.load")} className="hidden lg:table-cell text-right font-mono text-xs tabular-nums">
-                      {/* The load per CPU is what makes the number readable without knowing the machine. */}
-                      <span title={h.usage?.load_per_cpu != null ? t("hosts.usage.loadPerCpu", { value: formatLoad(h.usage.load_per_cpu, locale) }) : undefined}>
-                        {formatLoad(h.usage?.load1, locale)}
-                      </span>
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.agent")} className="hidden font-mono text-xs md:table-cell">
-                      {h.agent_version}
-                    </TableCell>
-                    <TableCell label={t("hosts.columns.lastSeen")} className="whitespace-nowrap">
-                      <time dateTime={h.last_seen} title={formatDateTime(seen, locale)}>
-                        {formatRelative(seen, now, locale)}
-                      </time>
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <AttributeChips attributes={h.resource_attributes} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("hosts.columns.name")}</SortableHead>
+                  <SortableHead column="os" defaultDir="asc" {...list.head}>{t("hosts.columns.os")}</SortableHead>
+                  <SortableHead column="cpu" className="w-28" {...list.head}>{t("hosts.columns.cpu")}</SortableHead>
+                  <SortableHead column="memory" className="w-28" {...list.head}>{t("hosts.columns.memory")}</SortableHead>
+                  <SortableHead column="disk" className="w-28" {...list.head}>{t("hosts.columns.disk")}</SortableHead>
+                  <SortableHead column="load" className="hidden lg:table-cell text-right" {...list.head}>{t("hosts.columns.load")}</SortableHead>
+                  <SortableHead column="agent" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("hosts.columns.agent")}</SortableHead>
+                  <SortableHead column="last_seen" {...list.head}>{t("hosts.columns.lastSeen")}</SortableHead>
+                  <TableHead className="hidden lg:table-cell">{t("hosts.columns.attributes")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {hosts.map((h) => {
+                  const seen = parseTimeParam(h.last_seen) ?? 0;
+                  return (
+                    <TableRow
+                      key={h.host_id}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("a")) return;
+                        void navigate({ to: "/hosts/$hostId", params: { hostId: h.host_id }, search: (prev) => ({ range: prev.range, from: prev.from, to: prev.to }) });
+                      }}
+                    >
+                      <TableCell className="font-medium">
+                        <Link
+                          to="/hosts/$hostId"
+                          params={{ hostId: h.host_id }}
+                          search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to })}
+                          className="hover:underline"
+                          aria-label={t("hosts.open", { name: h.host_name })}
+                        >
+                          {h.host_name || h.host_id}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {h.os_description}
+                        <div className="font-mono text-xs opacity-70">{h.arch}</div>
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.cpu")}>
+                        <UsageBar label={t("hosts.columns.cpu")} share={h.usage?.cpu} />
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.memory")}>
+                        <UsageBar label={t("hosts.columns.memory")} share={h.usage?.memory} />
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.disk")}>
+                        <UsageBar label={t("hosts.columns.disk")} share={h.usage?.disk} />
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.load")} className="hidden lg:table-cell text-right font-mono text-xs tabular-nums">
+                        {/* The load per CPU is what makes the number readable without knowing the machine. */}
+                        <span title={h.usage?.load_per_cpu != null ? t("hosts.usage.loadPerCpu", { value: formatLoad(h.usage.load_per_cpu, locale) }) : undefined}>
+                          {formatLoad(h.usage?.load1, locale)}
+                        </span>
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.agent")} className="hidden font-mono text-xs md:table-cell">
+                        {h.agent_version}
+                      </TableCell>
+                      <TableCell label={t("hosts.columns.lastSeen")} className="whitespace-nowrap">
+                        <time dateTime={h.last_seen} title={formatDateTime(seen, locale)}>
+                          {formatRelative(seen, now, locale)}
+                        </time>
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <AttributeChips attributes={h.resource_attributes} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={hosts.length} hasMore={query.data.has_more ?? false} />
+          </>
         )}
       </div>
     </div>

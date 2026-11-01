@@ -1,6 +1,7 @@
 // Vulnerabilities (docs/contracts/api.md "Vulnerabilities", D-142): read-only, like every other telemetry
 // read. Query factories follow queries.ts.
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
 
@@ -14,11 +15,13 @@ export type VulnCatalogStatus = S["VulnCatalogStatus"];
 /** The matcher runs hourly, so the screens refresh slowly. */
 export const VULN_REFRESH_MS = 5 * 60_000;
 
-export const vulnerabilitiesQuery = (severity?: VulnSeverity) =>
+export type VulnSort = "severity" | "advisory" | "score" | "hosts";
+
+export const vulnerabilitiesQuery = (severity: VulnSeverity | undefined, list: ListState<VulnSort>) =>
   queryOptions({
-    queryKey: ["vulnerabilities", "list", severity ?? ""],
+    queryKey: ["vulnerabilities", "list", severity ?? "", list],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/vulnerabilities", { params: { query: severity ? { severity } : {} }, signal })),
+      unwrap(await api.GET("/api/v1/vulnerabilities", { params: { query: { ...list, ...(severity ? { severity } : {}) } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: VULN_REFRESH_MS,
   });

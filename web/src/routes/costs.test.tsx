@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { login } from "@/api/account";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
@@ -27,6 +28,21 @@ beforeEach(async () => {
 });
 
 describe("Costs view", { timeout: 20_000 }, () => {
+  it("asks the server for another order when a heading is clicked", async () => {
+    const user = userEvent.setup();
+    renderCosts();
+    await screen.findAllByRole("button", { name: "Service" });
+    const table = screen.getByRole("button", { name: "Service" }).closest("table")!;
+    const names = () => within(table).getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0]!.textContent!);
+    await vi.waitFor(() => expect(names().length).toBeGreaterThan(1));
+    const byCost = names();
+
+    await user.click(screen.getByRole("button", { name: "Service" }));
+    await vi.waitFor(() => expect(names()).toEqual([...byCost].sort((a, b) => a.localeCompare(b))));
+    await user.click(screen.getByRole("button", { name: "Service" }));
+    await vi.waitFor(() => expect(names()).toEqual([...byCost].sort((a, b) => b.localeCompare(a))));
+  });
+
   it("shows the total, the run rate and the idle share as its own number", async () => {
     renderCosts();
     // mocks/costs.ts: total 12.8026, per hour 0.2667, idle 4.235 (33% of the total). The amounts are

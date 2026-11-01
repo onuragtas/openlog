@@ -5,7 +5,6 @@
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { RumPageSort } from "@/api/rum";
 import { PageHeader } from "@/components/AppShell";
 import { RumAnalyticsTab } from "@/components/rum/RumAnalyticsTab";
 import { RumApps } from "@/components/rum/RumApps";
@@ -88,8 +87,7 @@ export function RumAppPage() {
               range={range}
               app={app}
               environment={search.env}
-              sort={search.sort ?? "views"}
-              onSort={(sort: RumPageSort) => setSearch({ sort })}
+              initialSort={search.sort}
               facets={{ device_type: search.device, browser: search.browser }}
               onFacets={(f) => setSearch({ device: f.device_type, browser: f.browser })}
             />

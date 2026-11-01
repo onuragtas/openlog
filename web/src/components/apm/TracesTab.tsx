@@ -1,19 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { apmTracesQuery } from "@/api/apm";
+import { apmTracesQuery, type TraceSort } from "@/api/apm";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, type SortDir } from "@/components/ui/table";
 import { formatMs, parseAttrFilter, type ServiceScope } from "@/lib/apm";
 import { encodeFilterState } from "@/lib/querybuilder";
 import { formatDateTime } from "@/lib/format";
+import { useListState } from "@/lib/list";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 
 export interface TraceFilters {
@@ -22,7 +23,7 @@ export interface TraceFilters {
   qmax?: string;
   qerr?: boolean;
   qattr?: string;
-  qsort?: "timestamp" | "duration";
+  qsort?: TraceSort;
 }
 
 const num = (v: string | undefined) => {
@@ -34,8 +35,20 @@ const num = (v: string | undefined) => {
 export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceScope; range: RangeSpec; filters: TraceFilters; onChange: (f: TraceFilters) => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const ids = { txn: useId(), min: useId(), max: useId(), attr: useId(), sort: useId(), err: useId() };
+  const ids = { txn: useId(), min: useId(), max: useId(), attr: useId(), err: useId() };
   const [draft, setDraft] = useState<TraceFilters>(filters);
+  // The URL holds the column, so "show the slowest traces" of a transaction can open on it. The rest of the sort and the page stay here.
+  const list = useListState<TraceSort>(filters.qsort ?? "timestamp");
+  const { toFirstPage } = list;
+  // Another range is another list, so page five of it would usually show nothing. New filters remount this tab (routes/apm.tsx).
+  useEffect(toFirstPage, [range.range, range.from, range.to, toFirstPage]);
+  const head = {
+    ...list.head,
+    onSort: (column: TraceSort, dir: SortDir) => {
+      list.head.onSort(column, dir);
+      onChange({ ...filters, qsort: column });
+    },
+  };
   const q = useQuery(
     apmTracesQuery(range, {
       service: scope.service,
@@ -46,12 +59,12 @@ export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceS
       maxDurationMs: num(filters.qmax),
       errorsOnly: filters.qerr,
       attrs: parseAttrFilter(filters.qattr),
-      sort: filters.qsort,
+      ...list.state,
     }),
   );
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    onChange({ qtxn: draft.qtxn || undefined, qmin: draft.qmin || undefined, qmax: draft.qmax || undefined, qerr: draft.qerr || undefined, qattr: draft.qattr || undefined, qsort: draft.qsort });
+    onChange({ qtxn: draft.qtxn || undefined, qmin: draft.qmin || undefined, qmax: draft.qmax || undefined, qerr: draft.qerr || undefined, qattr: draft.qattr || undefined, qsort: list.state.sort });
   };
   return (
     <div className="flex flex-col gap-4">
@@ -77,13 +90,6 @@ export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceS
             <div className="flex items-center gap-2">
               <input id={ids.err} type="checkbox" className="size-4 accent-primary" checked={!!draft.qerr} onChange={(e) => setDraft({ ...draft, qerr: e.target.checked })} />
               <Label htmlFor={ids.err}>{t("apm.traces.errorsOnly")}</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor={ids.sort}>{t("apm.traces.sort")}</Label>
-              <NativeSelect id={ids.sort} value={draft.qsort ?? "timestamp"} onChange={(e) => setDraft({ ...draft, qsort: e.target.value as TraceFilters["qsort"] })}>
-                <option value="timestamp">{t("apm.traces.sorts.timestamp")}</option>
-                <option value="duration">{t("apm.traces.sorts.duration")}</option>
-              </NativeSelect>
             </div>
             <div className="md:col-start-6 md:justify-self-end">
               <Button type="submit">{t("apm.traces.search")}</Button>
@@ -124,39 +130,42 @@ export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceS
             <LoadingState />
           ) : q.isError ? (
             <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-          ) : q.data.length === 0 ? (
+          ) : q.data.traces.length === 0 && list.state.offset === 0 ? (
             <EmptyState>{t("apm.traces.empty")}</EmptyState>
           ) : (
-            <Table data-testid="trace-results">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("apm.traces.start")}</TableHead>
-                  <TableHead>{t("apm.traces.transaction")}</TableHead>
-                  <TableHead>{t("apm.traces.status")}</TableHead>
-                  <TableHead className="text-right">{t("apm.metrics.duration")}</TableHead>
-                  <TableHead>Trace</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {q.data.map((tr) => (
-                  <TableRow key={`${tr.trace_id}|${tr.span_id}`}>
-                    <TableCell className="whitespace-nowrap text-xs">{formatDateTime(parseTimeParam(tr.timestamp) ?? 0, locale, true)}</TableCell>
-                    <TableCell className="max-w-[28rem] truncate font-medium" title={tr.transaction_name}>
-                      {tr.transaction_name}
-                    </TableCell>
-                    <TableCell>
-                      {tr.is_error ? <Badge variant="destructive">{tr.http_status_code || t("apm.traces.error")}</Badge> : <Badge variant="muted">{tr.http_status_code || t("apm.traces.ok")}</Badge>}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatMs(tr.duration_ms, locale)}</TableCell>
-                    <TableCell>
-                      <Link to="/traces/$traceId" params={{ traceId: tr.trace_id }} search={{ span: tr.span_id }} className="font-mono text-xs text-primary hover:underline" aria-label={t("apm.traces.openTrace", { id: tr.trace_id })}>
-                        {tr.trace_id.slice(0, 16)}…
-                      </Link>
-                    </TableCell>
+            <>
+              <Table data-testid="trace-results">
+                <TableHeader>
+                  <TableRow>
+                    <SortableHead column="timestamp" {...head}>{t("apm.traces.start")}</SortableHead>
+                    <TableHead>{t("apm.traces.transaction")}</TableHead>
+                    <TableHead>{t("apm.traces.status")}</TableHead>
+                    <SortableHead column="duration" className="text-right" {...head}>{t("apm.metrics.duration")}</SortableHead>
+                    <TableHead>Trace</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {q.data.traces.map((tr) => (
+                    <TableRow key={`${tr.trace_id}|${tr.span_id}`}>
+                      <TableCell className="whitespace-nowrap text-xs">{formatDateTime(parseTimeParam(tr.timestamp) ?? 0, locale, true)}</TableCell>
+                      <TableCell className="max-w-[28rem] truncate font-medium" title={tr.transaction_name}>
+                        {tr.transaction_name}
+                      </TableCell>
+                      <TableCell>
+                        {tr.is_error ? <Badge variant="destructive">{tr.http_status_code || t("apm.traces.error")}</Badge> : <Badge variant="muted">{tr.http_status_code || t("apm.traces.ok")}</Badge>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatMs(tr.duration_ms, locale)}</TableCell>
+                      <TableCell>
+                        <Link to="/traces/$traceId" params={{ traceId: tr.trace_id }} search={{ span: tr.span_id }} className="font-mono text-xs text-primary hover:underline" aria-label={t("apm.traces.openTrace", { id: tr.trace_id })}>
+                          {tr.trace_id.slice(0, 16)}…
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <ListPager list={list} count={q.data.traces.length} hasMore={q.data.has_more ?? false} />
+            </>
           )}
         </CardContent>
       </Card>

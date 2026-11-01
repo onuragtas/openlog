@@ -177,7 +177,7 @@ application does not attribute the whole session's loading to its first screen.
 
 ### 2.7 Release health
 
-How a version behaved, and when it shipped: `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=`.
+How a version behaved, and when it shipped: `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=&sort=&dir=&limit=&offset=`.
 
 **Both halves reuse what already existed.** Releases come from `apm_service_versions_1m`, whose
 materialized view counts every span with a service name by its resource `service.version` — and a RUM span
@@ -489,11 +489,11 @@ Base `/api/v1/rum`, tenant-scoped like every telemetry read (viewer role, API ke
 
 | Endpoint | Content |
 |---|---|
-| `GET /rum/apps` | browser applications with views, sessions, errors, last seen |
+| `GET /rum/apps?sort=&dir=&limit=&offset=` | browser applications with views, sessions, errors, last seen |
 | `GET /rum/overview?app=` | the five vitals, the page view series and totals |
-| `GET /rum/pages?app=&sort=views\|slowest\|avg` | routes with views and p50/p75/p95 load time |
+| `GET /rum/pages?app=&sort=views\|slowest\|avg\|ttfb\|route&dir=&limit=&offset=` | routes with views and p50/p75/p95 load time |
 | `GET /rum/vitals?app=&route=` | the vital distribution, optionally for one route |
-| `GET /rum/sessions?app=` | sessions, newest first |
+| `GET /rum/sessions?app=&sort=&dir=&limit=&offset=` | sessions, newest first unless asked otherwise |
 
 **Narrowing a read to one kind of visitor.** `device_type` (`desktop`, `mobile`, `tablet`) and `browser`
 are accepted by `/rum/pages` and `/rum/sessions`; `/rum/vitals` takes `device_type` alone and answers 400

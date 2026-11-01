@@ -75,6 +75,7 @@ type OrgFilter struct {
 	// DefaultPlan is the plan of organizations without an assignment.
 	DefaultPlan string
 	Sort        string // created (newest first, default), name, ingest, members, last_ingest
+	Dir         string // asc or desc; empty is the column's own direction
 	Limit       int
 	Offset      int
 }
@@ -173,20 +174,30 @@ func (s Store) ListOrgs(ctx context.Context, f OrgFilter) ([]OrgSummary, int64, 
 		LEFT JOIN org_plans p ON p.org_id = o.id LEFT JOIN org_saas_state st ON st.org_id = o.id`+cond, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	order := " ORDER BY o.created_at DESC, o.id"
+	column, dir := "o.created_at", "DESC"
 	switch f.Sort {
 	case "", "created":
 	case "name":
-		order = " ORDER BY lower(o.name), o.id"
+		column, dir = "lower(o.name)", "ASC"
 	case "ingest":
-		order = " ORDER BY coalesce(q.ingest_bytes, 0) DESC, o.id"
+		column = "coalesce(q.ingest_bytes, 0)"
 	case "members":
-		order = " ORDER BY 12 DESC, o.id"
+		column = "12"
 	case "last_ingest":
-		order = " ORDER BY 16 DESC NULLS LAST, o.id"
+		column = "16"
 	default:
 		return nil, 0, fmt.Errorf("%w: sort must be created, name, ingest, members or last_ingest", ErrInvalidState)
 	}
+	switch f.Dir {
+	case "":
+	case "asc":
+		dir = "ASC"
+	case "desc":
+		dir = "DESC"
+	default:
+		return nil, 0, fmt.Errorf("%w: dir must be asc or desc", ErrInvalidState)
+	}
+	order := " ORDER BY " + column + " " + dir + " NULLS LAST, o.id"
 	limit := f.Limit
 	if limit <= 0 || limit > 200 {
 		limit = 50

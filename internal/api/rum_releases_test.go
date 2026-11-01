@@ -18,7 +18,7 @@ func TestRUMReleasesQueryBuilds(t *testing.T) {
 	}
 	env := "production"
 	now := time.Now()
-	sql, params, err := rumReleasesSelect(sc, rumFilter{app: "shop-android", env: &env}, now.Add(-time.Hour), now, 200).Build()
+	sql, params, err := rumReleasesSelect(sc, rumFilter{app: "shop-android", env: &env}, now.Add(-time.Hour), now, listRequest{sort: "last_seen", limit: 200}).Build()
 	if err != nil {
 		t.Fatalf("release query does not build: %v", err)
 	}

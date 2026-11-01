@@ -5,13 +5,16 @@
 // error-free rate beside it counts errors the application handled too (mobile-crash.md §5).
 import { useQuery } from "@tanstack/react-query";
 import { Rocket } from "lucide-react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { rumReleasesQuery, type RumRelease } from "@/api/rum";
+import { rumReleasesQuery, type RumRelease, type RumReleaseSort } from "@/api/rum";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { versionLabel } from "@/lib/deployments";
 import { formatDateTime, formatNumber } from "@/lib/format";
+import { useListState } from "@/lib/list";
 import { apiTimeMs } from "@/lib/rum";
 import type { RangeSpec } from "@/lib/time";
 
@@ -32,13 +35,16 @@ function CrashFree({ release }: { release: RumRelease }) {
 
 export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; app: string; environment?: string }) {
   const { t, i18n } = useTranslation();
-  const releases = useQuery(rumReleasesQuery(range, app, environment));
+  const list = useListState<RumReleaseSort>("last_seen");
+  const releases = useQuery(rumReleasesQuery(range, app, list.state, environment));
+  const { toFirstPage } = list;
+  useEffect(toFirstPage, [app, environment, range.range, range.from, range.to, toFirstPage]);
 
   if (releases.isPending) return <LoadingState />;
   if (releases.isError) return <ErrorState error={releases.error} onRetry={() => void releases.refetch()} />;
 
   const { releases: versions, deployments } = releases.data;
-  if (versions.length === 0 && deployments.length === 0) {
+  if (versions.length === 0 && deployments.length === 0 && list.state.offset === 0) {
     return <EmptyState icon={<Rocket className="size-5" aria-hidden="true" />}>{t("rum.releases.empty")}</EmptyState>;
   }
 
@@ -52,19 +58,20 @@ export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; 
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium">{t("rum.releases.versions")}</h2>
         <p className="text-xs text-muted-foreground">{t("rum.releases.retentionNote")}</p>
-        {versions.length === 0 ? (
+        {versions.length === 0 && list.state.offset === 0 ? (
           <EmptyState icon={<Rocket className="size-5" aria-hidden="true" />}>{t("rum.releases.noVersions")}</EmptyState>
         ) : (
+          <div className="flex flex-col">
           <Table mobile="stack" data-testid="rum-releases">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("rum.releases.columns.version")}</TableHead>
-                <TableHead className="text-right">{t("rum.releases.columns.crashFree")}</TableHead>
-                <TableHead className="text-right">{t("rum.releases.columns.errorFree")}</TableHead>
-                <TableHead className="text-right">{t("rum.releases.columns.sessions")}</TableHead>
-                <TableHead className="text-right">{t("rum.releases.columns.errorSessions")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("rum.releases.columns.firstSeen")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("rum.releases.columns.lastSeen")}</TableHead>
+                <SortableHead column="version" {...list.head}>{t("rum.releases.columns.version")}</SortableHead>
+                <SortableHead column="crash_free" className="text-right" {...list.head}>{t("rum.releases.columns.crashFree")}</SortableHead>
+                <SortableHead column="error_free" className="text-right" {...list.head}>{t("rum.releases.columns.errorFree")}</SortableHead>
+                <SortableHead column="sessions" className="text-right" {...list.head}>{t("rum.releases.columns.sessions")}</SortableHead>
+                <SortableHead column="error_sessions" className="text-right" {...list.head}>{t("rum.releases.columns.errorSessions")}</SortableHead>
+                <SortableHead column="first_seen" className="hidden md:table-cell" {...list.head}>{t("rum.releases.columns.firstSeen")}</SortableHead>
+                <SortableHead column="last_seen" className="hidden lg:table-cell" {...list.head}>{t("rum.releases.columns.lastSeen")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -93,6 +100,8 @@ export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; 
               ))}
             </TableBody>
           </Table>
+          <ListPager list={list} count={versions.length} hasMore={releases.data.has_more ?? false} />
+          </div>
         )}
       </section>
 

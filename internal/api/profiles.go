@@ -106,10 +106,26 @@ type profileFunctionJSON struct {
 	Samples  uint64 `json:"samples"`
 }
 
+var profileServicesList = listSpec{
+	columns: map[string]string{
+		"service": "service_name", "environment": "deployment_environment", "type": "profile_type",
+		"total": "p_total", "samples": "p_samples", "last_seen": "p_last",
+	},
+	sort:     "samples",
+	asc:      map[string]bool{"service": true, "environment": true, "type": true},
+	tiebreak: []string{"service_name", "deployment_environment", "profile_type", "unit"},
+	limit:    wholeList,
+	maxLimit: wholeList,
+}
+
 // profileServices lists what has been profiled in the window: one entry per service, environment and profile
 // type, which is also what tells a caller which types the other endpoints will accept.
 func (s *Server) profileServices(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	l, err := profileServicesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -119,7 +135,7 @@ func (s *Server) profileServices(w http.ResponseWriter, r *http.Request, sc *que
 		"sum(value) AS p_total",
 		"max(timestamp) AS p_last",
 	), from, to).GroupBy("service_name", "deployment_environment", "profile_type", "unit").
-		OrderBy("p_samples DESC").Limit(s.cfg.MaxRows)
+		OrderBy(profileServicesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -138,7 +154,8 @@ func (s *Server) profileServices(w http.ResponseWriter, r *http.Request, sc *que
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"services": out})
+	out, more := page(out, l)
+	writeJSON(w, http.StatusOK, map[string]any{"services": out, "has_more": more})
 	return nil
 }
 

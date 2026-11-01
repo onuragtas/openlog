@@ -3,15 +3,18 @@
 // Router-free: the page passes the navigation callbacks.
 import { useQuery } from "@tanstack/react-query";
 import { CircleAlert, Plus } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CloudConnection } from "@/api/cloud";
 import { cloudConnectionsQuery } from "@/api/cloud";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { connectionState, firstError, lastRunAt, scopeLabelKey, stateBadgeVariant } from "@/lib/cloud";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { connectionState, firstError, lastRunAt, scopeLabelKey, stateBadgeVariant, type CloudState } from "@/lib/cloud";
 import { formatRunAgo } from "@/lib/cloud";
+import { timeOf, useLocalList } from "@/lib/list";
 
 export interface CloudConnectionsListProps {
   onOpen: (connection: CloudConnection) => void;
@@ -19,10 +22,23 @@ export interface CloudConnectionsListProps {
   canManage?: boolean;
 }
 
+// The worst first when sorted largest first.
+const STATE_RANK: Record<CloudState, number> = { paused: 0, unknown: 1, ok: 2, partial: 3, error: 4 };
+
 export function CloudConnectionsList({ onOpen, onNew, canManage = false }: CloudConnectionsListProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(cloudConnectionsQuery());
+  const columns = useMemo(
+    () => ({
+      name: (c: CloudConnection) => c.name,
+      provider: (c: CloudConnection) => t(`cloud.providers.${c.provider}`),
+      status: (c: CloudConnection) => STATE_RANK[connectionState(c)],
+      last_run: (c: CloudConnection) => timeOf(lastRunAt(c.status)),
+    }),
+    [t],
+  );
+  const list = useLocalList(q.data?.connections, columns, "name");
 
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
@@ -51,49 +67,52 @@ export function CloudConnectionsList({ onOpen, onNew, canManage = false }: Cloud
             <p className="mt-1 text-xs">{t("cloud.emptyHint")}</p>
           </EmptyState>
         ) : (
-          <Table data-testid="cloud-list">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("cloud.columns.name")}</TableHead>
-                <TableHead>{t("cloud.columns.provider")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("cloud.columns.scopes")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("cloud.columns.services")}</TableHead>
-                <TableHead>{t("cloud.columns.status")}</TableHead>
-                <TableHead className="hidden sm:table-cell">{t("cloud.columns.lastRun")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {connections.map((c) => {
-                const state = connectionState(c);
-                const last = lastRunAt(c.status);
-                const error = firstError(c.status);
-                return (
-                  <TableRow key={c.id} data-testid="cloud-row">
-                    <TableCell>
-                      <button type="button" className="font-medium hover:underline" onClick={() => onOpen(c)}>
-                        {c.name}
-                      </button>
-                      {error && <div className="max-w-md truncate text-xs text-muted-foreground" title={error}>{error}</div>}
-                    </TableCell>
-                    <TableCell>{t(`cloud.providers.${c.provider}`)}</TableCell>
-                    <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
-                      <span className="sr-only">{t(`cloud.scopeLabelPlural.${scopeLabelKey(c.provider)}`)}: </span>
-                      {c.scopes.join(", ")}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
-                      {c.services.map((s) => t(`cloud.services.${s}`, { defaultValue: s })).join(", ")}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={stateBadgeVariant(state)}>{t(`cloud.state.${state}`)}</Badge>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
-                      {last ? formatRunAgo(last, locale) : t("cloud.detail.never")}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            <Table data-testid="cloud-list">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("cloud.columns.name")}</SortableHead>
+                  <SortableHead column="provider" defaultDir="asc" {...list.head}>{t("cloud.columns.provider")}</SortableHead>
+                  <TableHead className="hidden md:table-cell">{t("cloud.columns.scopes")}</TableHead>
+                  <TableHead className="hidden lg:table-cell">{t("cloud.columns.services")}</TableHead>
+                  <SortableHead column="status" {...list.head}>{t("cloud.columns.status")}</SortableHead>
+                  <SortableHead column="last_run" className="hidden sm:table-cell" {...list.head}>{t("cloud.columns.lastRun")}</SortableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((c) => {
+                  const state = connectionState(c);
+                  const last = lastRunAt(c.status);
+                  const error = firstError(c.status);
+                  return (
+                    <TableRow key={c.id} data-testid="cloud-row">
+                      <TableCell>
+                        <button type="button" className="font-medium hover:underline" onClick={() => onOpen(c)}>
+                          {c.name}
+                        </button>
+                        {error && <div className="max-w-md truncate text-xs text-muted-foreground" title={error}>{error}</div>}
+                      </TableCell>
+                      <TableCell>{t(`cloud.providers.${c.provider}`)}</TableCell>
+                      <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                        <span className="sr-only">{t(`cloud.scopeLabelPlural.${scopeLabelKey(c.provider)}`)}: </span>
+                        {c.scopes.join(", ")}
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell text-xs text-muted-foreground">
+                        {c.services.map((s) => t(`cloud.services.${s}`, { defaultValue: s })).join(", ")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={stateBadgeVariant(state)}>{t(`cloud.state.${state}`)}</Badge>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-xs text-muted-foreground">
+                        {last ? formatRunAgo(last, locale) : t("cloud.detail.never")}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </div>
     </div>

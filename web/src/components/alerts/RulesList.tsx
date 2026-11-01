@@ -1,15 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
 import { alertChannelsQuery, alertRulesQuery, deleteAlertRule, setAlertRuleEnabled, type AlertChannelType, type AlertRule } from "@/api/alerts";
 import { ConfirmAction } from "@/components/fleet/ConfirmAction";
+import { ListPager } from "@/components/ListPager";
 import { DateTimeText, FormError } from "@/components/settings/common";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { buttonVariants } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { canEditOwned } from "@/lib/alerts";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ChannelTypeIcon, RuleStateBadge, SeverityBadge } from "./badges";
 
@@ -68,12 +71,28 @@ function RuleRow({ rule, editable, channelTypes }: { rule: AlertRule; editable: 
   );
 }
 
+const SEVERITY_RANK: Record<string, number> = { info: 0, warning: 1, critical: 2 };
+const STATE_RANK: Record<string, number> = { disabled: 0, unknown: 1, ok: 2, pending: 3, firing: 4, error: 5 };
+
 export function RulesList() {
   const { t } = useTranslation();
   const me = useMe().data;
   const perms = usePermissions();
   const rules = useQuery(alertRulesQuery());
   const channels = useQuery(alertChannelsQuery());
+  const columns = useMemo(
+    () => ({
+      name: (r: AlertRule) => r.name,
+      // What the column shows, since the names of the types sort differently from their keys.
+      type: (r: AlertRule) => t(`alerts.types.${r.type}`),
+      severity: (r: AlertRule) => SEVERITY_RANK[r.severity],
+      state: (r: AlertRule) => STATE_RANK[r.status.state],
+      channels: (r: AlertRule) => r.channel_ids.length,
+      evaluated: (r: AlertRule) => timeOf(r.status.last_evaluated_at),
+    }),
+    [t],
+  );
+  const list = useLocalList(rules.data, columns, "name");
   const channelTypes = new Map((channels.data?.channels ?? []).map((c) => [c.id, { name: c.name, type: c.type }] as const));
   return (
     <div className="flex flex-col gap-3">
@@ -96,23 +115,24 @@ export function RulesList() {
           <Table mobile="stack">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("alerts.rules.columns.name")}</TableHead>
-                <TableHead>{t("alerts.rules.columns.type")}</TableHead>
-                <TableHead>{t("alerts.rules.columns.severity")}</TableHead>
-                <TableHead>{t("alerts.rules.columns.state")}</TableHead>
-                <TableHead>{t("alerts.rules.columns.channels")}</TableHead>
-                <TableHead>{t("alerts.rules.columns.evaluated")}</TableHead>
+                <SortableHead column="name" defaultDir="asc" {...list.head}>{t("alerts.rules.columns.name")}</SortableHead>
+                <SortableHead column="type" defaultDir="asc" {...list.head}>{t("alerts.rules.columns.type")}</SortableHead>
+                <SortableHead column="severity" {...list.head}>{t("alerts.rules.columns.severity")}</SortableHead>
+                <SortableHead column="state" {...list.head}>{t("alerts.rules.columns.state")}</SortableHead>
+                <SortableHead column="channels" {...list.head}>{t("alerts.rules.columns.channels")}</SortableHead>
+                <SortableHead column="evaluated" {...list.head}>{t("alerts.rules.columns.evaluated")}</SortableHead>
                 <TableHead>
                   <span className="sr-only">{t("alerts.rules.delete")}</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rules.data.map((r) => (
+              {list.visible.map((r) => (
                 <RuleRow key={r.id} rule={r} editable={perms.writable && canEditOwned(me?.role, r.created_by_user_id, me?.user?.id)} channelTypes={channelTypes} />
               ))}
             </TableBody>
           </Table>
+          <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
         </div>
       )}
     </div>

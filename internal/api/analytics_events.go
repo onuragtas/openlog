@@ -16,7 +16,10 @@ import (
 const (
 	// analyticsMaxEventsRange is as far back as analytics_events is kept (0102_analytics).
 	analyticsMaxEventsRange = 90 * 24 * time.Hour
-	// analyticsMaxBreakdown bounds a list. Event names are bounded per key and a parameter's values are not.
+	// analyticsMaxBreakdown bounds a list, per period. Event names are bounded per key and a parameter's values are not.
+	// These lists have no pages on the server. A comparison merges two periods in Go, adding the rows only the previous one has, and
+	// offset would have to cut that merged list and read both periods again for every page. So the console holds them all, at most
+	// twice this, and sorts them itself: complete up to this cap in each period, and a sort can't reach a row past it.
 	analyticsMaxBreakdown = 200
 	// analyticsFunnelMaxUserWindow is why a user funnel exists at all: people take days to do what a session cannot.
 	analyticsFunnelMaxUserWindow = analyticsMaxEventsRange

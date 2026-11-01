@@ -2,14 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createLicenseKey, licenseKeysQuery, revokeLicenseKey } from "@/api/account";
+import { createLicenseKey, licenseKeysQuery, revokeLicenseKey, type LicenseKey } from "@/api/account";
 import { CUSTOM_KEY_MAX, CUSTOM_KEY_MIN, customKeyProblem } from "@/api/licenseKeyValue";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { cn } from "@/lib/utils";
 import { ConfirmButton } from "./ConfirmButton";
@@ -18,12 +20,21 @@ import { SecretReveal } from "./SecretReveal";
 
 type Created = { name: string; key: string | null };
 
+const KEY_COLUMNS = {
+  name: (k: LicenseKey) => k.name,
+  created_by: (k: LicenseKey) => k.created_by_email,
+  created: (k: LicenseKey) => timeOf(k.created_at),
+  last_used: (k: LicenseKey) => timeOf(k.last_used_at),
+  status: (k: LicenseKey) => (k.revoked_at ? 1 : 0),
+};
+
 export function LicenseKeysSettings() {
   const { t } = useTranslation();
   const id = useId();
   const qc = useQueryClient();
   const canManage = usePermissions().can("license_keys.manage");
   const keys = useQuery(licenseKeysQuery());
+  const list = useLocalList(keys.data, KEY_COLUMNS, "created", "desc");
   const [name, setName] = useState("");
   const [useOwn, setUseOwn] = useState(false);
   // An imported value lives only in this state until the key is created.
@@ -191,67 +202,70 @@ export function LicenseKeysSettings() {
         ) : keys.data.length === 0 ? (
           <EmptyState icon={<KeyRound className="size-5" aria-hidden="true" />}>{t("settings.licenseKeys.empty")}</EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.columns.name")}</TableHead>
-                <TableHead>{t("settings.columns.key")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("settings.columns.createdBy")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.created")}</TableHead>
-                <TableHead>{t("settings.columns.lastUsed")}</TableHead>
-                <TableHead>{t("settings.columns.status")}</TableHead>
-                {canManage && (
-                  <TableHead>
-                    <span className="sr-only">{t("settings.columns.actions")}</span>
-                  </TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.data.map((k) => (
-                <TableRow key={k.id}>
-                  <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell label={t("settings.columns.key")}>
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                      <span>
-                        <code className="font-mono text-xs">{k.prefix}</code>
-                        <span aria-hidden="true">…</span>
-                      </span>
-                      {k.custom && (
-                        <Badge variant="outline" title={t("settings.licenseKeys.customHint")}>
-                          {t("settings.licenseKeys.custom")}
-                        </Badge>
-                      )}
-                    </span>
-                  </TableCell>
-                  <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
-                    {k.created_by_email || "–"}
-                  </TableCell>
-                  <TableCell label={t("settings.columns.created")} className="hidden md:table-cell">
-                    <DateTimeText value={k.created_at} />
-                  </TableCell>
-                  <TableCell label={t("settings.columns.lastUsed")}>
-                    <DateTimeText value={k.last_used_at} relative />
-                  </TableCell>
-                  <TableCell className="max-md:w-auto">
-                    {k.revoked_at ? <Badge variant="muted">{t("settings.revoked")}</Badge> : <Badge variant="success">{t("settings.active")}</Badge>}
-                  </TableCell>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("settings.columns.name")}</SortableHead>
+                  <TableHead>{t("settings.columns.key")}</TableHead>
+                  <SortableHead column="created_by" defaultDir="asc" className="hidden lg:table-cell" {...list.head}>{t("settings.columns.createdBy")}</SortableHead>
+                  <SortableHead column="created" className="hidden md:table-cell" {...list.head}>{t("settings.columns.created")}</SortableHead>
+                  <SortableHead column="last_used" {...list.head}>{t("settings.columns.lastUsed")}</SortableHead>
+                  <SortableHead column="status" defaultDir="asc" {...list.head}>{t("settings.columns.status")}</SortableHead>
                   {canManage && (
-                    <TableCell className="text-right">
-                      {!k.revoked_at && (
-                        <ConfirmButton
-                          label={t("settings.revoke")}
-                          confirmLabel={t("settings.confirmRevoke")}
-                          pending={revoke.isPending && revoke.variables === k.id}
-                          onConfirm={() => revoke.mutate(k.id)}
-                        />
-                      )}
-                    </TableCell>
+                    <TableHead>
+                      <span className="sr-only">{t("settings.columns.actions")}</span>
+                    </TableHead>
                   )}
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((k) => (
+                  <TableRow key={k.id}>
+                    <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell label={t("settings.columns.key")}>
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <span>
+                          <code className="font-mono text-xs">{k.prefix}</code>
+                          <span aria-hidden="true">…</span>
+                        </span>
+                        {k.custom && (
+                          <Badge variant="outline" title={t("settings.licenseKeys.customHint")}>
+                            {t("settings.licenseKeys.custom")}
+                          </Badge>
+                        )}
+                      </span>
+                    </TableCell>
+                    <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
+                      {k.created_by_email || "–"}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.created")} className="hidden md:table-cell">
+                      <DateTimeText value={k.created_at} />
+                    </TableCell>
+                    <TableCell label={t("settings.columns.lastUsed")}>
+                      <DateTimeText value={k.last_used_at} relative />
+                    </TableCell>
+                    <TableCell className="max-md:w-auto">
+                      {k.revoked_at ? <Badge variant="muted">{t("settings.revoked")}</Badge> : <Badge variant="success">{t("settings.active")}</Badge>}
+                    </TableCell>
+                    {canManage && (
+                      <TableCell className="text-right">
+                        {!k.revoked_at && (
+                          <ConfirmButton
+                            label={t("settings.revoke")}
+                            confirmLabel={t("settings.confirmRevoke")}
+                            pending={revoke.isPending && revoke.variables === k.id}
+                            onConfirm={() => revoke.mutate(k.id)}
+                          />
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </div>
     </div>

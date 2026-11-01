@@ -5,7 +5,6 @@ import { atLeast, type Role } from "@/api/roles";
 
 export const ERROR_STATUS_TABS = ["unresolved", "resolved", "ignored", "all"] as const;
 export type ErrorStatusTab = (typeof ERROR_STATUS_TABS)[number];
-export const ERROR_SORTS = ["count", "last_seen", "first_seen"] as const;
 
 export const COMMENT_MAX_BYTES = 4000;
 export const VERSION_MAX = 256;

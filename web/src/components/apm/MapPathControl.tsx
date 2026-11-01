@@ -25,7 +25,7 @@ export interface MapPathControlProps {
 export function MapPathControl({ range, serviceOptions, service, transaction, namespace, environment, onChange, path, loading }: MapPathControlProps) {
   const { t } = useTranslation();
   const ids = { svc: useId(), txn: useId() };
-  const txns = useQuery({ ...apmTransactionsQuery({ service, namespace, environment }, range, "throughput", 100), enabled: service !== "" });
+  const txns = useQuery({ ...apmTransactionsQuery({ service, namespace, environment }, range, { sort: "throughput", dir: "desc", limit: 100, offset: 0 }), enabled: service !== "" });
   const names = [...new Set((txns.data?.transactions ?? []).map((x) => x.transaction_name))];
   if (transaction && !names.includes(transaction)) names.unshift(transaction);
 

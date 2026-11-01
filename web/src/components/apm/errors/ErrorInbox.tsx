@@ -1,22 +1,24 @@
-// Error inbox (apm.md §3.4): status tabs with counts, assignee/search/sort filters, selectable groups with
+// Error inbox (apm.md §3.4): status tabs with counts, assignee and search filters, sortable headings, selectable groups with
 // bulk workflow actions. Service inbox (scope) or organization-wide (GET /apm/errors, with a service column).
 import { useQuery } from "@tanstack/react-query";
 import { MessageSquare, Search } from "lucide-react";
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { apmErrorInboxQuery, apmErrorsQuery, type ApmErrorGroup, type ErrorSort } from "@/api/apm";
 import { Sparkline } from "@/components/apm/Charts";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, type SortDir } from "@/components/ui/table";
 import type { ServiceScope } from "@/lib/apm";
-import { allSelected, ERROR_SORTS, ERROR_STATUS_TABS, pruneSelection, toggleAll, type ErrorStatusTab } from "@/lib/apm-errors";
+import { allSelected, ERROR_STATUS_TABS, pruneSelection, toggleAll, type ErrorStatusTab } from "@/lib/apm-errors";
 import { formatDateTime, formatNumber, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useListState } from "@/lib/list";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { StatusBadges } from "./StatusBadges";
@@ -46,14 +48,28 @@ export interface ErrorInboxProps {
   defaultVersion?: string;
 }
 
+const TEXT_SORTS: ErrorSort[] = ["type", "service", "status", "assignee"];
+
 export function ErrorInbox({ range, scope, orgFilter, filters, onFilters, selected, onOpen, defaultVersion }: ErrorInboxProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const now = useNow();
-  const ids = { q: useId(), assignee: useId(), sort: useId() };
+  const ids = { q: useId(), assignee: useId() };
   const orgWide = !scope;
   const { canWrite, members } = useErrorWorkflow();
-  const inboxFilters = { status: filters.status, assignee: filters.assignee, q: filters.q, sort: filters.sort };
+  // The URL holds the column, so a shared link opens on it, and the rest of the sort and the page stay on this screen.
+  const list = useListState<ErrorSort>(filters.sort, TEXT_SORTS.includes(filters.sort) ? "asc" : "desc");
+  const { toFirstPage } = list;
+  // New filters are a new list, so page five of it would usually show nothing.
+  useEffect(toFirstPage, [filters.status, filters.assignee, filters.q, range.range, range.from, range.to, orgFilter?.service, orgFilter?.namespace, orgFilter?.environment, toFirstPage]);
+  const head = {
+    ...list.head,
+    onSort: (column: ErrorSort, dir: SortDir) => {
+      list.head.onSort(column, dir);
+      onFilters({ sort: column });
+    },
+  };
+  const inboxFilters = { status: filters.status, assignee: filters.assignee, q: filters.q, ...list.state };
   const q = useQuery(scope ? apmErrorsQuery(scope, range, inboxFilters) : apmErrorInboxQuery(range, { ...orgFilter, ...inboxFilters }));
   const [draftQ, setDraftQ] = useState(filters.q);
   const [shownQ, setShownQ] = useState(filters.q);
@@ -84,7 +100,7 @@ export function ErrorInbox({ range, scope, orgFilter, filters, onFilters, select
           <CardTitle>
             <h2>{orgWide ? t("apm.errors.inboxTitle") : t("apm.service.tabs.errors")}</h2>
           </CardTitle>
-          {q.data?.truncated && <p className="text-xs text-muted-foreground">{t("apm.errors.truncated")}</p>}
+          {q.data?.capped && <p className="text-xs text-muted-foreground">{t("apm.errors.truncated")}</p>}
         </div>
         {workflow ? (
           <div role="group" aria-label={t("apm.errors.statusFilter")} className="flex flex-wrap gap-1" data-testid="error-status-tabs">
@@ -139,18 +155,6 @@ export function ErrorInbox({ range, scope, orgFilter, filters, onFilters, select
               </NativeSelect>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <label htmlFor={ids.sort} className="text-xs text-muted-foreground">
-              {t("apm.errors.sort")}
-            </label>
-            <NativeSelect id={ids.sort} value={filters.sort} onChange={(e) => onFilters({ sort: e.target.value as ErrorSort })}>
-              {ERROR_SORTS.map((s) => (
-                <option key={s} value={s}>
-                  {t(`apm.errors.sorts.${s}`)}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
         </div>
         {writable && selection.size > 0 && (
           <div className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-2" data-testid="error-bulk-actions">
@@ -178,109 +182,123 @@ export function ErrorInbox({ range, scope, orgFilter, filters, onFilters, select
           <LoadingState />
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-        ) : groups.length === 0 ? (
+        ) : groups.length === 0 && list.state.offset === 0 ? (
           <EmptyState>{filters.q || filters.assignee !== "any" || filters.status !== "all" ? t("apm.errors.emptyFiltered") : t("apm.errors.empty")}</EmptyState>
         ) : (
-          <Table data-testid="error-groups">
-            <TableHeader>
-              <TableRow>
-                {writable && (
-                  <TableHead className="w-10">
-                    <input
-                      type="checkbox"
-                      className="size-4 align-middle pointer-coarse:size-5"
-                      aria-label={t("apm.errors.selectAll")}
-                      checked={allSelected(selection, visibleIds)}
-                      onChange={() => setPicked(toggleAll(selection, visibleIds))}
-                    />
-                  </TableHead>
-                )}
-                <TableHead>{t("apm.errors.error")}</TableHead>
-                {orgWide && <TableHead>{t("apm.errors.service")}</TableHead>}
-                <TableHead>{t("apm.errors.status")}</TableHead>
-                {workflow && <TableHead className="hidden md:table-cell">{t("apm.errors.assignee")}</TableHead>}
-                {workflow && (
-                  <TableHead className="hidden text-right md:table-cell">
-                    <MessageSquare className="ml-auto size-4" aria-label={t("apm.errors.comments")} />
-                  </TableHead>
-                )}
-                <TableHead className="hidden lg:table-cell">{t("apm.errors.trend")}</TableHead>
-                <TableHead className="text-right">{t("apm.errors.count")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("apm.errors.lastSeen")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.map((g) => {
-                const last = parseTimeParam(g.last_seen);
-                const isSelected = g.group_id === selected;
-                return (
-                  <TableRow key={g.group_id} data-state={isSelected ? "selected" : undefined}>
-                    {writable && (
-                      <TableCell>
-                        <input
-                          type="checkbox"
-                          className="size-4 align-middle pointer-coarse:size-5"
-                          aria-label={t("apm.errors.select", { type: g.error_type })}
-                          checked={selection.has(g.group_id)}
-                          onChange={() =>
-                            setPicked(() => {
-                              const next = new Set(selection);
-                              if (next.has(g.group_id)) next.delete(g.group_id);
-                              else next.add(g.group_id);
-                              return next;
-                            })
-                          }
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell className="max-w-[32rem]">
-                      <button
-                        type="button"
-                        className="flex max-w-full flex-col items-start text-left max-md:max-w-[50vw]"
-                        aria-label={t("apm.errors.open", { type: g.error_type })}
-                        aria-pressed={isSelected}
-                        onClick={() => onOpen(g)}
-                      >
-                        <span className="font-mono text-sm font-semibold text-destructive-text hover:underline">{g.error_type}</span>
-                        <span className="max-w-full truncate text-sm" title={g.message}>
-                          {g.message || "–"}
-                        </span>
-                        {g.last_span_name && <span className="text-xs text-muted-foreground">{g.last_span_name}</span>}
-                      </button>
-                    </TableCell>
-                    {orgWide && (
-                      <TableCell className="text-sm">
-                        <span className="font-medium">{g.service_name}</span>
-                        {(g.environment || g.service_namespace) && <div className="text-xs text-muted-foreground">{[g.environment, g.service_namespace].filter(Boolean).join(" · ")}</div>}
-                      </TableCell>
-                    )}
-                    <TableCell>
-                      <StatusBadges group={g} />
-                    </TableCell>
-                    {workflow && <TableCell className="hidden text-sm md:table-cell">{g.assignee ? g.assignee.name || g.assignee.email : <span className="text-muted-foreground">–</span>}</TableCell>}
-                    {workflow && (
-                      <TableCell className={cn("hidden text-right font-mono tabular-nums md:table-cell", g.comment_count === 0 && "text-muted-foreground")}>
-                        <span aria-label={t("apm.errors.commentCount", { count: g.comment_count })}>{formatNumber(g.comment_count, locale)}</span>
-                      </TableCell>
-                    )}
-                    <TableCell className="hidden lg:table-cell">
-                      <Sparkline points={g.sparkline} label={t("apm.errors.trend")} />
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatNumber(g.count, locale)}</TableCell>
-                    <TableCell className="hidden whitespace-nowrap text-xs md:table-cell">
-                      {last !== null ? (
-                        <time dateTime={g.last_seen ?? undefined} title={formatDateTime(last, locale)}>
-                          {formatRelative(last, now, locale)}
-                        </time>
-                      ) : (
-                        "–"
+          <>
+            <Table data-testid="error-groups">
+              <TableHeader>
+                <TableRow>
+                  {writable && (
+                    <TableHead className="w-10">
+                      <input
+                        type="checkbox"
+                        className="size-4 align-middle pointer-coarse:size-5"
+                        aria-label={t("apm.errors.selectAll")}
+                        checked={allSelected(selection, visibleIds)}
+                        onChange={() => setPicked(toggleAll(selection, visibleIds))}
+                      />
+                    </TableHead>
+                  )}
+                  <SortableHead column="type" defaultDir="asc" {...head}>{t("apm.errors.error")}</SortableHead>
+                  {orgWide && <SortableHead column="service" defaultDir="asc" {...head}>{t("apm.errors.service")}</SortableHead>}
+                  <SortableHead column="status" defaultDir="asc" {...head}>{t("apm.errors.status")}</SortableHead>
+                  {workflow && <SortableHead column="assignee" defaultDir="asc" className="hidden md:table-cell" {...head}>{t("apm.errors.assignee")}</SortableHead>}
+                  {workflow && (
+                    <SortableHead column="comments" className="hidden text-right md:table-cell" {...head}>
+                      <MessageSquare className="size-4" aria-label={t("apm.errors.comments")} />
+                    </SortableHead>
+                  )}
+                  <TableHead className="hidden lg:table-cell">{t("apm.errors.trend")}</TableHead>
+                  <SortableHead column="count" className="text-right" {...head}>{t("apm.errors.count")}</SortableHead>
+                  <SortableHead column="first_seen" className="hidden lg:table-cell" {...head}>{t("apm.errors.firstSeen")}</SortableHead>
+                  <SortableHead column="last_seen" className="hidden md:table-cell" {...head}>{t("apm.errors.lastSeen")}</SortableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {groups.map((g) => {
+                  const last = parseTimeParam(g.last_seen);
+                  const first = parseTimeParam(g.first_seen);
+                  const isSelected = g.group_id === selected;
+                  return (
+                    <TableRow key={g.group_id} data-state={isSelected ? "selected" : undefined}>
+                      {writable && (
+                        <TableCell>
+                          <input
+                            type="checkbox"
+                            className="size-4 align-middle pointer-coarse:size-5"
+                            aria-label={t("apm.errors.select", { type: g.error_type })}
+                            checked={selection.has(g.group_id)}
+                            onChange={() =>
+                              setPicked(() => {
+                                const next = new Set(selection);
+                                if (next.has(g.group_id)) next.delete(g.group_id);
+                                else next.add(g.group_id);
+                                return next;
+                              })
+                            }
+                          />
+                        </TableCell>
                       )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                      <TableCell className="max-w-[32rem]">
+                        <button
+                          type="button"
+                          className="flex max-w-full flex-col items-start text-left max-md:max-w-[50vw]"
+                          aria-label={t("apm.errors.open", { type: g.error_type })}
+                          aria-pressed={isSelected}
+                          onClick={() => onOpen(g)}
+                        >
+                          <span className="font-mono text-sm font-semibold text-destructive-text hover:underline">{g.error_type}</span>
+                          <span className="max-w-full truncate text-sm" title={g.message}>
+                            {g.message || "–"}
+                          </span>
+                          {g.last_span_name && <span className="text-xs text-muted-foreground">{g.last_span_name}</span>}
+                        </button>
+                      </TableCell>
+                      {orgWide && (
+                        <TableCell className="text-sm">
+                          <span className="font-medium">{g.service_name}</span>
+                          {(g.environment || g.service_namespace) && <div className="text-xs text-muted-foreground">{[g.environment, g.service_namespace].filter(Boolean).join(" · ")}</div>}
+                        </TableCell>
+                      )}
+                      <TableCell>
+                        <StatusBadges group={g} />
+                      </TableCell>
+                      {workflow && <TableCell className="hidden text-sm md:table-cell">{g.assignee ? g.assignee.name || g.assignee.email : <span className="text-muted-foreground">–</span>}</TableCell>}
+                      {workflow && (
+                        <TableCell className={cn("hidden text-right font-mono tabular-nums md:table-cell", g.comment_count === 0 && "text-muted-foreground")}>
+                          <span aria-label={t("apm.errors.commentCount", { count: g.comment_count })}>{formatNumber(g.comment_count, locale)}</span>
+                        </TableCell>
+                      )}
+                      <TableCell className="hidden lg:table-cell">
+                        <Sparkline points={g.sparkline} label={t("apm.errors.trend")} />
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatNumber(g.count, locale)}</TableCell>
+                      <TableCell className="hidden whitespace-nowrap text-xs lg:table-cell">
+                        {first !== null ? (
+                          <time dateTime={g.first_seen ?? undefined} title={formatDateTime(first, locale)}>
+                            {formatRelative(first, now, locale)}
+                          </time>
+                        ) : (
+                          "–"
+                        )}
+                      </TableCell>
+                      <TableCell className="hidden whitespace-nowrap text-xs md:table-cell">
+                        {last !== null ? (
+                          <time dateTime={g.last_seen ?? undefined} title={formatDateTime(last, locale)}>
+                            {formatRelative(last, now, locale)}
+                          </time>
+                        ) : (
+                          "–"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={groups.length} hasMore={q.data.has_more ?? false} />
+          </>
         )}
       </CardContent>
     </Card>

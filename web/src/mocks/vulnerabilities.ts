@@ -5,6 +5,7 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import type { VulnFinding, VulnGroup } from "@/api/vulnerabilities";
 import { authenticate } from "./account";
 import { formatTs, HOST_IDS } from "./fixtures";
+import { pageOf } from "./list";
 
 const API = "*/api/v1";
 
@@ -111,10 +112,14 @@ export const vulnerabilityHandlers = [
   http.get(`${API}/vulnerabilities`, authed(({ request }) => {
     const url = new URL(request.url);
     const severity = url.searchParams.get("severity") ?? undefined;
-    const list = groups(severity);
+    // Critical first and then the most hosts, as the list the server sorts by severity.
+    const rank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const list = pageOf(url, [...groups(severity)].sort((a, b) => b.hosts - a.hosts), {
+      severity: (g) => rank[g.severity] ?? 4, advisory: (g) => g.vuln_id, score: (g) => g.score, hosts: (g) => g.hosts,
+    }, { sort: "severity", asc: ["severity", "advisory"] });
     const counts: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0, none: 0 };
     for (const g of groups()) counts[g.severity] = (counts[g.severity] ?? 0) + 1;
-    return HttpResponse.json({ vulnerabilities: list, severity_counts: counts });
+    return HttpResponse.json({ vulnerabilities: list.rows, has_more: list.has_more, severity_counts: counts });
   })),
   http.get(`${API}/vulnerabilities/catalog/status`, authed(() =>
     HttpResponse.json({

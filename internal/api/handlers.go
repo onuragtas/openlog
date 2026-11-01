@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -53,23 +54,80 @@ func scanHosts(rows query.Rows) ([]hostJSON, error) {
 	return out, rows.Err()
 }
 
+// hostKeys is what the hosts list can be sorted by. The list is sorted in Go because the usage of a host comes from another table, and
+// a search covers the resource attributes, so its order and its search are complete up to OPENLOG_API_MAX_ROWS hosts.
+var hostKeys = map[string]func(hostJSON) rowKey{
+	"name":      func(h hostJSON) rowKey { return textKey(cmp.Or(h.HostName, h.HostID)) },
+	"os":        func(h hostJSON) rowKey { return textKey(h.OSDescription) },
+	"agent":     func(h hostJSON) rowKey { return textKey(h.AgentVersion) },
+	"last_seen": func(h hostJSON) rowKey { return textKey(h.LastSeen) },
+	"cpu":       func(h hostJSON) rowKey { return hostUsageKey(h, func(u *hostUsageJSON) *float64 { return u.CPU }) },
+	"memory":    func(h hostJSON) rowKey { return hostUsageKey(h, func(u *hostUsageJSON) *float64 { return u.Memory }) },
+	"disk":      func(h hostJSON) rowKey { return hostUsageKey(h, func(u *hostUsageJSON) *float64 { return u.Disk }) },
+	"load":      func(h hostJSON) rowKey { return hostUsageKey(h, func(u *hostUsageJSON) *float64 { return u.Load1 }) },
+}
+
+var hostsList = listSpec{
+	columns:  columnsOf(hostKeys),
+	sort:     "name",
+	asc:      map[string]bool{"name": true, "os": true, "agent": true},
+	limit:    100,
+	maxLimit: wholeList,
+}
+
+func hostUsageKey(h hostJSON, read func(*hostUsageJSON) *float64) rowKey {
+	if h.Usage == nil {
+		return rowKey{blank: true}
+	}
+	return optKey(read(h.Usage))
+}
+
+// hostMatches is the search of the hosts list, over what the list shows.
+func hostMatches(h hostJSON, q string) bool {
+	if q == "" {
+		return true
+	}
+	fields := []string{h.HostName, h.HostID, h.OSDescription, h.Arch, h.AgentVersion}
+	for k, v := range h.ResourceAttributes {
+		fields = append(fields, k+"="+v)
+	}
+	return matchTerms(q, fields...)
+}
+
 func (s *Server) listHosts(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
-	limit, err := s.limit(r)
+	l, err := hostsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
 	q := hostsQuery(sc).
 		Where("last_seen >= fromUnixTimestamp64Milli({since:Int64})").Param("since", s.now().Add(-24*time.Hour).UnixMilli()).
-		OrderBy("h_name", "host_id").Limit(limit)
+		OrderBy("h_name", "host_id").Limit(s.cfg.MaxRows)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
 	}
-	hosts, err := scanHosts(rows)
+	all, err := scanHosts(rows)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hosts": s.withHostUsage(r, sc, hosts)})
+	search := r.URL.Query().Get("q")
+	hosts := all[:0]
+	for _, h := range all {
+		if hostMatches(h, search) {
+			hosts = append(hosts, h)
+		}
+	}
+	// Usage is read for the page only, unless the page is decided by it. Then it is read per tenant and not per host: thousands of ids
+	// are a worse statement than one with no list at all.
+	byUsage := l.sort == "cpu" || l.sort == "memory" || l.sort == "disk" || l.sort == "load"
+	if byUsage {
+		hosts = s.attachHostUsage(r, sc, hosts, nil)
+	}
+	hosts, more := sortPage(hosts, l, hostKeys, func(a, b hostJSON) int { return strings.Compare(a.HostID, b.HostID) })
+	if !byUsage {
+		hosts = s.withHostUsage(r, sc, hosts)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"hosts": hosts, "has_more": more})
 	return nil
 }
 

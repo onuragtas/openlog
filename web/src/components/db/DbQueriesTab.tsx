@@ -1,41 +1,42 @@
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import { dbQueriesQuery, type DbQuerySort } from "@/api/db";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber, formatValue } from "@/lib/format";
+import { useListState } from "@/lib/list";
 import type { RangeSpec } from "@/lib/time";
-
-const DB_SORTS: DbQuerySort[] = ["time", "calls", "avg", "rows", "errors", "reads"];
 
 /** The statements of an instance, heaviest first; the share bar makes "where does the time go" readable at once. */
 export function DbQueriesTab({
   instance,
   range,
-  sort,
+  initialSort = "time",
   q,
-  onSort,
   onSearch,
   onOpen,
 }: {
   instance: string;
   range: RangeSpec;
-  sort: DbQuerySort;
+  /** A link can still open the list on a sort: `?sort=reads` from before the headings did this. */
+  initialSort?: DbQuerySort;
   q: string;
-  onSort: (s: DbQuerySort) => void;
   onSearch: (q: string) => void;
   onOpen: (fingerprint: string) => void;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const sortId = useId();
   const searchId = useId();
-  const res = useQuery(dbQueriesQuery({ instance, range, sort, q }));
+  const list = useListState<DbQuerySort>(initialSort, initialSort === "statement" ? "asc" : "desc");
+  const res = useQuery(dbQueriesQuery({ instance, range, list: list.state, q }));
+  const { toFirstPage } = list;
+  // A new search or window changes what the pages hold, so staying on page five of it would usually show nothing.
+  useEffect(toFirstPage, [q, instance, range.range, range.from, range.to, toFirstPage]);
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-3">
@@ -46,41 +47,34 @@ export function DbQueriesTab({
           <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" aria-hidden="true" />
           <Input id={searchId} type="search" className="pl-8" placeholder={t("db.queries.search")} value={q} onChange={(e) => onSearch(e.target.value)} />
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor={sortId}>{t("db.queries.sort")}</Label>
-          <NativeSelect id={sortId} value={sort} onChange={(e) => onSort(e.target.value as DbQuerySort)}>
-            {DB_SORTS.map((s) => (
-              <option key={s} value={s}>
-                {t(`db.queries.sorts.${s}`)}
-              </option>
-            ))}
-          </NativeSelect>
-        </div>
       </div>
       {res.isPending ? (
         <LoadingState />
       ) : res.isError ? (
         <ErrorState error={res.error} onRetry={() => void res.refetch()} />
-      ) : res.data.queries.length === 0 ? (
+      ) : res.data.queries.length === 0 && list.state.offset === 0 ? (
         <EmptyState>{t("db.queries.empty")}</EmptyState>
       ) : (
         <div className="rounded-xl border bg-card" data-testid="db-queries">
-          <Table mobile="stack">
+          {/* It scrolls on a phone rather than stacking into cards: the headings are the only way to sort this list now, and cards hide them. */}
+          <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("db.columns.statement")}</TableHead>
-                <TableHead className="text-right">{t("db.columns.share")}</TableHead>
-                <TableHead className="text-right">{t("db.columns.throughput")}</TableHead>
-                <TableHead className="text-right">{t("db.columns.avg")}</TableHead>
-                <TableHead className="text-right">{t("db.columns.rowsPerCall")}</TableHead>
-                <TableHead className="text-right">{t("db.columns.errors")}</TableHead>
+                <SortableHead column="statement" defaultDir="asc" {...list.head}>{t("db.columns.statement")}</SortableHead>
+                <SortableHead column="time" className="text-right" {...list.head}>{t("db.columns.share")}</SortableHead>
+                <SortableHead column="calls" className="text-right" {...list.head}>{t("db.columns.throughput")}</SortableHead>
+                <SortableHead column="avg" className="text-right" {...list.head}>{t("db.columns.avg")}</SortableHead>
+                <SortableHead column="rows_per_call" className="text-right" {...list.head}>{t("db.columns.rowsPerCall")}</SortableHead>
+                <SortableHead column="rows" className="text-right" {...list.head}>{t("db.columns.rows")}</SortableHead>
+                <SortableHead column="reads" className="text-right" {...list.head}>{t("db.columns.reads")}</SortableHead>
+                <SortableHead column="errors" className="text-right" {...list.head}>{t("db.columns.errors")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {res.data.queries.map((d) => (
                 <TableRow key={d.fingerprint} data-testid="db-query">
                   <TableCell className="max-w-xl">
-                    <button type="button" className="line-clamp-3 text-left font-mono text-xs break-all text-primary hover:underline" onClick={() => onOpen(d.fingerprint)}>
+                    <button type="button" className="line-clamp-3 text-left font-mono text-xs break-all text-primary hover:underline max-md:block max-md:max-w-[50vw] max-md:truncate" onClick={() => onOpen(d.fingerprint)}>
                       {d.text}
                     </button>
                     {d.db_names.length > 0 && <span className="mt-1 block text-xs text-muted-foreground">{d.db_names.join(", ")}</span>}
@@ -100,6 +94,12 @@ export function DbQueriesTab({
                   <TableCell label={t("db.columns.rowsPerCall")} className="text-right tabular-nums">
                     {d.rows_per_call === null ? "–" : formatNumber(d.rows_per_call, locale)}
                   </TableCell>
+                  <TableCell label={t("db.columns.rows")} className="text-right tabular-nums">
+                    {formatNumber(d.rows, locale)}
+                  </TableCell>
+                  <TableCell label={t("db.columns.reads")} className="text-right tabular-nums">
+                    {formatNumber(d.blocks_read, locale)}
+                  </TableCell>
                   <TableCell label={t("db.columns.errors")} className="text-right tabular-nums">
                     {formatNumber(d.errors, locale)}
                   </TableCell>
@@ -107,6 +107,7 @@ export function DbQueriesTab({
               ))}
             </TableBody>
           </Table>
+          <ListPager list={list} count={res.data.queries.length} hasMore={res.data.has_more ?? false} />
         </div>
       )}
     </div>

@@ -3,10 +3,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Bug, Network, PackageCheck, Search } from "lucide-react";
-import { lazy, Suspense, useId, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { apmAgentsQuery, apmMapPathQuery, apmMapQuery, apmServiceQuery, apmServicesQuery, type ApmService } from "@/api/apm";
+import { apmAgentsQuery, apmMapPathQuery, apmMapQuery, apmServiceQuery, apmServicesPageQuery, apmServicesQuery, type ServiceSort } from "@/api/apm";
 import { AgentVersionBadge } from "@/components/apm/AgentVersions";
 import { indexAgents, serviceKey } from "@/lib/agent-versions";
 import { ApiError } from "@/api/client";
@@ -22,18 +22,20 @@ import { TransactionsTab } from "@/components/apm/TransactionsTab";
 import { ServiceContainers } from "@/components/containers/ServiceContainers";
 import { ServiceKubernetesPods } from "@/components/kubernetes/ServiceKubernetesPods";
 import { PageHeader } from "@/components/AppShell";
+import { ListPager } from "@/components/ListPager";
 import { AddDataLink } from "@/components/onboarding/AddDataLink";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatMs, formatRate, formatRpm, serviceNodeId, type ServiceScope } from "@/lib/apm";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
-import { parseTimeParam } from "@/lib/time";
+import { useListState } from "@/lib/list";
+import { parseTimeParam, type RangeSpec } from "@/lib/time";
 import { APM_TABS, type ApmMapSearch, type ApmServiceSearch, type ApmTab } from "@/router";
 import type { ServiceMapProps } from "@/components/apm/ServiceMap";
 
@@ -52,33 +54,48 @@ const servicesRoute = getRouteApi("/app/apm");
 const serviceRoute = getRouteApi("/app/apm/services/$service");
 const mapRoute = getRouteApi("/app/apm/map");
 
-export function filterServices(services: ApmService[], q: string): ApmService[] {
-  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return services;
-  return services.filter((s) => {
-    const text = [s.service_name, s.service_namespace, s.environment, s.language, s.version].join(" ").toLowerCase();
-    return terms.every((term) => text.includes(term));
-  });
+// Every keystroke of a search would be a round of statements over the whole range.
+const SEARCH_DELAY_MS = 250;
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
 }
 
 export function ApmServicesPage() {
-  const { t, i18n } = useTranslation();
   const search = servicesRoute.useSearch();
   const navigate = useNavigate({ from: "/apm" });
+  return (
+    <ApmServicesView
+      range={{ range: search.range, from: search.from, to: search.to }}
+      q={search.q ?? ""}
+      env={search.env}
+      onQ={(q) => void navigate({ search: (prev) => ({ ...prev, q: q || undefined }), replace: true })}
+      onEnv={(env) => void navigate({ search: (prev) => ({ ...prev, env: env || undefined }), replace: true })}
+    />
+  );
+}
+
+export function ApmServicesView({ range, q, env, onQ, onEnv }: { range: RangeSpec; q: string; env?: string; onQ: (q: string) => void; onEnv: (env: string) => void }) {
+  const { t, i18n } = useTranslation();
   const ids = { q: useId(), env: useId() };
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
-  const range = { range: search.range, from: search.from, to: search.to };
-  const all = useQuery(apmServicesQuery(range));
+  const list = useListState<ServiceSort>("name", "asc");
+  const settledQ = useDebounced(q, SEARCH_DELAY_MS);
+  const page = useQuery(apmServicesPageQuery(range, list.state, { q: settledQ, environment: env }));
   // Agent version badges (D-124): no upgrade instructions needed here, so no registry checks.
   const agents = useQuery(apmAgentsQuery(range, { upgrade: false }));
   const agentIndex = useMemo(() => indexAgents(agents.data?.services ?? []), [agents.data]);
-  const q = search.q ?? "";
-  const environments = useMemo(() => [...new Set((all.data?.services ?? []).map((s) => s.environment).filter(Boolean))].sort(), [all.data]);
-  const services = useMemo(
-    () => filterServices((all.data?.services ?? []).filter((s) => !search.env || s.environment === search.env), q),
-    [all.data, search.env, q],
-  );
+  const environments = page.data?.environments ?? [];
+  const services = page.data?.services ?? [];
+  const { toFirstPage } = list;
+  // New filters are a new list, so page five of it would usually show nothing.
+  useEffect(toFirstPage, [settledQ, env, range.range, range.from, range.to, toFirstPage]);
 
   return (
     <div>
@@ -90,11 +107,11 @@ export function ApmServicesPage() {
             <label htmlFor={ids.env} className="sr-only">
               {t("apm.environment")}
             </label>
-            <NativeSelect id={ids.env} value={search.env ?? ""} onChange={(e) => void navigate({ search: (prev) => ({ ...prev, env: e.target.value || undefined }), replace: true })}>
+            <NativeSelect id={ids.env} value={env ?? ""} onChange={(e) => onEnv(e.target.value)}>
               <option value="">{t("apm.allEnvironments")}</option>
-              {environments.map((env) => (
-                <option key={env} value={env}>
-                  {env}
+              {environments.map((e) => (
+                <option key={e} value={e}>
+                  {e}
                 </option>
               ))}
             </NativeSelect>
@@ -109,7 +126,7 @@ export function ApmServicesPage() {
                 className="pl-8"
                 placeholder={t("apm.searchPlaceholder")}
                 value={q}
-                onChange={(e) => void navigate({ search: (prev) => ({ ...prev, q: e.target.value || undefined }), replace: true })}
+                onChange={(e) => onQ(e.target.value)}
               />
             </div>
             <Button asChild variant="outline">
@@ -119,13 +136,13 @@ export function ApmServicesPage() {
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to="/apm/errors" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env: search.env })}>
+              <Link to="/apm/errors" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env })}>
                 <Bug className="size-4" aria-hidden="true" />
                 {t("apm.errors.inboxLink")}
               </Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to="/apm/agents" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env: search.env })}>
+              <Link to="/apm/agents" search={(prev) => ({ range: prev.range, from: prev.from, to: prev.to, env })}>
                 <PackageCheck className="size-4" aria-hidden="true" />
                 {t("apm.agents.link")}
               </Link>
@@ -134,76 +151,81 @@ export function ApmServicesPage() {
         }
       />
       <div className="rounded-xl border bg-card">
-        {all.isPending ? (
+        {page.isPending ? (
           <LoadingState />
-        ) : all.isError ? (
-          <ErrorState error={all.error} onRetry={() => void all.refetch()} />
-        ) : all.data.services.length === 0 ? (
-          <EmptyState>
-            <p>{t("apm.empty")}</p>
-            <AddDataLink label={t("addData.empty.apm")} />
-          </EmptyState>
-        ) : services.length === 0 ? (
-          <EmptyState>{t("apm.noMatch", { q })}</EmptyState>
+        ) : page.isError ? (
+          <ErrorState error={page.error} onRetry={() => void page.refetch()} />
+        ) : services.length === 0 && list.state.offset === 0 ? (
+          q || env ? (
+            <EmptyState>{t("apm.noMatch", { q })}</EmptyState>
+          ) : (
+            <EmptyState>
+              <p>{t("apm.empty")}</p>
+              <AddDataLink label={t("addData.empty.apm")} />
+            </EmptyState>
+          )
         ) : (
-          <Table data-testid="apm-services">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("apm.columns.service")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("apm.columns.environment")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.throughput")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.errorRate")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.p95")}</TableHead>
-                <TableHead className="text-right">{t("apm.metrics.apdex")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("apm.columns.trend")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("apm.columns.lastSeen")}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {services.map((s) => {
-                const seen = parseTimeParam(s.last_seen) ?? 0;
-                const linkSearch = (prev: Record<string, unknown>) =>
-                  ({ range: prev.range, from: prev.from, to: prev.to, ns: s.service_namespace || undefined, env: s.environment || undefined }) as never;
-                return (
-                  <TableRow key={`${s.service_name}|${s.service_namespace}|${s.environment}`}>
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <Link
-                          to="/apm/services/$service"
-                          params={{ service: s.service_name }}
-                          search={linkSearch}
-                          className="font-medium hover:underline"
-                          aria-label={t("apm.openService", { name: s.service_name })}
-                        >
-                          {s.service_name}
-                        </Link>
-                        <AgentVersionBadge service={agentIndex.get(serviceKey(s))} latest={agents.data?.release.latest} />
-                      </div>
-                      <div className="text-xs text-muted-foreground">{[s.language, s.version].filter(Boolean).join(" · ")}</div>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      <span className="text-sm">{s.environment || "–"}</span>
-                      {s.service_namespace && <div className="text-xs text-muted-foreground">{s.service_namespace}</div>}
-                    </TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatRpm(s.throughput, locale)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatRate(s.error_rate, locale)}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">{formatMs(s.p95_ms, locale)}</TableCell>
-                    <TableCell className="text-right">
-                      <ApdexBadge apdex={s.apdex} tMs={s.apdex_t_ms} />
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell">
-                      <Sparkline points={s.sparkline} label={t("apm.columns.trend")} />
-                    </TableCell>
-                    <TableCell className="hidden whitespace-nowrap md:table-cell">
-                      <time dateTime={s.last_seen} title={formatDateTime(seen, locale)}>
-                        {formatRelative(seen, now, locale)}
-                      </time>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            <Table data-testid="apm-services">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("apm.columns.service")}</SortableHead>
+                  <SortableHead column="environment" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("apm.columns.environment")}</SortableHead>
+                  <SortableHead column="throughput" className="text-right" {...list.head}>{t("apm.metrics.throughput")}</SortableHead>
+                  <SortableHead column="error_rate" className="text-right" {...list.head}>{t("apm.metrics.errorRate")}</SortableHead>
+                  <SortableHead column="p95" className="text-right" {...list.head}>{t("apm.metrics.p95")}</SortableHead>
+                  <SortableHead column="apdex" className="text-right" {...list.head}>{t("apm.metrics.apdex")}</SortableHead>
+                  <TableHead className="hidden lg:table-cell">{t("apm.columns.trend")}</TableHead>
+                  <SortableHead column="last_seen" className="hidden md:table-cell" {...list.head}>{t("apm.columns.lastSeen")}</SortableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {services.map((s) => {
+                  const seen = parseTimeParam(s.last_seen) ?? 0;
+                  const linkSearch = (prev: Record<string, unknown>) =>
+                    ({ range: prev.range, from: prev.from, to: prev.to, ns: s.service_namespace || undefined, env: s.environment || undefined }) as never;
+                  return (
+                    <TableRow key={`${s.service_name}|${s.service_namespace}|${s.environment}`}>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Link
+                            to="/apm/services/$service"
+                            params={{ service: s.service_name }}
+                            search={linkSearch}
+                            className="font-medium hover:underline"
+                            aria-label={t("apm.openService", { name: s.service_name })}
+                          >
+                            {s.service_name}
+                          </Link>
+                          <AgentVersionBadge service={agentIndex.get(serviceKey(s))} latest={agents.data?.release.latest} />
+                        </div>
+                        <div className="text-xs text-muted-foreground">{[s.language, s.version].filter(Boolean).join(" · ")}</div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <span className="text-sm">{s.environment || "–"}</span>
+                        {s.service_namespace && <div className="text-xs text-muted-foreground">{s.service_namespace}</div>}
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatRpm(s.throughput, locale)}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatRate(s.error_rate, locale)}</TableCell>
+                      <TableCell className="text-right font-mono tabular-nums">{formatMs(s.p95_ms, locale)}</TableCell>
+                      <TableCell className="text-right">
+                        <ApdexBadge apdex={s.apdex} tMs={s.apdex_t_ms} />
+                      </TableCell>
+                      <TableCell className="hidden lg:table-cell">
+                        <Sparkline points={s.sparkline} label={t("apm.columns.trend")} />
+                      </TableCell>
+                      <TableCell className="hidden whitespace-nowrap md:table-cell">
+                        <time dateTime={s.last_seen} title={formatDateTime(seen, locale)}>
+                          {formatRelative(seen, now, locale)}
+                        </time>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={services.length} hasMore={page.data.has_more ?? false} />
+          </>
         )}
       </div>
     </div>
@@ -351,7 +373,7 @@ export function ApmServicePage() {
         <TabsContent value="traces">
           {tab === "traces" && (
             <TracesTab
-              key={JSON.stringify([search.qtxn, search.qmin, search.qmax, search.qerr, search.qattr, search.qsort])}
+              key={JSON.stringify([search.qtxn, search.qmin, search.qmax, search.qerr, search.qattr])}
               scope={scope}
               range={range}
               filters={{ qtxn: search.qtxn, qmin: search.qmin, qmax: search.qmax, qerr: search.qerr, qattr: search.qattr, qsort: search.qsort }}

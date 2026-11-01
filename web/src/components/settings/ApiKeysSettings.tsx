@@ -3,14 +3,16 @@ import { KeyRound, Loader2, Plus } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apiKeysQuery, createApiKey, revokeApiKey, useMe, type ApiKey, type ApiKeyRole } from "@/api/account";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useNow } from "@/lib/hooks";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
@@ -22,6 +24,15 @@ type Expiry = (typeof EXPIRY)[number];
 const EXPIRY_DAYS: Record<Expiry, number | null> = { never: null, d30: 30, d90: 90, d365: 365 };
 /** Key roles, weakest first; "viewer" only reads and stays the default (D-133). */
 const KEY_ROLES: readonly ApiKeyRole[] = ["viewer", "member", "admin"];
+
+const KEY_COLUMNS = {
+  name: (k: ApiKey) => k.name,
+  role: (k: ApiKey) => k.role,
+  created_by: (k: ApiKey) => k.created_by_email,
+  last_used: (k: ApiKey) => timeOf(k.last_used_at),
+  expires: (k: ApiKey) => timeOf(k.expires_at),
+  status: (k: ApiKey) => (k.revoked_at ? 1 : 0),
+};
 
 export function ApiKeysSettings() {
   const { t } = useTranslation();
@@ -35,6 +46,7 @@ export function ApiKeysSettings() {
   const canCreateWriting = perms.can("api_keys.create_writing");
   const canRevokeAny = perms.can("api_keys.revoke_any");
   const keys = useQuery(apiKeysQuery());
+  const list = useLocalList(keys.data, KEY_COLUMNS, "name");
   const [name, setName] = useState("");
   const [role, setRole] = useState<ApiKeyRole>("viewer");
   const [expiry, setExpiry] = useState<Expiry>("d90");
@@ -128,56 +140,59 @@ export function ApiKeysSettings() {
         ) : keys.data.length === 0 ? (
           <EmptyState icon={<KeyRound className="size-5" aria-hidden="true" />}>{t("settings.apiKeys.empty")}</EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.columns.name")}</TableHead>
-                <TableHead>{t("settings.columns.key")}</TableHead>
-                <TableHead>{t("settings.columns.role")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("settings.columns.createdBy")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.lastUsed")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.expires")}</TableHead>
-                <TableHead>{t("settings.columns.status")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("settings.columns.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {keys.data.map((k) => (
-                <TableRow key={k.id}>
-                  <TableCell className="font-medium">{k.name}</TableCell>
-                  <TableCell label={t("settings.columns.key")}>
-                    <code className="font-mono text-xs">{k.prefix}</code>
-                    <span aria-hidden="true">…</span>
-                  </TableCell>
-                  <TableCell label={t("settings.columns.role")} className="max-md:w-auto">
-                    {roleBadge(k)}
-                  </TableCell>
-                  <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
-                    {k.created_by_email || "–"}
-                  </TableCell>
-                  <TableCell label={t("settings.columns.lastUsed")} className="hidden md:table-cell">
-                    <DateTimeText value={k.last_used_at} relative />
-                  </TableCell>
-                  <TableCell label={t("settings.columns.expires")} className="hidden md:table-cell">
-                    <DateTimeText value={k.expires_at} />
-                  </TableCell>
-                  <TableCell className="max-md:w-auto">{status(k)}</TableCell>
-                  <TableCell className="text-right">
-                    {canRevoke(k) && (
-                      <ConfirmButton
-                        label={t("settings.revoke")}
-                        confirmLabel={t("settings.confirmRevoke")}
-                        pending={revoke.isPending && revoke.variables === k.id}
-                        onConfirm={() => revoke.mutate(k.id)}
-                      />
-                    )}
-                  </TableCell>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="name" defaultDir="asc" {...list.head}>{t("settings.columns.name")}</SortableHead>
+                  <TableHead>{t("settings.columns.key")}</TableHead>
+                  <SortableHead column="role" defaultDir="asc" {...list.head}>{t("settings.columns.role")}</SortableHead>
+                  <SortableHead column="created_by" defaultDir="asc" className="hidden lg:table-cell" {...list.head}>{t("settings.columns.createdBy")}</SortableHead>
+                  <SortableHead column="last_used" className="hidden md:table-cell" {...list.head}>{t("settings.columns.lastUsed")}</SortableHead>
+                  <SortableHead column="expires" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("settings.columns.expires")}</SortableHead>
+                  <SortableHead column="status" defaultDir="asc" {...list.head}>{t("settings.columns.status")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("settings.columns.actions")}</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((k) => (
+                  <TableRow key={k.id}>
+                    <TableCell className="font-medium">{k.name}</TableCell>
+                    <TableCell label={t("settings.columns.key")}>
+                      <code className="font-mono text-xs">{k.prefix}</code>
+                      <span aria-hidden="true">…</span>
+                    </TableCell>
+                    <TableCell label={t("settings.columns.role")} className="max-md:w-auto">
+                      {roleBadge(k)}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.createdBy")} className="hidden break-all lg:table-cell">
+                      {k.created_by_email || "–"}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.lastUsed")} className="hidden md:table-cell">
+                      <DateTimeText value={k.last_used_at} relative />
+                    </TableCell>
+                    <TableCell label={t("settings.columns.expires")} className="hidden md:table-cell">
+                      <DateTimeText value={k.expires_at} />
+                    </TableCell>
+                    <TableCell className="max-md:w-auto">{status(k)}</TableCell>
+                    <TableCell className="text-right">
+                      {canRevoke(k) && (
+                        <ConfirmButton
+                          label={t("settings.revoke")}
+                          confirmLabel={t("settings.confirmRevoke")}
+                          pending={revoke.isPending && revoke.variables === k.id}
+                          onConfirm={() => revoke.mutate(k.id)}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </div>
     </div>

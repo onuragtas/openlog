@@ -15,21 +15,42 @@ import {
   revokeInvitation,
   updateMemberRole,
   useMe,
+  type Invitation,
+  type Member,
 } from "@/api/account";
 import { setSelectedOrg } from "@/api/auth";
 import { assignableRoles, can, ROLES, type Role } from "@/api/roles";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { WriteGuard } from "@/components/ReadOnly";
+import { timeOf, useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { SecretReveal } from "./SecretReveal";
+
+// ROLES has the most rights first, which is how a list of people reads.
+const roleRank = (role: Role) => ROLES.indexOf(role);
+
+const MEMBER_COLUMNS = {
+  member: (m: Member) => m.name || m.email,
+  role: (m: Member) => roleRank(m.role),
+  joined: (m: Member) => timeOf(m.joined_at),
+};
+
+const INVITATION_COLUMNS = {
+  email: (i: Invitation) => i.email,
+  role: (i: Invitation) => roleRank(i.role),
+  invited_by: (i: Invitation) => i.invited_by_email,
+  expires: (i: Invitation) => timeOf(i.expires_at),
+  last_sent: (i: Invitation) => timeOf(i.last_sent_at),
+};
 
 export function MembersSettings() {
   const { t } = useTranslation();
@@ -45,6 +66,8 @@ export function MembersSettings() {
   const canInvite = perms.can("invitations.manage");
   const members = useQuery(membersQuery());
   const invitations = useQuery({ ...invitationsQuery(), enabled: can(role, "invitations.manage") });
+  const memberList = useLocalList(members.data, MEMBER_COLUMNS, "member");
+  const invitationList = useLocalList(invitations.data, INVITATION_COLUMNS, "expires");
   const emailEnabled = useQuery(authConfigQuery()).data?.email_enabled === true;
 
   const [email, setEmail] = useState("");
@@ -108,68 +131,71 @@ export function MembersSettings() {
         ) : members.data.length === 0 ? (
           <EmptyState>{t("settings.members.empty")}</EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.columns.member")}</TableHead>
-                <TableHead>{t("settings.columns.role")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.joined")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("settings.columns.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {members.data.map((m) => {
-                const options = assignableRoles(role, m.role);
-                const self = m.user_id === myId;
-                return (
-                  <TableRow key={m.user_id}>
-                    <TableCell>
-                      <div className="font-medium">
-                        {m.name || m.email}
-                        {self && <span className="ml-1 text-xs font-normal text-muted-foreground">({t("settings.you")})</span>}
-                      </div>
-                      {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
-                    </TableCell>
-                    <TableCell>
-                      {options.length > 0 ? (
-                        <NativeSelect
-                          aria-label={t("settings.members.roleFor", { email: m.email })}
-                          value={m.role}
-                          disabled={update.isPending}
-                          onChange={(e) => update.mutate({ userId: m.user_id, role: e.target.value as Role })}
-                        >
-                          {options.map((r) => (
-                            <option key={r} value={r}>
-                              {t(`settings.roles.${r}`)}
-                            </option>
-                          ))}
-                        </NativeSelect>
-                      ) : (
-                        <Badge variant="secondary">{t(`settings.roles.${m.role}`)}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell label={t("settings.columns.joined")} className="hidden md:table-cell">
-                      <DateTimeText value={m.joined_at} />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {self ? (
-                        <WriteGuard>
-                          <ConfirmButton label={t("settings.leave")} confirmLabel={t("settings.confirmLeave")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
-                        </WriteGuard>
-                      ) : (
-                        canManage &&
-                        (m.role !== "owner" || role === "owner") && (
-                          <ConfirmButton label={t("settings.remove")} confirmLabel={t("settings.confirmRemove")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
-                        )
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="member" defaultDir="asc" {...memberList.head}>{t("settings.columns.member")}</SortableHead>
+                  <SortableHead column="role" defaultDir="asc" {...memberList.head}>{t("settings.columns.role")}</SortableHead>
+                  <SortableHead column="joined" className="hidden md:table-cell" {...memberList.head}>{t("settings.columns.joined")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("settings.columns.actions")}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {memberList.visible.map((m) => {
+                  const options = assignableRoles(role, m.role);
+                  const self = m.user_id === myId;
+                  return (
+                    <TableRow key={m.user_id}>
+                      <TableCell>
+                        <div className="font-medium">
+                          {m.name || m.email}
+                          {self && <span className="ml-1 text-xs font-normal text-muted-foreground">({t("settings.you")})</span>}
+                        </div>
+                        {m.name && <div className="text-xs text-muted-foreground">{m.email}</div>}
+                      </TableCell>
+                      <TableCell>
+                        {options.length > 0 ? (
+                          <NativeSelect
+                            aria-label={t("settings.members.roleFor", { email: m.email })}
+                            value={m.role}
+                            disabled={update.isPending}
+                            onChange={(e) => update.mutate({ userId: m.user_id, role: e.target.value as Role })}
+                          >
+                            {options.map((r) => (
+                              <option key={r} value={r}>
+                                {t(`settings.roles.${r}`)}
+                              </option>
+                            ))}
+                          </NativeSelect>
+                        ) : (
+                          <Badge variant="secondary">{t(`settings.roles.${m.role}`)}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell label={t("settings.columns.joined")} className="hidden md:table-cell">
+                        <DateTimeText value={m.joined_at} />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {self ? (
+                          <WriteGuard>
+                            <ConfirmButton label={t("settings.leave")} confirmLabel={t("settings.confirmLeave")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
+                          </WriteGuard>
+                        ) : (
+                          canManage &&
+                          (m.role !== "owner" || role === "owner") && (
+                            <ConfirmButton label={t("settings.remove")} confirmLabel={t("settings.confirmRemove")} pending={remove.isPending} onConfirm={() => remove.mutate(m.user_id)} />
+                          )
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={memberList} count={memberList.visible.length} hasMore={memberList.hasMore} />
+          </>
         )}
       </SettingsSection>
 
@@ -221,49 +247,52 @@ export function MembersSettings() {
           ) : invitations.data.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("settings.members.pendingEmpty")}</p>
           ) : (
-            <Table mobile="stack">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("settings.columns.email")}</TableHead>
-                  <TableHead>{t("settings.columns.role")}</TableHead>
-                  <TableHead className="hidden md:table-cell">{t("settings.columns.invitedBy")}</TableHead>
-                  <TableHead>{t("settings.columns.expires")}</TableHead>
-                  {emailEnabled && <TableHead className="hidden md:table-cell">{t("settings.members.lastSent")}</TableHead>}
-                  <TableHead>
-                    <span className="sr-only">{t("settings.columns.actions")}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {invitations.data.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="max-md:w-auto max-md:break-all">{inv.email}</TableCell>
-                    <TableCell className="max-md:w-auto">
-                      <Badge variant="secondary">{t(`settings.roles.${inv.role}`)}</Badge>
-                    </TableCell>
-                    <TableCell label={t("settings.columns.invitedBy")} className="hidden break-all md:table-cell">
-                      {inv.invited_by_email}
-                    </TableCell>
-                    <TableCell label={t("settings.columns.expires")}>
-                      {inv.expired ? <Badge variant="warning">{t("settings.expired")}</Badge> : <DateTimeText value={inv.expires_at} relative />}
-                    </TableCell>
-                    {emailEnabled && (
-                      <TableCell label={t("settings.members.lastSent")} className="hidden md:table-cell">
-                        {inv.last_sent_at ? <DateTimeText value={inv.last_sent_at} relative /> : <span className="text-muted-foreground">{t("settings.members.notSent")}</span>}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right">
-                      <span className="inline-flex flex-wrap justify-end gap-1">
-                        <Button type="button" variant="outline" size="sm" disabled={resend.isPending} onClick={() => resend.mutate(inv.id)}>
-                          {t("settings.members.resend")}
-                        </Button>
-                        <ConfirmButton label={t("settings.revoke")} confirmLabel={t("settings.confirmRevoke")} pending={revoke.isPending} onConfirm={() => revoke.mutate(inv.id)} />
-                      </span>
-                    </TableCell>
+            <>
+              <Table mobile="stack">
+                <TableHeader>
+                  <TableRow>
+                    <SortableHead column="email" defaultDir="asc" {...invitationList.head}>{t("settings.columns.email")}</SortableHead>
+                    <SortableHead column="role" defaultDir="asc" {...invitationList.head}>{t("settings.columns.role")}</SortableHead>
+                    <SortableHead column="invited_by" defaultDir="asc" className="hidden md:table-cell" {...invitationList.head}>{t("settings.columns.invitedBy")}</SortableHead>
+                    <SortableHead column="expires" defaultDir="asc" {...invitationList.head}>{t("settings.columns.expires")}</SortableHead>
+                    {emailEnabled && <SortableHead column="last_sent" className="hidden md:table-cell" {...invitationList.head}>{t("settings.members.lastSent")}</SortableHead>}
+                    <TableHead>
+                      <span className="sr-only">{t("settings.columns.actions")}</span>
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {invitationList.visible.map((inv) => (
+                    <TableRow key={inv.id}>
+                      <TableCell className="max-md:w-auto max-md:break-all">{inv.email}</TableCell>
+                      <TableCell className="max-md:w-auto">
+                        <Badge variant="secondary">{t(`settings.roles.${inv.role}`)}</Badge>
+                      </TableCell>
+                      <TableCell label={t("settings.columns.invitedBy")} className="hidden break-all md:table-cell">
+                        {inv.invited_by_email}
+                      </TableCell>
+                      <TableCell label={t("settings.columns.expires")}>
+                        {inv.expired ? <Badge variant="warning">{t("settings.expired")}</Badge> : <DateTimeText value={inv.expires_at} relative />}
+                      </TableCell>
+                      {emailEnabled && (
+                        <TableCell label={t("settings.members.lastSent")} className="hidden md:table-cell">
+                          {inv.last_sent_at ? <DateTimeText value={inv.last_sent_at} relative /> : <span className="text-muted-foreground">{t("settings.members.notSent")}</span>}
+                        </TableCell>
+                      )}
+                      <TableCell className="text-right">
+                        <span className="inline-flex flex-wrap justify-end gap-1">
+                          <Button type="button" variant="outline" size="sm" disabled={resend.isPending} onClick={() => resend.mutate(inv.id)}>
+                            {t("settings.members.resend")}
+                          </Button>
+                          <ConfirmButton label={t("settings.revoke")} confirmLabel={t("settings.confirmRevoke")} pending={revoke.isPending} onConfirm={() => revoke.mutate(inv.id)} />
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <ListPager list={invitationList} count={invitationList.visible.length} hasMore={invitationList.hasMore} />
+            </>
           )}
         </SettingsSection>
       )}

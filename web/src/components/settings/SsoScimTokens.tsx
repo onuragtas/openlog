@@ -1,24 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { createScimToken, revokeScimToken, scimTokensQuery } from "@/api/sso";
+import { createScimToken, revokeScimToken, scimTokensQuery, type ScimToken } from "@/api/sso";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { timeOf, useLocalList } from "@/lib/list";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 import { SecretReveal } from "./SecretReveal";
 import { SsoCopyField } from "./SsoCopyField";
 
 /** SCIM base URL and bearer tokens (shown once). */
+const TOKEN_COLUMNS = {
+  name: (x: ScimToken) => x.name,
+  created_by: (x: ScimToken) => x.created_by_email,
+  last_used: (x: ScimToken) => timeOf(x.last_used_at),
+};
+
 export function SsoScimTokens({ enabled }: { enabled: boolean }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const id = useId();
   const tokens = useQuery({ ...scimTokensQuery(), enabled });
+  const list = useLocalList(tokens.data?.tokens, TOKEN_COLUMNS, "name");
   const [name, setName] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const create = useMutation({
@@ -66,47 +75,50 @@ export function SsoScimTokens({ enabled }: { enabled: boolean }) {
           {tokens.data.tokens.length === 0 ? (
             <EmptyState>{t("sso.scim.empty")}</EmptyState>
           ) : (
-            <Table mobile="stack">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t("settings.columns.name")}</TableHead>
-                  <TableHead className="hidden md:table-cell">{t("settings.columns.createdBy")}</TableHead>
-                  <TableHead>{t("settings.columns.lastUsed")}</TableHead>
-                  <TableHead>
-                    <span className="sr-only">{t("settings.columns.actions")}</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {tokens.data.tokens.map((tok) => (
-                  <TableRow key={tok.id}>
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium">{tok.name}</span>
-                        <span className="font-mono text-xs text-muted-foreground">{tok.prefix}…</span>
-                        {tok.revoked_at && <Badge variant="outline">{t("settings.revoked")}</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell label={t("settings.columns.createdBy")} className="hidden md:table-cell">
-                      <span className="break-all">{tok.created_by_email}</span> · <DateTimeText value={tok.created_at} />
-                    </TableCell>
-                    <TableCell label={t("settings.columns.lastUsed")}>
-                      <DateTimeText value={tok.last_used_at} relative />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {!tok.revoked_at && (
-                        <ConfirmButton
-                          label={t("settings.revoke")}
-                          confirmLabel={t("settings.confirmRevoke")}
-                          pending={revoke.isPending && revoke.variables === tok.id}
-                          onConfirm={() => revoke.mutate(tok.id)}
-                        />
-                      )}
-                    </TableCell>
+            <>
+              <Table mobile="stack">
+                <TableHeader>
+                  <TableRow>
+                    <SortableHead column="name" defaultDir="asc" {...list.head}>{t("settings.columns.name")}</SortableHead>
+                    <SortableHead column="created_by" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("settings.columns.createdBy")}</SortableHead>
+                    <SortableHead column="last_used" {...list.head}>{t("settings.columns.lastUsed")}</SortableHead>
+                    <TableHead>
+                      <span className="sr-only">{t("settings.columns.actions")}</span>
+                    </TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {list.visible.map((tok) => (
+                    <TableRow key={tok.id}>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">{tok.name}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{tok.prefix}…</span>
+                          {tok.revoked_at && <Badge variant="outline">{t("settings.revoked")}</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell label={t("settings.columns.createdBy")} className="hidden md:table-cell">
+                        <span className="break-all">{tok.created_by_email}</span> · <DateTimeText value={tok.created_at} />
+                      </TableCell>
+                      <TableCell label={t("settings.columns.lastUsed")}>
+                        <DateTimeText value={tok.last_used_at} relative />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {!tok.revoked_at && (
+                          <ConfirmButton
+                            label={t("settings.revoke")}
+                            confirmLabel={t("settings.confirmRevoke")}
+                            pending={revoke.isPending && revoke.variables === tok.id}
+                            onConfirm={() => revoke.mutate(tok.id)}
+                          />
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+            </>
           )}
         </>
       )}

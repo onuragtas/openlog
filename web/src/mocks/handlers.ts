@@ -30,6 +30,7 @@ import { onboardingHandlers, onboardingHosts } from "./onboarding";
 import { privacyHandlers } from "./privacy";
 import { explorerHandlers } from "./explorer";
 import * as fx from "./fixtures";
+import { pageOf } from "./list";
 
 type ErrorCode = "invalid_argument" | "unauthenticated" | "not_found" | "internal" | "timeout";
 const STATUS: Record<ErrorCode, number> = { invalid_argument: 400, unauthenticated: 401, not_found: 404, internal: 500, timeout: 504 };
@@ -94,8 +95,16 @@ export const handlers = [
     const lim = limit(url);
     if (lim instanceof Response) return lim;
     const now = Date.now();
-    const list = [...fx.hosts(now), ...onboardingHosts(now)].filter((h) => Date.parse(h.last_seen) >= now - 24 * 3_600_000);
-    return HttpResponse.json({ hosts: list.slice(0, lim) });
+    const terms = (url.searchParams.get("q") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    const list = [...fx.hosts(now), ...onboardingHosts(now)].filter((h) => {
+      const text = [h.host_name, h.host_id, h.os_description, h.arch, h.agent_version, ...Object.entries(h.resource_attributes).map(([k, v]) => `${k}=${v}`)].join(" ").toLowerCase();
+      return Date.parse(h.last_seen) >= now - 24 * 3_600_000 && terms.every((t) => text.includes(t));
+    });
+    const page = pageOf(url, list, {
+      name: (h) => h.host_name || h.host_id, os: (h) => h.os_description, agent: (h) => h.agent_version, last_seen: (h) => h.last_seen,
+      cpu: (h) => h.usage?.cpu, memory: (h) => h.usage?.memory, disk: (h) => h.usage?.disk, load: (h) => h.usage?.load1,
+    }, { sort: "name", asc: ["name", "os", "agent"], limit: lim });
+    return HttpResponse.json({ hosts: page.rows, has_more: page.has_more });
   })),
 
   http.get(`${API}/hosts/:hostId`, authed(({ params }) => {

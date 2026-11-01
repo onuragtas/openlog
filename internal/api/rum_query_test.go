@@ -100,3 +100,146 @@ func TestRUMFilterFacets(t *testing.T) {
 		t.Errorf("the vitals rollup has no browser column: %s", sql)
 	}
 }
+
+// A sort name selects a fragment, and the query layer refuses fragments it does not like only when one is built. An empty result set stops
+// nothing here, because the first statement of each is the list itself.
+func TestRUMListsSortAndPageInTheStatement(t *testing.T) {
+	cases := []struct {
+		path  string
+		sort  string
+		dir   string
+		order string
+	}{
+		{"/api/v1/rum/apps?", "views", "", "v_views DESC, app, deployment_environment"},
+		{"/api/v1/rum/apps?", "sessions", "", "v_sessions DESC"},
+		{"/api/v1/rum/apps?", "errors", "asc", "v_errors ASC"},
+		{"/api/v1/rum/apps?", "last_seen", "", "v_last DESC"},
+		{"/api/v1/rum/apps?", "app", "", "app ASC"},
+		{"/api/v1/rum/apps?", "environment", "desc", "deployment_environment DESC"},
+		{"/api/v1/rum/pages?app=a&", "views", "", "p_views DESC, route"},
+		{"/api/v1/rum/pages?app=a&", "slowest", "", "p_dsum DESC, route"},
+		{"/api/v1/rum/pages?app=a&", "avg", "", "p_dsum / p_views DESC, route"},
+		{"/api/v1/rum/pages?app=a&", "ttfb", "", "p_ttfb / p_views DESC, route"},
+		{"/api/v1/rum/pages?app=a&", "route", "", "route ASC, route"},
+		{"/api/v1/rum/sessions?app=a&", "last_seen", "", "s_last DESC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "started", "asc", "s_first ASC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "duration", "", "dateDiff('millisecond', s_first, s_last) DESC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "page_views", "", "s_views DESC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "errors", "", "s_errors DESC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "entry", "", "s_entry ASC, session_id"},
+		{"/api/v1/rum/sessions?app=a&", "browser", "", "s_browser ASC, session_id"},
+		{"/api/v1/rum/releases?app=a&", "last_seen", "", "r_last DESC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "first_seen", "", "r_first DESC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "sessions", "", "r_sessions DESC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "error_sessions", "", "r_errors DESC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "error_free", "asc", "greatest(1 - r_errors / r_sessions, 0)) ASC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "crash_free", "", "greatest(1 - r_crashed / r_capturing, 0)) DESC, r_version"},
+		{"/api/v1/rum/releases?app=a&", "version", "desc", "splitByChar('.', r_version)) DESC, r_version"},
+	}
+	for _, c := range cases {
+		t.Run(c.path+c.sort, func(t *testing.T) {
+			s, conn := newTestServer(t)
+			path := c.path + "sort=" + c.sort + "&limit=25&offset=50"
+			if c.dir != "" {
+				path += "&dir=" + c.dir
+			}
+			if rec := get(t, s.Handler(), path); rec.Code != 200 {
+				t.Fatalf("status %d %s", rec.Code, rec.Body)
+			}
+			if !strings.Contains(conn.sql[0], c.order) || !strings.Contains(conn.sql[0], "LIMIT 26 OFFSET 50") {
+				t.Errorf("want order %q and a page:\n%s", c.order, conn.sql[0])
+			}
+		})
+	}
+}
+
+func TestRUMListsRefuseWhatTheyDoNotName(t *testing.T) {
+	s, conn := newTestServer(t)
+	h := s.Handler()
+	for _, p := range []string{
+		"/api/v1/rum/apps?sort=nope",
+		"/api/v1/rum/apps?dir=up",
+		"/api/v1/rum/pages?app=a&sort=p75",
+		"/api/v1/rum/pages?app=a&offset=-1",
+		"/api/v1/rum/sessions?app=a&sort=nope",
+		"/api/v1/rum/releases?app=a&sort=nope",
+		"/api/v1/rum/releases?app=a&limit=0",
+	} {
+		if r := get(t, h, p); r.Code != 400 {
+			t.Errorf("%s: status %d", p, r.Code)
+		}
+	}
+	if len(conn.sql) != 0 {
+		t.Errorf("queries ran for invalid requests: %v", conn.sql)
+	}
+}
+
+// A request with no paging gets what it always got: the store's console pages nothing and talks to this server too.
+func TestRUMListsKeepTheirOldDefaults(t *testing.T) {
+	cases := []struct {
+		path, want string
+	}{
+		{"/api/v1/rum/apps", "ORDER BY v_views DESC"},
+		{"/api/v1/rum/apps", "LIMIT 1001"},
+		{"/api/v1/rum/pages?app=a", "ORDER BY p_views DESC"},
+		{"/api/v1/rum/pages?app=a", "LIMIT 51"},
+		{"/api/v1/rum/sessions?app=a", "ORDER BY s_last DESC"},
+		{"/api/v1/rum/sessions?app=a", "LIMIT 51"},
+		{"/api/v1/rum/releases?app=a", "ORDER BY r_last DESC"},
+		{"/api/v1/rum/releases?app=a", "LIMIT 201"},
+	}
+	for _, c := range cases {
+		s, conn := newTestServer(t)
+		if r := get(t, s.Handler(), c.path); r.Code != 200 {
+			t.Fatalf("%s: status %d %s", c.path, r.Code, r.Body)
+		}
+		if !strings.Contains(conn.sql[0], c.want) {
+			t.Errorf("%s: want %q:\n%s", c.path, c.want, conn.sql[0])
+		}
+	}
+}
+
+// The ids of one person have to outlast the page: cut to the page's size, they would select nothing at all from page two onwards.
+func TestRUMSessionsOfOneUserAreNotCutToThePage(t *testing.T) {
+	s, conn := newTestServer(t)
+	if r := get(t, s.Handler(), "/api/v1/rum/sessions?app=a&user_id=u&limit=25&offset=25"); r.Code != 200 {
+		t.Fatalf("status %d %s", r.Code, r.Body)
+	}
+	// The test server's MaxRows is 1000, below rumMaxUserSessions.
+	if len(conn.sql) != 1 || !strings.Contains(conn.sql[0], "LIMIT 1000") || !strings.Contains(conn.sql[0], "ORDER BY max(timestamp) DESC") {
+		t.Errorf("%v", conn.sql)
+	}
+}
+
+// The LCP of a page has to be read for the routes on that page, or a page past the first shows none.
+func TestRUMPageLCPNamesItsRoutes(t *testing.T) {
+	s, _ := newTestServer(t)
+	sc, err := s.db.Scope("tenant-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	sql, params, err := rumPageLCPSelect(sc, rumFilter{app: "a"}, []string{"/x", "/y"}, now.Add(-time.Hour), now).Build()
+	if err != nil {
+		t.Fatalf("does not build: %v", err)
+	}
+	if !strings.Contains(sql, "route IN ({v_routes:Array(String)})") || !strings.Contains(sql, "LIMIT 2") {
+		t.Errorf("%s", sql)
+	}
+	if !strings.Contains(params["v_routes"], "/y") {
+		t.Errorf("%v", params)
+	}
+}
+
+// The console's largest page is 250. A server that gave it fewer would have Next step over the rows in between.
+func TestRUMListsServeTheLargestPage(t *testing.T) {
+	for _, path := range []string{"/api/v1/rum/apps?limit=250", "/api/v1/rum/pages?app=a&limit=250", "/api/v1/rum/sessions?app=a&limit=250", "/api/v1/rum/releases?app=a&limit=250"} {
+		s, conn := newTestServer(t)
+		if r := get(t, s.Handler(), path); r.Code != 200 {
+			t.Fatalf("%s: status %d %s", path, r.Code, r.Body)
+		}
+		if !strings.Contains(conn.sql[0], "LIMIT 251") {
+			t.Errorf("%s: %s", path, conn.sql[0])
+		}
+	}
+}

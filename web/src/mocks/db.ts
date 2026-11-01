@@ -32,6 +32,16 @@ const QUERIES: DbQuery[] = [
 
 const PLAN = JSON.stringify([{ Plan: { "Node Type": "Index Scan", "Relation Name": "orders", "Index Name": "orders_pkey", "Index Cond": "(id = $1)", "Total Cost": 8.3, "Plan Rows": 1 } }]);
 
+/** The paging of a list, so the screens can be driven through it: the rows are few and in the order the shop has them. */
+const paged = <T,>(url: string, rows: T[]) => {
+  const q = new URL(url).searchParams;
+  const offset = Number(q.get("offset") ?? 0);
+  const limit = Number(q.get("limit") ?? 50);
+  return { rows: rows.slice(offset, offset + limit), has_more: offset + limit < rows.length };
+};
+
+const WAITS = [{ type: "Lock", event: "transactionid", samples: 1445, share: 0.62 }, { type: "CPU", event: "", samples: 560, share: 0.24 }, { type: "IO", event: "DataFileRead", samples: 330, share: 0.14 }];
+
 export const dbHandlers = [
   http.get(`${API}/db/instances`, authed(() => {
     const inst: DbInstance = {
@@ -39,9 +49,12 @@ export const dbHandlers = [
       calls: 423200, throughput: 117.6, total_time_ms: 1000000, avg_ms: 2.36, statements: 3, errors: 0, avg_active_sessions: 3.4, top_wait: "Lock",
       last_seen: iso(Date.now() - 20_000),
     };
-    return HttpResponse.json({ instances: [inst] });
+    return HttpResponse.json({ instances: [inst], has_more: false });
   })),
-  http.get(`${API}/db/queries`, authed(() => HttpResponse.json({ queries: QUERIES, total_time_ms: 1000000 }))),
+  http.get(`${API}/db/queries`, authed(({ request }) => {
+    const { rows, has_more } = paged(request.url, QUERIES);
+    return HttpResponse.json({ queries: rows, total_time_ms: 1000000, has_more });
+  })),
   http.get(`${API}/db/queries/:fingerprint`, authed(({ params }) => {
     const q = QUERIES.find((x) => x.fingerprint === params.fingerprint);
     if (!q) return HttpResponse.json({ error: { code: "not_found", message: "statement not found" } }, { status: 404 });
@@ -62,9 +75,17 @@ export const dbHandlers = [
     return HttpResponse.json({
       from: iso(from), to: iso(to), step: "60s",
       series: [{ wait_type: "CPU", points: pts(0.8) }, { wait_type: "Lock", points: pts(2.1) }, { wait_type: "IO", points: pts(0.3) }],
-      waits: [{ type: "Lock", event: "transactionid", samples: 1445, share: 0.62 }, { type: "CPU", event: "", samples: 560, share: 0.24 }, { type: "IO", event: "DataFileRead", samples: 330, share: 0.14 }],
+      waits: WAITS,
       top_queries: [{ fingerprint: QUERIES[0]!.fingerprint, text: QUERIES[0]!.text, samples: 1200, avg_active_sessions: 2.1, top_wait: "Lock:transactionid" }],
     });
+  })),
+  http.get(`${API}/db/activity/waits`, authed(({ request }) => {
+    const { rows, has_more } = paged(request.url, WAITS);
+    return HttpResponse.json({ waits: rows, has_more });
+  })),
+  http.get(`${API}/db/activity/queries`, authed(({ request }) => {
+    const { rows, has_more } = paged(request.url, [{ fingerprint: QUERIES[0]!.fingerprint, text: QUERIES[0]!.text, samples: 1200, avg_active_sessions: 2.1, top_wait: "Lock:transactionid" }]);
+    return HttpResponse.json({ queries: rows, has_more });
   })),
   http.get(`${API}/db/sessions`, authed(() => {
     const s = (id: string, extra: Partial<DbSession>): DbSession => ({

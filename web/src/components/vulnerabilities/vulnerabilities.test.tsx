@@ -22,6 +22,23 @@ afterEach(async () => {
 });
 
 describe("Vulnerabilities", () => {
+  it("asks the server for another order and keeps the counters of the whole list", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    renderWithClient(<VulnerabilitiesList onOpen={vi.fn()} />);
+    await screen.findAllByTestId("vulnerability-row");
+    const scores = () => screen.getAllByTestId("vulnerability-row").map((r) => Number(within(r).getAllByRole("cell")[2]!.textContent));
+    const total = screen.getByRole("button", { name: /^All/ }).textContent;
+
+    await user.click(screen.getByRole("button", { name: "CVSS" }));
+    await vi.waitFor(() => {
+      const s = scores();
+      expect(s).toEqual([...s].sort((a, b) => b - a));
+    });
+    expect(screen.getByRole("columnheader", { name: "CVSS" })).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByRole("button", { name: /^All/ }).textContent).toBe(total);
+  });
+
   it("groups the findings by advisory, most serious first", async () => {
     await login(MOCK_EMAIL, MOCK_PASSWORD);
     const user = userEvent.setup();

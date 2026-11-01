@@ -3,6 +3,7 @@
 import { http, HttpResponse } from "msw";
 import type { AbuseFlag, OperatorOrg, OperatorOrgDetail, OrgLifecycle, OrgSaaSState, SupportSession } from "@/api/operator";
 import { authenticate, MOCK_DEFAULT_ORG_ID, MOCK_EMAIL, MOCK_STAGING_ORG_ID } from "./account";
+import { pageOf } from "./list";
 
 const API = "*/api/v1";
 const GiB = 2 ** 30;
@@ -153,7 +154,10 @@ export const operatorHandlers = [
         (!plan || o.plan_id === plan) &&
         (!st || (st === "flagged" ? o.open_flags > 0 : o.state === st)),
     );
-    return HttpResponse.json({ organizations: orgs, total: orgs.length, saas_mode: true });
+    const page = pageOf(url, orgs, {
+      created: (o) => o.created_at, name: (o) => o.name, ingest: (o) => o.ingest_bytes, members: (o) => o.members, last_ingest: (o) => o.last_ingest_at,
+    }, { sort: "created", asc: ["name"] });
+    return HttpResponse.json({ organizations: page.rows, total: orgs.length, saas_mode: true });
   }),
   http.get(`${API}/operator/orgs/:org`, ({ request, params }) => {
     const denied = operatorOnly(request);

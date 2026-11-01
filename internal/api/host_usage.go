@@ -135,12 +135,17 @@ func clampShare(v float64) *float64 {
 // withHostUsage attaches the usage summary to a page of hosts. A failing summary is not a failing page: the
 // list still answers "which machines exist", which is what it did before the summary existed.
 func (s *Server) withHostUsage(r *http.Request, sc *query.Scope, hosts []hostJSON) []hostJSON {
-	if len(hosts) == 0 || r.URL.Query().Get("usage") == "false" {
-		return hosts
-	}
 	ids := make([]string, 0, len(hosts))
 	for _, h := range hosts {
 		ids = append(ids, h.HostID)
+	}
+	return s.attachHostUsage(r, sc, hosts, ids)
+}
+
+// attachHostUsage reads the usage of the given hosts, or of every host of the tenant when ids is empty.
+func (s *Server) attachHostUsage(r *http.Request, sc *query.Scope, hosts []hostJSON, ids []string) []hostJSON {
+	if len(hosts) == 0 || r.URL.Query().Get("usage") == "false" {
+		return hosts
 	}
 	usage, err := s.hostUsage(r.Context(), sc, ids)
 	if err != nil {

@@ -83,9 +83,13 @@ paths:
     get:
       tags: [hosts]
       operationId: listHosts
-      summary: Hosts seen in the last 24h, ordered by host_name
+      summary: Hosts seen in the last 24h, ordered by host_name unless asked otherwise
       parameters:
         - $ref: "#/components/parameters/Limit"
+        - { name: q, in: query, description: "Words that must all appear in the name, id, OS, architecture, agent version or a key=value resource attribute", schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, os, cpu, memory, disk, load, agent, last_seen], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -98,6 +102,7 @@ paths:
                   hosts:
                     type: array
                     items: { $ref: "#/components/schemas/Host" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -306,11 +311,14 @@ paths:
     get:
       tags: [costs]
       operationId: listCostHosts
-      summary: Hosts ordered by cost, most expensive first
+      summary: Hosts ordered by cost, most expensive first unless asked otherwise
       parameters:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, schema: { type: string, enum: [host, instance, cost, idle], default: cost } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -324,6 +332,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/CostHost" }
                   total: { type: integer, description: Hosts before limit }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
                   summary: { $ref: "#/components/schemas/CostSummary" }
                   pricing: { $ref: "#/components/schemas/CostPricing" }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -340,6 +349,9 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, schema: { type: string, enum: [service, environment, containers, cost], default: cost } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -353,6 +365,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/CostService" }
                   total: { type: integer, description: Services before limit }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
                   summary: { $ref: "#/components/schemas/CostSummary" }
                   pricing: { $ref: "#/components/schemas/CostPricing" }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1561,7 +1574,11 @@ paths:
         - $ref: "#/components/parameters/ApmStep"
         - $ref: "#/components/parameters/ApmNamespace"
         - $ref: "#/components/parameters/ApmEnvironment"
-        - { name: q, in: query, description: Case-insensitive substring of the service name, schema: { type: string } }
+        - { name: q, in: query, description: "Case-insensitive words, each found somewhere in the name, namespace, environment, language or version", schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [name, environment, throughput, error_rate, p95, apdex, last_seen], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, description: Without one the answer is every service up to the server's maximum, so a page is only what asks for one., schema: { type: integer, minimum: 1 } }
       responses:
         "200":
           description: OK
@@ -1575,6 +1592,11 @@ paths:
                   services:
                     type: array
                     items: { $ref: "#/components/schemas/ApmService" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
+                  environments:
+                    type: array
+                    items: { type: string }
+                    description: Every environment seen since `from`, whatever `environment`, `q` and the page narrowed the rows to. Optional, since older servers do not send it.
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -1628,7 +1650,9 @@ paths:
         - $ref: "#/components/parameters/ApmEnvironment"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
-        - { name: sort, in: query, schema: { type: string, enum: [time, throughput, slowest, errors], default: time } }
+        - { name: sort, in: query, schema: { type: string, enum: [time, throughput, avg, slowest, errors, error_rate, apdex, name], default: time } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: type, in: query, schema: { $ref: "#/components/schemas/ApmTransactionType" } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
       responses:
@@ -1644,6 +1668,7 @@ paths:
                   transactions:
                     type: array
                     items: { $ref: "#/components/schemas/ApmTransaction" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
@@ -1685,6 +1710,8 @@ paths:
         - $ref: "#/components/parameters/ApmErrorAssignee"
         - $ref: "#/components/parameters/ApmErrorQuery"
         - $ref: "#/components/parameters/ApmErrorSort"
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Error inbox of the service (groups with occurrences in the range, plus groups whose workflow state matches the filter)
@@ -1733,6 +1760,8 @@ paths:
         - $ref: "#/components/parameters/ApmErrorAssignee"
         - $ref: "#/components/parameters/ApmErrorQuery"
         - $ref: "#/components/parameters/ApmErrorSort"
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Error groups with workflow state
@@ -1947,7 +1976,9 @@ paths:
         - $ref: "#/components/parameters/ApmEnvironment"
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
-        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors], default: time } }
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, slowest, errors, error_rate, max, statement, database], default: time } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: db_system, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 100 } }
       responses:
@@ -1962,6 +1993,7 @@ paths:
                   queries:
                     type: array
                     items: { $ref: "#/components/schemas/ApmDbQuery" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
@@ -2195,6 +2227,8 @@ paths:
         - { name: max_duration_ms, in: query, schema: { type: number, minimum: 0 } }
         - { name: error, in: query, schema: { type: boolean } }
         - { name: sort, in: query, schema: { type: string, enum: [timestamp, duration], default: timestamp } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 50 } }
       responses:
         "200":
@@ -2208,6 +2242,7 @@ paths:
                   traces:
                     type: array
                     items: { $ref: "#/components/schemas/ApmTraceResult" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
 
@@ -2372,6 +2407,10 @@ paths:
       parameters:
         - { name: severity, in: query, schema: { $ref: "#/components/schemas/VulnSeverity" } }
         - { name: host_id, in: query, schema: { type: string }, description: Only the findings of this host }
+        - { name: sort, in: query, schema: { type: string, enum: [severity, advisory, score, hosts], default: severity } }
+        - { name: limit, in: query, description: "Default and maximum 1000", schema: { type: integer, minimum: 1, maximum: 1000 } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Advisories with the number of hosts each affects
@@ -2386,7 +2425,9 @@ paths:
                     items: { $ref: "#/components/schemas/VulnGroup" }
                   severity_counts:
                     type: object
+                    description: Of the whole list, not of the page. Respects the filters.
                     additionalProperties: { type: integer, format: int64 }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -2812,8 +2853,12 @@ paths:
       operationId: listRumApps
       description: >-
         Browser applications that reported in the range, with page views, sessions, errors and when they
-        were last seen (rum.md §7).
+        were last seen (rum.md §7). With no `limit` this is every application, up to the server's row limit.
       parameters:
+        - { name: sort, in: query, schema: { type: string, enum: [views, sessions, errors, last_seen, app, environment], default: views } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1 } }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
       responses:
@@ -2828,6 +2873,7 @@ paths:
                   apps:
                     type: array
                     items: { $ref: "#/components/schemas/RumApp" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -2871,8 +2917,10 @@ paths:
           in: query
           description: One browser name (`Chrome`, `Safari`, …). Page views keep it; vitals do not.
           schema: { type: string, maxLength: 64 }
-        - { name: sort, in: query, schema: { type: string, enum: [views, slowest, avg], default: views } }
-        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: sort, in: query, schema: { type: string, enum: [views, slowest, avg, ttfb, route], default: views } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 1000 } }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
       responses:
@@ -2887,6 +2935,7 @@ paths:
                   pages:
                     type: array
                     items: { $ref: "#/components/schemas/RumPage" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -2946,7 +2995,7 @@ paths:
             lives on the spans rather than on the session rollup, so this narrows the rollup by the session
             ids those spans carry: it is bounded by the same window and by the trace retention, and costs
             nothing when it is not asked for. Empty for every session of an application that never
-            identifies anyone.
+            identifies anyone. It looks through that person's newest 2000 sessions, and pages stop there.
           schema: { type: string, maxLength: 128 }
         - name: device_type
           in: query
@@ -2956,6 +3005,9 @@ paths:
           in: query
           description: One browser name (`Chrome`, `Safari`, …).
           schema: { type: string, maxLength: 64 }
+        - { name: sort, in: query, schema: { type: string, enum: [last_seen, started, duration, page_views, errors, entry, browser], default: last_seen } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 500 } }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
@@ -2971,6 +3023,7 @@ paths:
                   sessions:
                     type: array
                     items: { $ref: "#/components/schemas/RumSession" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -3024,6 +3077,10 @@ paths:
           in: query
           description: How long a version must have been absent for its return to count as a new release.
           schema: { type: string, default: 30m }
+        - { name: sort, in: query, schema: { type: string, enum: [last_seen, first_seen, version, crash_free, error_free, sessions, error_sessions], default: last_seen } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, default: 200, maximum: 1000 } }
       responses:
         "200":
           description: Versions and the releases that introduced them
@@ -3039,6 +3096,7 @@ paths:
                   deployments:
                     type: array
                     items: { $ref: "#/components/schemas/ApmDeployment" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -3429,8 +3487,14 @@ paths:
     get:
       tags: [db]
       operationId: listDbInstances
-      description: Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5).
+      description: >-
+        Database instances that sent statement statistics or session samples in the range (db-monitoring.md §5). With no `limit`
+        this is every instance. Sorted and paged after merging two reads of at most 500 instances each, so complete up to those.
       parameters:
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, avg, aas, errors, statements, instance, host, wait, last_seen], default: time } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000 } }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
       responses:
@@ -3443,6 +3507,7 @@ paths:
                 required: [instances]
                 properties:
                   instances: { type: array, items: { $ref: "#/components/schemas/DbInstance" } }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -3456,10 +3521,12 @@ paths:
         - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
-        - { name: sort, in: query, schema: { type: string, enum: [time, calls, avg, rows, errors, reads], default: time } }
+        - { name: sort, in: query, schema: { type: string, enum: [time, calls, avg, rows, rows_per_call, errors, reads, statement], default: time } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
         - { name: db, in: query, schema: { type: string } }
         - { name: q, in: query, schema: { type: string }, description: case-insensitive substring of the statement }
-        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 50 } }
       responses:
         "200":
           description: Statements
@@ -3471,6 +3538,7 @@ paths:
                 properties:
                   queries: { type: array, items: { $ref: "#/components/schemas/DbQuery" } }
                   total_time_ms: { type: number, description: statement time of the whole instance in the range }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -3517,13 +3585,70 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/db/activity/waits:
+    get:
+      tags: [db]
+      operationId: listDbActivityWaits
+      description: Every wait event of the range, where /db/activity holds the top ones. `share` is of all the instance's samples in the range.
+      parameters:
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [samples, type, event], default: samples } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 50 } }
+      responses:
+        "200":
+          description: Wait events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [waits]
+                properties:
+                  waits: { type: array, items: { $ref: "#/components/schemas/DbWait" } }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  /api/v1/db/activity/queries:
+    get:
+      tags: [db]
+      operationId: listDbActivityQueries
+      description: Every statement the session samples caught in the range, where /db/activity holds the top ones.
+      parameters:
+        - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 }, description: "service.instance.id of the database instance" }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [samples, statement, wait], default: samples } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 50 } }
+      responses:
+        "200":
+          description: Statements by load
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queries]
+                properties:
+                  queries: { type: array, items: { $ref: "#/components/schemas/DbActivityQuery" } }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
   /api/v1/db/sessions:
     get:
       tags: [db]
       operationId: getDbSessions
       description: >-
         The latest session sample at or before `at` (default now, looking back 5 minutes): what every non-idle
-        session runs, waits for and blocks.
+        session runs, waits for and blocks. Not paged, because a blocking chain can only be drawn over the whole sample: it holds the
+        1000 longest running sessions, and `has_more` says when the sample had more.
       parameters:
         - { name: instance, in: query, required: true, schema: { type: string, maxLength: 512 } }
         - { name: at, in: query, schema: { type: integer, format: int64 }, description: unix milliseconds }
@@ -3538,6 +3663,7 @@ paths:
                 properties:
                   sampled_at: { $ref: "#/components/schemas/NullableTimestamp" }
                   sessions: { type: array, items: { $ref: "#/components/schemas/DbSession" } }
+                  has_more: { type: boolean, description: The sample held more sessions than this. Optional, since older servers do not send it. }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -3588,6 +3714,10 @@ paths:
       parameters:
         - { name: from, in: query, schema: { type: string } }
         - { name: to, in: query, schema: { type: string } }
+        - { name: sort, in: query, schema: { type: string, enum: [service, environment, type, total, samples, last_seen], default: samples } }
+        - { name: limit, in: query, description: "Default and maximum OPENLOG_API_MAX_ROWS", schema: { type: integer, minimum: 1 } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Profiled services
@@ -3600,6 +3730,7 @@ paths:
                   services:
                     type: array
                     items: { $ref: "#/components/schemas/ProfileService" }
+                  has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
@@ -7674,6 +7805,7 @@ paths:
         - { name: plan, in: query, description: Effective plan id, schema: { type: string } }
         - { name: state, in: query, schema: { type: string, enum: [active, suspended, trial, flagged] } }
         - { name: sort, in: query, schema: { type: string, enum: [created, name, ingest, members, last_ingest] } }
+        - { $ref: "#/components/parameters/ListDir" }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
         - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
@@ -8537,7 +8669,7 @@ components:
     ApmErrorSort:
       name: sort
       in: query
-      schema: { type: string, enum: [count, last_seen, first_seen], default: count }
+      schema: { type: string, enum: [count, last_seen, first_seen, type, service, status, assignee, comments], default: count }
     ApmGroupID:
       name: group_id
       in: path
@@ -11435,15 +11567,16 @@ components:
         waits: { type: array, items: { $ref: "#/components/schemas/DbWait" } }
         top_queries:
           type: array
-          items:
-            type: object
-            required: [fingerprint, text, samples, avg_active_sessions, top_wait]
-            properties:
-              fingerprint: { type: string }
-              text: { type: string }
-              samples: { type: integer }
-              avg_active_sessions: { type: number }
-              top_wait: { type: string }
+          items: { $ref: "#/components/schemas/DbActivityQuery" }
+    DbActivityQuery:
+      type: object
+      required: [fingerprint, text, samples, avg_active_sessions, top_wait]
+      properties:
+        fingerprint: { type: string }
+        text: { type: string }
+        samples: { type: integer }
+        avg_active_sessions: { type: number }
+        top_wait: { type: string }
     DbSession:
       type: object
       required: [session_id, state, wait_type, wait_event, db_name, user, application, client_address, duration_ms, fingerprint, text, blocking_session_ids, blocks]
@@ -12289,6 +12422,8 @@ components:
             resolved: { type: integer }
             ignored: { type: integer }
         truncated: { type: boolean, description: More than 2000 candidate groups or more than limit results }
+        capped: { type: boolean, description: "More than 2000 candidate groups, so some are in no sort or page. Optional, since older servers do not send it." }
+        has_more: { type: boolean, description: There is another page. Optional, since older servers do not send it. }
         workflow: { type: boolean, description: "false without PostgreSQL (static auth mode): every group is unresolved" }
     ApmErrorGroupState:
       allOf:

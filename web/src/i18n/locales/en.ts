@@ -3192,13 +3192,6 @@ export const en = {
     },
     transactions: {
       relatedLogs: "Related logs",
-      sort: "Sort by",
-      sorts: {
-        time: "Most time consuming",
-        throughput: "Highest throughput",
-        slowest: "Slowest (p95)",
-        errors: "Most errors",
-      },
       name: "Transaction",
       type: "Type",
       empty: "No transactions in this range.",
@@ -3268,8 +3261,6 @@ export const en = {
       selectedCount_one: "{{count}} selected",
       selectedCount_other: "{{count}} selected",
       service: "Service",
-      sort: "Sort by",
-      sorts: { count: "Most occurrences", last_seen: "Last seen", first_seen: "Newest groups" },
       status: "Status",
       statusFilter: "Filter by status",
       statuses: { unresolved: "Unresolved", resolved: "Resolved", ignored: "Ignored", all: "All" },
@@ -3315,13 +3306,6 @@ export const en = {
       statement: "Statement",
       system: "Database",
       operation: "Operation",
-      sort: "Sort by",
-      sorts: {
-        time: "Most time consuming",
-        calls: "Most calls",
-        slowest: "Slowest (avg)",
-        errors: "Most errors",
-      },
     },
     map: {
       namespace: "Namespace",
@@ -3339,8 +3323,6 @@ export const en = {
       resetLayout: "Reset layout",
       infraCounts: "Hosts & containers",
       infraCountsHint: "Show how many hosts and containers run each service",
-      showAllConnections: "Show all {{count}} connections",
-      showFewerConnections: "Show fewer",
       title: "Service map",
       subtitle: "Services and their dependencies, with requests per minute, error rate and p95 latency per connection",
       empty: "No services or dependencies in this range.",
@@ -3371,11 +3353,6 @@ export const en = {
       errorsOnly: "Errors only",
       attributes: "Span attributes",
       attributesHint: "key=value, comma separated",
-      sort: "Sort by",
-      sorts: {
-        timestamp: "Newest",
-        duration: "Slowest",
-      },
       search: "Search",
       start: "Start",
       status: "Status",
@@ -3604,9 +3581,7 @@ export const en = {
       open: "Details of {{route}}",
     },
     pages: {
-      sortLabel: "Sort by",
-      sort: { views: "Most views", slowest: "Most time consuming", avg: "Slowest on average" },
-      columns: { route: "Route", views: "Views", avg: "Average", p75: "p75", p95: "p95", ttfb: "TTFB", lcp: "LCP p75", errors: "Errors" },
+      columns: { route: "Route", views: "Views", totalTime: "Total time", avg: "Average", p75: "p75", p95: "p95", ttfb: "TTFB", lcp: "LCP p75", errors: "Errors" },
       empty: "No page views in this range.",
     },
     releases: {
@@ -3947,7 +3922,7 @@ export const en = {
     columns: {
       instance: "Instance", host: "Host", throughput: "Calls", avg: "Avg latency", aas: "Avg active sessions", topWait: "Top wait",
       lastSeen: "Last seen", waitType: "Wait type", waitEvent: "Wait event", share: "Share of time", statement: "Statement",
-      rowsPerCall: "Rows/call", errors: "Errors", session: "Session", service: "Service", calls: "Calls", clientAvg: "Client-side avg", cacheHit: "Cache hit",
+      rowsPerCall: "Rows/call", rows: "Rows", reads: "Disk reads", state: "State", duration: "Duration", errors: "Errors", session: "Session", service: "Service", calls: "Calls", clientAvg: "Client-side avg", cacheHit: "Cache hit",
     },
     activity: {
       title: "Active sessions by wait type",
@@ -3958,8 +3933,6 @@ export const en = {
     },
     queries: {
       search: "Search statements",
-      sort: "Sort by",
-      sorts: { time: "Total time", calls: "Calls", avg: "Avg latency", rows: "Rows", errors: "Errors", reads: "Disk reads" },
       empty: "No statement ran in this range.",
     },
     sessions: {
@@ -3972,6 +3945,7 @@ export const en = {
       active_one: "{{count}} other active session",
       active_other: "{{count}} other active sessions",
       noneOther: "No other session is running anything.",
+      cut: "This sample was bigger than what is shown: these are its {{n}} longest running sessions.",
     },
     query: {
       title: "Statement",

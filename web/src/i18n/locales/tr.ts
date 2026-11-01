@@ -3193,13 +3193,6 @@ export const tr: Messages = {
     },
     transactions: {
       relatedLogs: "İlgili loglar",
-      sort: "Sıralama",
-      sorts: {
-        time: "En çok süre harcayan",
-        throughput: "En yüksek istek hızı",
-        slowest: "En yavaş (p95)",
-        errors: "En çok hata",
-      },
       name: "İşlem",
       type: "Tür",
       empty: "Bu aralıkta işlem yok.",
@@ -3269,8 +3262,6 @@ export const tr: Messages = {
       selectedCount_one: "{{count}} seçili",
       selectedCount_other: "{{count}} seçili",
       service: "Servis",
-      sort: "Sırala",
-      sorts: { count: "En çok oluşum", last_seen: "Son görülme", first_seen: "En yeni gruplar" },
       status: "Durum",
       statusFilter: "Duruma göre süz",
       statuses: { unresolved: "Çözülmemiş", resolved: "Çözülmüş", ignored: "Yok sayılan", all: "Tümü" },
@@ -3316,13 +3307,6 @@ export const tr: Messages = {
       statement: "Sorgu",
       system: "Veritabanı",
       operation: "İşlem",
-      sort: "Sıralama",
-      sorts: {
-        time: "En çok süre harcayan",
-        calls: "En çok çağrılan",
-        slowest: "En yavaş (ort.)",
-        errors: "En çok hata",
-      },
     },
     map: {
       namespace: "Namespace",
@@ -3340,8 +3324,6 @@ export const tr: Messages = {
       resetLayout: "Yerleşimi sıfırla",
       infraCounts: "Host ve konteynerler",
       infraCountsHint: "Her servisi çalıştıran host ve konteyner sayısını göster",
-      showAllConnections: "{{count}} bağlantının tümünü göster",
-      showFewerConnections: "Daha az göster",
       title: "Servis haritası",
       subtitle: "Servisler ve bağımlılıkları; her bağlantı için dakikadaki istek, hata oranı ve p95 gecikme",
       empty: "Bu aralıkta servis veya bağımlılık yok.",
@@ -3372,11 +3354,6 @@ export const tr: Messages = {
       errorsOnly: "Yalnızca hatalar",
       attributes: "Span özellikleri",
       attributesHint: "anahtar=değer, virgülle ayrılmış",
-      sort: "Sıralama",
-      sorts: {
-        timestamp: "En yeni",
-        duration: "En yavaş",
-      },
       search: "Ara",
       start: "Başlangıç",
       status: "Durum",
@@ -3605,9 +3582,7 @@ export const tr: Messages = {
       open: "{{route}} rotasının ayrıntıları",
     },
     pages: {
-      sortLabel: "Sıralama",
-      sort: { views: "En çok görüntülenen", slowest: "En çok süre harcayan", avg: "Ortalamada en yavaş" },
-      columns: { route: "Rota", views: "Görüntüleme", avg: "Ortalama", p75: "p75", p95: "p95", ttfb: "TTFB", lcp: "LCP p75", errors: "Hatalar" },
+      columns: { route: "Rota", views: "Görüntüleme", totalTime: "Toplam süre", avg: "Ortalama", p75: "p75", p95: "p95", ttfb: "TTFB", lcp: "LCP p75", errors: "Hatalar" },
       empty: "Bu aralıkta sayfa görüntüleme yok.",
     },
     releases: {
@@ -3948,7 +3923,7 @@ export const tr: Messages = {
     columns: {
       instance: "Instance", host: "Sunucu", throughput: "Çağrı", avg: "Ort. gecikme", aas: "Ort. aktif oturum", topWait: "Baskın bekleme",
       lastSeen: "Son görülme", waitType: "Bekleme türü", waitEvent: "Bekleme olayı", share: "Süre payı", statement: "Sorgu",
-      rowsPerCall: "Satır/çağrı", errors: "Hata", session: "Oturum", service: "Servis", calls: "Çağrı", clientAvg: "İstemci ort.", cacheHit: "Önbellek isabeti",
+      rowsPerCall: "Satır/çağrı", rows: "Satır", reads: "Disk okuma", state: "Durum", duration: "Süre", errors: "Hata", session: "Oturum", service: "Servis", calls: "Çağrı", clientAvg: "İstemci ort.", cacheHit: "Önbellek isabeti",
     },
     activity: {
       title: "Bekleme türüne göre aktif oturumlar",
@@ -3959,8 +3934,6 @@ export const tr: Messages = {
     },
     queries: {
       search: "Sorgularda ara",
-      sort: "Sırala",
-      sorts: { time: "Toplam süre", calls: "Çağrı", avg: "Ort. gecikme", rows: "Satır", errors: "Hata", reads: "Disk okuma" },
       empty: "Bu aralıkta çalışan sorgu yok.",
     },
     sessions: {
@@ -3973,6 +3946,7 @@ export const tr: Messages = {
       active_one: "{{count}} diğer aktif oturum",
       active_other: "{{count}} diğer aktif oturum",
       noneOther: "Başka çalışan oturum yok.",
+      cut: "Bu örnek gösterilenden büyüktü: bunlar en uzun süren {{n}} oturumu.",
     },
     query: {
       title: "Sorgu",

@@ -2,6 +2,7 @@
 // useQuery(xxxQuery(...)); keys are stable and include the *range spec*
 // (not resolved timestamps) so relative ranges refetch with a fresh "now".
 import { infiniteQueryOptions, keepPreviousData, queryOptions } from "@tanstack/react-query";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { Aggregation, LogRecord, MetricSeriesResponse } from "./types";
@@ -13,6 +14,17 @@ export const hostsQuery = () =>
     queryKey: ["hosts"],
     queryFn: async ({ signal }) =>
       unwrap(await api.GET("/api/v1/hosts", { params: { query: { limit: 1000 } }, signal })).hosts,
+    refetchInterval: REFRESH_MS,
+  });
+
+export type HostSort = "name" | "os" | "cpu" | "memory" | "disk" | "load" | "agent" | "last_seen";
+
+/** One page of the hosts list. hostsQuery is every host, for what picks one. */
+export const hostListQuery = (list: ListState<HostSort>, q: string) =>
+  queryOptions({
+    queryKey: ["hosts", "list", list, q],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/hosts", { params: { query: { ...list, q: q || undefined } }, signal })),
+    placeholderData: keepPreviousData,
     refetchInterval: REFRESH_MS,
   });
 

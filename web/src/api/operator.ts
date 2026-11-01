@@ -1,5 +1,6 @@
 // SaaS operator console, organization lifecycle and support access (docs/contracts/api.md "SaaS operations").
 import { queryOptions } from "@tanstack/react-query";
+import type { SortDir } from "@/components/ui/table";
 import { api, expectOk, unwrap } from "./client";
 import type { components } from "./schema.gen";
 
@@ -13,11 +14,14 @@ export type AbuseFlag = S["AbuseFlag"];
 export type OrgSaaSState = S["OrgSaaSState"];
 export type OrgState = OperatorOrg["state"];
 
+export type OperatorOrgSort = "created" | "name" | "ingest" | "members" | "last_ingest";
+
 export interface OperatorOrgFilter {
   q?: string;
   plan?: string;
   state?: "active" | "suspended" | "trial" | "flagged";
-  sort?: "created" | "name" | "ingest" | "members" | "last_ingest";
+  sort?: OperatorOrgSort;
+  dir?: SortDir;
   offset?: number;
 }
 
@@ -38,7 +42,7 @@ export const operatorOrgsQuery = (f: OperatorOrgFilter) =>
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET("/api/v1/operator/orgs", {
-          params: { query: { q: f.q || undefined, plan: f.plan || undefined, state: f.state, sort: f.sort, limit: OPERATOR_PAGE_SIZE, offset: f.offset || undefined } },
+          params: { query: { q: f.q || undefined, plan: f.plan || undefined, state: f.state, sort: f.sort, dir: f.dir, limit: OPERATOR_PAGE_SIZE, offset: f.offset || undefined } },
           signal,
         }),
       ),

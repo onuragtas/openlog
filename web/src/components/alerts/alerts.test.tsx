@@ -11,6 +11,7 @@ import { ThemeProvider } from "@/lib/theme";
 import { MOCK_EMAIL, MOCK_PASSWORD, MOCK_STAGING_ORG_ID } from "@/mocks/account";
 import { MOCK_ALERT_IDS, resetMockAlerts } from "@/mocks/alerts";
 import { ChannelsManager } from "./ChannelsManager";
+import { RulesList } from "./RulesList";
 
 // uPlot reads window.matchMedia when it loads; jsdom has none.
 vi.hoisted(() => {
@@ -206,4 +207,24 @@ describe("alerting UI", () => {
     expect(await screen.findByText("Your role can view mutes but not change them.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send test" })).not.toBeInTheDocument();
   }, 40_000);
+});
+
+describe("RulesList", () => {
+  it("sorts by name and puts the most severe first on the first click of its column", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    resetMockAlerts();
+    const user = userEvent.setup();
+    renderUi(<RulesList />);
+    await screen.findAllByTestId("rule-row");
+    const names = () => screen.getAllByTestId("rule-row").map((r) => within(r).getAllByRole("cell")[0]!.textContent!);
+
+    const initial = names();
+    expect(initial).toEqual([...initial].sort((a, b) => a.localeCompare(b)));
+
+    await user.click(screen.getByRole("button", { name: "Severity" }));
+    const severities = screen.getAllByTestId("rule-row").map((r) => within(r).getAllByRole("cell")[2]!.textContent);
+    expect(severities[0]).toBe("Critical");
+    expect(severities[severities.length - 1]).not.toBe("Critical");
+    expect(screen.getByRole("columnheader", { name: "Severity" })).toHaveAttribute("aria-sort", "descending");
+  });
 });

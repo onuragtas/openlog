@@ -26,7 +26,7 @@ export interface OverviewTabProps {
 export function OverviewTab({ scope, range, onOpenTransaction, onViewAll, onOpenErrorGroup }: OverviewTabProps) {
   const { t } = useTranslation();
   const overview = useQuery(apmOverviewQuery(scope, range));
-  const top = useQuery(apmTransactionsQuery(scope, range, "time", 5));
+  const top = useQuery(apmTransactionsQuery(scope, range, { sort: "time", dir: "desc", limit: 5, offset: 0 }));
   const deployments = useQuery(apmDeploymentsQuery(scope, range));
   const points = useMemo(() => overview.data?.series ?? [], [overview.data]);
   const markers = useMemo(() => deploymentMarkers(deployments.data?.deployments, overview.data?.from, overview.data?.to), [deployments.data, overview.data?.from, overview.data?.to]);

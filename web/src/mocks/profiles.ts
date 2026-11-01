@@ -6,6 +6,7 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 import type { FlameNode, ProfileFunction, ProfileService } from "@/api/profiles";
 import { authenticate } from "./account";
 import { formatTs } from "./fixtures";
+import { pageOf } from "./list";
 
 const API = "*/api/v1";
 
@@ -91,7 +92,12 @@ const ALLOC_FUNCTIONS: ProfileFunction[] = [
 const unitOf = (type: string) => (type === "alloc_space" ? "bytes" : "nanoseconds");
 
 export const profileHandlers = [
-  http.get(`${API}/profiles/services`, authed(() => HttpResponse.json({ services: services(Date.now()) }))),
+  http.get(`${API}/profiles/services`, authed(({ request }) => {
+    const list = pageOf(new URL(request.url), services(Date.now()), {
+      service: (s) => s.service, environment: (s) => s.environment, type: (s) => s.type, total: (s) => s.total, samples: (s) => s.samples, last_seen: (s) => s.last_seen,
+    }, { sort: "samples", asc: ["service", "environment", "type"] });
+    return HttpResponse.json({ services: list.rows, has_more: list.has_more });
+  })),
 
   http.get(`${API}/profiles/flame`, authed(({ request }) => {
     const q = new URL(request.url).searchParams;

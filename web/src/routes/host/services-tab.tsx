@@ -7,15 +7,17 @@ import { hostQuery, inventoryQuery, servicesQuery } from "@/api/queries";
 import type { DiscoveredService, InventoryItem } from "@/api/types";
 import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { ApmHintFooter } from "@/components/onboarding/ApmHintFooter";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { translateOptional } from "@/i18n/dynamic";
 import { formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { hasPanel, integrationOf } from "@/lib/integrations";
+import { useLocalList } from "@/lib/list";
 import { formatPort } from "@/lib/ports";
 import { parseTimeParam } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -151,10 +153,29 @@ interface SystemService {
   path?: string;
 }
 
+const systemService = (it: InventoryItem) => (it.data && typeof it.data === "object" ? it.data : {}) as SystemService;
+const systemServicePid = (d: SystemService) => (typeof d.pid === "number" && d.pid > 0 ? d.pid : null);
+
+// State and start type as sent, not as translated: an unknown value is shown as it came, and the order only has to group them.
+const SYSTEM_SERVICE_COLUMNS = {
+  name: (it: InventoryItem) => {
+    const d = systemService(it);
+    return d.label || d.name || it.key;
+  },
+  state: (it: InventoryItem) => systemService(it).state,
+  start_type: (it: InventoryItem) => systemService(it).start_type,
+  pid: (it: InventoryItem) => systemServicePid(systemService(it)),
+  program: (it: InventoryItem) => {
+    const d = systemService(it);
+    return d.binary_path || d.program || d.path;
+  },
+};
+
 function SystemServices({ hostId }: { hostId: string }) {
   const { t } = useTranslation();
   const query = useQuery(inventoryQuery(hostId));
   const items = useMemo(() => (query.data?.items ?? []).filter((it) => SYSTEM_SERVICE_CATEGORIES.includes(it.category)), [query.data]);
+  const list = useLocalList(items, SYSTEM_SERVICE_COLUMNS, "name");
   if (items.length === 0) return null;
   return (
     <section aria-labelledby="system-services-title" className="mt-6" data-testid="system-services">
@@ -165,18 +186,18 @@ function SystemServices({ hostId }: { hostId: string }) {
         <Table mobile="stack">
           <TableHeader>
             <TableRow>
-              <TableHead>{t("services.systemColumns.name")}</TableHead>
-              <TableHead>{t("services.systemColumns.state")}</TableHead>
-              <TableHead>{t("services.systemColumns.startType")}</TableHead>
-              <TableHead>{t("services.systemColumns.pid")}</TableHead>
-              <TableHead>{t("services.systemColumns.program")}</TableHead>
+              <SortableHead column="name" defaultDir="asc" {...list.head}>{t("services.systemColumns.name")}</SortableHead>
+              <SortableHead column="state" defaultDir="asc" {...list.head}>{t("services.systemColumns.state")}</SortableHead>
+              <SortableHead column="start_type" defaultDir="asc" {...list.head}>{t("services.systemColumns.startType")}</SortableHead>
+              <SortableHead column="pid" {...list.head}>{t("services.systemColumns.pid")}</SortableHead>
+              <SortableHead column="program" defaultDir="asc" {...list.head}>{t("services.systemColumns.program")}</SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((it) => {
-              const d = (it.data && typeof it.data === "object" ? it.data : {}) as SystemService;
+            {list.visible.map((it) => {
+              const d = systemService(it);
               const name = d.label || d.name || it.key;
-              const pid = typeof d.pid === "number" && d.pid > 0 ? d.pid : null;
+              const pid = systemServicePid(d);
               const state = d.state
                 ? translateOptional(`services.states.${d.state}`, d.state.replace(/_/g, " "))
                 : pid !== null
@@ -212,6 +233,7 @@ function SystemServices({ hostId }: { hostId: string }) {
             })}
           </TableBody>
         </Table>
+        <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
       </div>
     </section>
   );

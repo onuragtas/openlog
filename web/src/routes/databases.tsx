@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { dbInstancesQuery, type DbQuerySort } from "@/api/db";
+import { dbInstancesQuery } from "@/api/db";
 import { PageHeader } from "@/components/AppShell";
 import { AppDbQueries } from "@/components/db/AppDbQueries";
 import { DbActivityTab } from "@/components/db/DbActivityTab";
@@ -93,9 +93,8 @@ export function DatabaseInstancePage() {
             <DbQueriesTab
               instance={instance}
               range={rangeOf(search)}
-              sort={search.sort ?? "time"}
+              initialSort={search.sort}
               q={search.q ?? ""}
-              onSort={(sort: DbQuerySort) => setSearch({ sort })}
               onSearch={(q) => setSearch({ q: q || undefined })}
               onOpen={openQuery}
             />

@@ -11,6 +11,7 @@ import {
   resolveFlag,
   type AbuseFlag,
   type OperatorOrgFilter,
+  type OperatorOrgSort,
 } from "@/api/operator";
 import { plansQuery } from "@/api/usage";
 import { PageHeader } from "@/components/AppShell";
@@ -20,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, type SortDir, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatBytes } from "@/lib/format";
 import { ReasonAction } from "./ReasonAction";
@@ -83,6 +84,8 @@ function OrganizationList() {
   const plans = useQuery(plansQuery()).data?.plans ?? [];
   const orgs = useQuery(operatorOrgsQuery(filter));
   const set = (patch: Partial<OperatorOrgFilter>) => setFilter((f) => ({ ...f, offset: 0, ...patch }));
+  const sort = filter.sort ?? "created";
+  const head = { sort, dir: filter.dir ?? (sort === "name" ? ("asc" as const) : ("desc" as const)), onSort: (s: OperatorOrgSort, dir: SortDir) => set({ sort: s, dir }) };
 
   return (
     <div className="flex flex-col gap-3">
@@ -129,7 +132,7 @@ function OrganizationList() {
           <label htmlFor={`${id}-sort`} className="text-xs text-muted-foreground">
             {t("operator.filters.sort")}
           </label>
-          <NativeSelect id={`${id}-sort`} value={filter.sort} onChange={(e) => set({ sort: e.target.value as OperatorOrgFilter["sort"] })}>
+          <NativeSelect id={`${id}-sort`} value={filter.sort} onChange={(e) => set({ sort: e.target.value as OperatorOrgSort, dir: undefined })}>
             {SORTS.map((s) => (
               <option key={s} value={s}>
                 {t(`operator.sort.${s}`)}
@@ -154,14 +157,14 @@ function OrganizationList() {
           <Table mobile="stack">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("operator.columns.organization")}</TableHead>
+                <SortableHead column="name" defaultDir="asc" {...head}>{t("operator.columns.organization")}</SortableHead>
                 <TableHead>{t("operator.columns.plan")}</TableHead>
                 <TableHead>{t("operator.columns.state")}</TableHead>
-                <TableHead className="text-right">{t("operator.columns.members")}</TableHead>
+                <SortableHead column="members" className="text-right" {...head}>{t("operator.columns.members")}</SortableHead>
                 <TableHead className="text-right">{t("operator.columns.hosts")}</TableHead>
-                <TableHead className="text-right">{t("operator.columns.ingest")}</TableHead>
-                <TableHead>{t("operator.columns.lastIngest")}</TableHead>
-                <TableHead>{t("operator.columns.created")}</TableHead>
+                <SortableHead column="ingest" className="text-right" {...head}>{t("operator.columns.ingest")}</SortableHead>
+                <SortableHead column="last_ingest" {...head}>{t("operator.columns.lastIngest")}</SortableHead>
+                <SortableHead column="created" {...head}>{t("operator.columns.created")}</SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

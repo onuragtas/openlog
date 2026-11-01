@@ -1,40 +1,47 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
-import { useId } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { apmDeploymentsQuery, apmTransactionQuery, apmTransactionsQuery, type ApmTransaction, type TransactionSort } from "@/api/apm";
 import { deploymentMarkers } from "@/lib/deployments";
 import { ApdexBadge, LatencyHistogram, RedTiles } from "@/components/apm/Charts";
 import { ChartCard } from "@/components/apm/OverviewTab";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, type SortDir } from "@/components/ui/table";
 import { formatMs, formatRate, formatRpm, latencySeries, metricPoints, type ServiceScope } from "@/lib/apm";
 import { formatDateTime } from "@/lib/format";
+import { useListState, type ListControls } from "@/lib/list";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 
-const SORTS: TransactionSort[] = ["time", "throughput", "slowest", "errors"];
-
-export function TransactionTable({ transactions, apdexTMs, onOpen, selected }: { transactions: ApmTransaction[]; apdexTMs: number; onOpen: (name: string) => void; selected?: string }) {
+export function TransactionTable({ transactions, apdexTMs, onOpen, selected, head }: { transactions: ApmTransaction[]; apdexTMs: number; onOpen: (name: string) => void; selected?: string; head?: ListControls<TransactionSort>["head"] }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
+  // The overview shows the top few and nothing else, so only a list that was handed a sort has headings to click.
+  const heading = (column: TransactionSort, label: string, className?: string, defaultDir?: SortDir) =>
+    head ? (
+      <SortableHead column={column} className={className} defaultDir={defaultDir} {...head}>
+        {label}
+      </SortableHead>
+    ) : (
+      <TableHead className={className}>{label}</TableHead>
+    );
   return (
     <Table data-testid="transactions-table">
       <TableHeader>
         <TableRow>
-          <TableHead>{t("apm.transactions.name")}</TableHead>
-          <TableHead className="text-right">{t("apm.metrics.throughput")}</TableHead>
-          <TableHead className="text-right">{t("apm.metrics.avg")}</TableHead>
-          <TableHead className="text-right">{t("apm.metrics.p95")}</TableHead>
-          <TableHead className="text-right">{t("apm.metrics.errorRate")}</TableHead>
-          <TableHead className="text-right">{t("apm.metrics.apdex")}</TableHead>
-          <TableHead className="w-40">{t("apm.metrics.timeShare")}</TableHead>
+          {heading("name", t("apm.transactions.name"), undefined, "asc")}
+          {heading("throughput", t("apm.metrics.throughput"), "text-right")}
+          {heading("avg", t("apm.metrics.avg"), "text-right")}
+          {heading("slowest", t("apm.metrics.p95"), "text-right")}
+          {heading("error_rate", t("apm.metrics.errorRate"), "text-right")}
+          {heading("apdex", t("apm.metrics.apdex"), "text-right")}
+          {heading("time", t("apm.metrics.timeShare"), "w-40")}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -87,8 +94,19 @@ export interface TransactionsTabProps {
 
 export function TransactionsTab({ scope, range, sort, selected, onSort, onSelect, onShowTraces }: TransactionsTabProps) {
   const { t } = useTranslation();
-  const id = useId();
-  const list = useQuery(apmTransactionsQuery(scope, range, sort));
+  // The URL holds the column, so a shared link opens on it, and the rest of the sort and the page stay on this screen.
+  const list = useListState<TransactionSort>(sort, sort === "name" ? "asc" : "desc");
+  const q = useQuery(apmTransactionsQuery(scope, range, list.state));
+  const { toFirstPage } = list;
+  // Another range is another list, so page five of it would usually show nothing.
+  useEffect(toFirstPage, [range.range, range.from, range.to, toFirstPage]);
+  const head = {
+    ...list.head,
+    onSort: (column: TransactionSort, dir: SortDir) => {
+      list.head.onSort(column, dir);
+      onSort(column);
+    },
+  };
   return (
     <div className="flex flex-col gap-4">
       {selected && <TransactionDetail scope={scope} range={range} name={selected} onClose={() => onSelect(undefined)} onShowTraces={onShowTraces} />}
@@ -97,26 +115,19 @@ export function TransactionsTab({ scope, range, sort, selected, onSort, onSelect
           <CardTitle>
             <h2>{t("apm.service.tabs.transactions")}</h2>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Label htmlFor={id}>{t("apm.transactions.sort")}</Label>
-            <NativeSelect id={id} value={sort} onChange={(e) => onSort(e.target.value as TransactionSort)}>
-              {SORTS.map((s) => (
-                <option key={s} value={s}>
-                  {t(`apm.transactions.sorts.${s}`)}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
         </CardHeader>
         <CardContent className="px-0">
-          {list.isPending ? (
+          {q.isPending ? (
             <LoadingState />
-          ) : list.isError ? (
-            <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-          ) : list.data.transactions.length === 0 ? (
+          ) : q.isError ? (
+            <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+          ) : q.data.transactions.length === 0 && list.state.offset === 0 ? (
             <EmptyState>{t("apm.transactions.empty")}</EmptyState>
           ) : (
-            <TransactionTable transactions={list.data.transactions} apdexTMs={list.data.apdex_t_ms} onOpen={onSelect} selected={selected} />
+            <>
+              <TransactionTable transactions={q.data.transactions} apdexTMs={q.data.apdex_t_ms} onOpen={onSelect} selected={selected} head={head} />
+              <ListPager list={list} count={q.data.transactions.length} hasMore={q.data.has_more ?? false} />
+            </>
           )}
         </CardContent>
       </Card>

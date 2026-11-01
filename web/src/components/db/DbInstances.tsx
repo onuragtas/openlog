@@ -1,12 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { dbInstancesQuery, type DbInstance } from "@/api/db";
+import { dbInstancesPageQuery, type DbInstance, type DbInstanceSort } from "@/api/db";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { dbSystemName, instanceLabel } from "@/lib/db";
 import { formatNumber, formatRelative, formatValue } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useListState } from "@/lib/list";
 import type { RangeSpec } from "@/lib/time";
 
 /** Database instances with query monitoring data in the range, heaviest first (db-monitoring.md §5). */
@@ -14,10 +17,14 @@ export function DbInstances({ range, onOpen }: { range: RangeSpec; onOpen: (i: D
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const now = useNow();
-  const q = useQuery(dbInstancesQuery(range));
+  // Starts on total time, which has no column of its own: it is what "heaviest" has always meant here.
+  const list = useListState<DbInstanceSort>("time");
+  const q = useQuery(dbInstancesPageQuery(range, list.state));
+  const { toFirstPage } = list;
+  useEffect(toFirstPage, [range.range, range.from, range.to, toFirstPage]);
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
-  if (q.data.length === 0) {
+  if (q.data.instances.length === 0 && list.state.offset === 0) {
     return (
       <EmptyState>
         <span className="block">{t("db.empty")}</span>
@@ -30,17 +37,17 @@ export function DbInstances({ range, onOpen }: { range: RangeSpec; onOpen: (i: D
       <Table mobile="stack">
         <TableHeader>
           <TableRow>
-            <TableHead>{t("db.columns.instance")}</TableHead>
-            <TableHead>{t("db.columns.host")}</TableHead>
-            <TableHead className="text-right">{t("db.columns.throughput")}</TableHead>
-            <TableHead className="text-right">{t("db.columns.avg")}</TableHead>
-            <TableHead className="text-right">{t("db.columns.aas")}</TableHead>
-            <TableHead>{t("db.columns.topWait")}</TableHead>
-            <TableHead>{t("db.columns.lastSeen")}</TableHead>
+            <SortableHead column="instance" defaultDir="asc" {...list.head}>{t("db.columns.instance")}</SortableHead>
+            <SortableHead column="host" defaultDir="asc" {...list.head}>{t("db.columns.host")}</SortableHead>
+            <SortableHead column="calls" className="text-right" {...list.head}>{t("db.columns.throughput")}</SortableHead>
+            <SortableHead column="avg" className="text-right" {...list.head}>{t("db.columns.avg")}</SortableHead>
+            <SortableHead column="aas" className="text-right" {...list.head}>{t("db.columns.aas")}</SortableHead>
+            <SortableHead column="wait" defaultDir="asc" {...list.head}>{t("db.columns.topWait")}</SortableHead>
+            <SortableHead column="last_seen" {...list.head}>{t("db.columns.lastSeen")}</SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {q.data.map((d) => (
+          {q.data.instances.map((d) => (
             <TableRow key={d.instance} className="cursor-pointer" onClick={() => onOpen(d)} data-testid="db-instance">
               <TableCell>
                 <button type="button" className="text-left font-medium text-primary hover:underline" title={d.instance} onClick={() => onOpen(d)}>
@@ -68,6 +75,7 @@ export function DbInstances({ range, onOpen }: { range: RangeSpec; onOpen: (i: D
           ))}
         </TableBody>
       </Table>
+      <ListPager list={list} count={q.data.instances.length} hasMore={q.data.has_more ?? false} />
     </div>
   );
 }

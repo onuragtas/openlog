@@ -26,9 +26,27 @@ import (
 // days as the release list. A range starts at its first whole hour, and sessions before that migration are not
 // in it, so the rates of an upgraded installation start from then.
 
-// rumMaxReleases bounds the versions a list returns. An application with more distinct versions than this
-// in one window is not releasing, it is leaking build identifiers into service.version.
+// rumMaxReleases bounds the versions a request with no limit gets, which is what it always got. An application
+// with more distinct versions than this in one window is not releasing, it is leaking build identifiers into
+// service.version.
 const rumMaxReleases = 200
+
+// rumReleasesList computes the rates in the statement the way the handler does, so the order and the numbers
+// can't disagree. A build that cannot report a crash has a null rate, which ClickHouse sorts last either way.
+var rumReleasesList = listSpec{
+	columns: map[string]string{
+		"last_seen": "r_last", "first_seen": "r_first", "sessions": "r_sessions", "error_sessions": "r_errors",
+		"error_free": "if(r_sessions = 0, 1, greatest(1 - r_errors / r_sessions, 0))",
+		"crash_free": "if(r_capturing = 0, NULL, greatest(1 - r_crashed / r_capturing, 0))",
+		// By its numbers, or 1.10 would read as older than 1.9.
+		"version": "arrayMap(x -> toUInt32OrZero(x), splitByChar('.', r_version))",
+	},
+	sort:     "last_seen",
+	asc:      map[string]bool{"version": true},
+	tiebreak: []string{"r_version"},
+	limit:    rumMaxReleases,
+	maxLimit: 1000,
+}
 
 type rumReleaseJSON struct {
 	Version string `json:"version"`
@@ -56,7 +74,7 @@ type rumReleaseJSON struct {
 // It is a function of its own so a test can build it without data: the handler reaches this query only
 // after its filter parses, and a fragment the query layer refuses would otherwise be found in production
 // (the same lesson as rumTimelineSelect).
-func rumReleasesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit int) *query.Select {
+func rumReleasesSelect(sc *query.Scope, f rumFilter, from, to time.Time, l listRequest) *query.Select {
 	q := sc.From(query.RumReleaseSessions).Columns(
 		"version AS r_version",
 		// A session counts once however many errors it had, which is what "error-free session" means.
@@ -70,7 +88,7 @@ func rumReleasesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit i
 		Where("app = {r_app:String}").Param("r_app", f.app).
 		Where("hour >= toStartOfHour(fromUnixTimestamp({t_from:Int64})) AND hour < fromUnixTimestamp({t_to:Int64})").
 		Param("t_from", from.Unix()).Param("t_to", to.Unix()).
-		GroupBy("r_version").OrderBy("r_last DESC").Limit(limit)
+		GroupBy("r_version").OrderBy(rumReleasesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	if f.env != nil {
 		q.Where("deployment_environment = {r_env:String}").Param("r_env", *f.env)
 	}
@@ -267,7 +285,11 @@ func (s *Server) rumReleases(w http.ResponseWriter, r *http.Request, sc *query.S
 		return err
 	}
 
-	rows, err := sc.Query(r.Context(), rumReleasesSelect(sc, f, from, to, min(rumMaxReleases, s.cfg.MaxRows)))
+	l, err := rumReleasesList.parse(r, s.cfg.MaxRows)
+	if err != nil {
+		return err
+	}
+	rows, err := sc.Query(r.Context(), rumReleasesSelect(sc, f, from, to, l))
 	if err != nil {
 		return err
 	}
@@ -292,12 +314,13 @@ func (s *Server) rumReleases(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	releases, more := page(releases, l)
 
 	// The releases themselves come from the APM version rollup, which a RUM span already feeds.
 	deployments, err := serviceDeployments(r.Context(), sc, svcFilter{name: f.app, env: f.env}, from, to, gap)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"releases": releases, "deployments": deployments})
+	writeJSON(w, http.StatusOK, map[string]any{"releases": releases, "deployments": deployments, "has_more": more})
 	return nil
 }

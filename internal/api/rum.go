@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -19,8 +20,12 @@ import (
 // fingerprint, grouping and workflow state, and the UI links straight to `GET /apm/errors?service=<app>`.
 // Adding a parallel inbox would mean two places to resolve the same error.
 
-// rumMaxRoutes bounds the pages a list returns; the rollup key is the route, which the ingest bounds too.
-const rumMaxRoutes = 200
+// rumMaxRoutes bounds one page of routes; the rollup key is the route, which the ingest bounds too.
+const rumMaxRoutes = 1000
+
+// rumMaxUserSessions bounds the session ids `user_id` looks through, the newest of them. They go into a statement, and that person's visits past
+// this many are not in the list at all.
+const rumMaxUserSessions = 2000
 
 func (s *Server) rumRoutes(mux *http.ServeMux) {
 	route := func(pattern string, h handlerFunc) { mux.Handle(pattern, s.wrap(pattern, h)) }
@@ -206,9 +211,26 @@ type rumEventJSON struct {
 
 // ---- handlers ----
 
+// rumAppsList has no default page: with no limit a request gets everything up to MaxRows, as it did before there were pages.
+var rumAppsList = listSpec{
+	columns: map[string]string{
+		"views": "v_views", "sessions": "v_sessions", "errors": "v_errors", "last_seen": "v_last",
+		"app": "app", "environment": "deployment_environment",
+	},
+	sort:     "views",
+	asc:      map[string]bool{"app": true, "environment": true},
+	tiebreak: []string{"app", "deployment_environment"},
+	limit:    math.MaxInt32,
+	maxLimit: math.MaxInt32,
+}
+
 // rumApps lists the browser applications that reported in the range.
 func (s *Server) rumApps(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	l, err := rumAppsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -221,7 +243,7 @@ func (s *Server) rumApps(w http.ResponseWriter, r *http.Request, sc *query.Scope
 		"max(last_seen) AS v_last",
 	).Where("last_seen >= fromUnixTimestamp64Nano({t_from:Int64})").Param("t_from", from.UnixNano()).
 		Where("first_seen < fromUnixTimestamp64Nano({t_to:Int64})").Param("t_to", to.UnixNano()).
-		GroupBy("app", "deployment_environment").OrderBy("v_views DESC").Limit(s.cfg.MaxRows)
+		GroupBy("app", "deployment_environment").OrderBy(rumAppsList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -240,7 +262,8 @@ func (s *Server) rumApps(w http.ResponseWriter, r *http.Request, sc *query.Scope
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"apps": apps})
+	apps, more := page(apps, l)
+	writeJSON(w, http.StatusOK, map[string]any{"apps": apps, "has_more": more})
 	return nil
 }
 
@@ -423,6 +446,49 @@ func (s *Server) rumVitals(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	return nil
 }
 
+// rumPagesList orders what the page view rollup can order. The percentiles are worked out in Go from a histogram and the LCP comes from another
+// table, so neither is known when the statement cuts a page and neither can be a sort here.
+var rumPagesList = listSpec{
+	columns: map[string]string{
+		"views": "p_views",
+		// By total time, not by p95: the slowest page worth fixing is the one that costs the most seconds
+		// across all its views, which is the same reasoning as APM's "most time consuming".
+		"slowest": "p_dsum",
+		"avg":     "p_dsum / p_views",
+		"ttfb":    "p_ttfb / p_views",
+		"route":   "route",
+	},
+	sort:     "views",
+	asc:      map[string]bool{"route": true},
+	tiebreak: []string{"route"},
+	limit:    50,
+	maxLimit: rumMaxRoutes,
+}
+
+// rumPagesSelect is a function of its own so a test can build it, the same lesson as rumTimelineSelect.
+func rumPagesSelect(sc *query.Scope, f rumFilter, from, to time.Time, l listRequest) *query.Select {
+	return rumRange(f.applyBrowser(f.applyDevice(f.apply(sc.From(query.RumPageViews1m).Columns(
+		"route",
+		"sum(views) AS p_views",
+		"sum(duration_sum_ms) AS p_dsum",
+		"max(duration_max_ms) AS p_max",
+		"sum(ttfb_sum_ms) AS p_ttfb",
+		"tupleElement(sumMap(duration_hist), 1) AS p_hk",
+		"tupleElement(sumMap(duration_hist), 2) AS p_hv",
+	)))), from, to).GroupBy("route").OrderBy(rumPagesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
+}
+
+// rumPageLCPSelect reads the LCP of the routes of one page. It has to name them: cut at a number of routes instead, it would return whichever
+// came first, and a page further down would show no LCP at all.
+func rumPageLCPSelect(sc *query.Scope, f rumFilter, routes []string, from, to time.Time) *query.Select {
+	return rumRange(f.apply(sc.From(query.RumVitals1m).Columns(
+		"route",
+		"tupleElement(sumMap(value_hist), 1) AS v_hk",
+		"tupleElement(sumMap(value_hist), 2) AS v_hv",
+	)), from, to).Where("vital = {v_name:String}").Param("v_name", rum.VitalLCP).
+		Where("route IN ({v_routes:Array(String)})").Param("v_routes", routes).GroupBy("route").Limit(len(routes))
+}
+
 // rumPages lists the routes of an application: how often they were viewed and how slow they were.
 func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	f, err := parseRUMFilter(r, true)
@@ -433,34 +499,11 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 50, rumMaxRoutes)
+	l, err := rumPagesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	sort := r.URL.Query().Get("sort")
-	order := "p_views DESC"
-	switch sort {
-	case "", "views":
-	case "slowest":
-		// By total time, not by p95: the slowest page worth fixing is the one that costs the most seconds
-		// across all its views, which is the same reasoning as APM's "most time consuming".
-		order = "p_dsum DESC"
-	case "avg":
-		order = "p_dsum / p_views DESC"
-	default:
-		return badRequest("sort must be one of views, slowest, avg")
-	}
-
-	q := rumRange(f.applyBrowser(f.applyDevice(f.apply(sc.From(query.RumPageViews1m).Columns(
-		"route",
-		"sum(views) AS p_views",
-		"sum(duration_sum_ms) AS p_dsum",
-		"max(duration_max_ms) AS p_max",
-		"sum(ttfb_sum_ms) AS p_ttfb",
-		"tupleElement(sumMap(duration_hist), 1) AS p_hk",
-		"tupleElement(sumMap(duration_hist), 2) AS p_hv",
-	)))), from, to).GroupBy("route").OrderBy(order).Limit(limit)
-	rows, err := sc.Query(r.Context(), q)
+	rows, err := sc.Query(r.Context(), rumPagesSelect(sc, f, from, to, l))
 	if err != nil {
 		return err
 	}
@@ -487,15 +530,15 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	pages, more := page(pages, l)
 	// The page view rollup carries load time, not vitals (0094_rum.sql), so the LCP of each route comes from
 	// the vitals rollup — the same p75 the overview leads with, per route.
 	if len(pages) > 0 {
-		vq := rumRange(f.apply(sc.From(query.RumVitals1m).Columns(
-			"route",
-			"tupleElement(sumMap(value_hist), 1) AS v_hk",
-			"tupleElement(sumMap(value_hist), 2) AS v_hv",
-		)), from, to).Where("vital = {v_name:String}").Param("v_name", rum.VitalLCP).GroupBy("route").Limit(limit)
-		vrows, err := sc.Query(r.Context(), vq)
+		routes := make([]string, len(pages))
+		for i := range pages {
+			routes[i] = pages[i].Route
+		}
+		vrows, err := sc.Query(r.Context(), rumPageLCPSelect(sc, f, routes, from, to))
 		if err != nil {
 			return err
 		}
@@ -518,8 +561,20 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 			pages[i].LCPP75 = lcp[pages[i].Route]
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pages": pages})
+	writeJSON(w, http.StatusOK, map[string]any{"pages": pages, "has_more": more})
 	return nil
+}
+
+var rumSessionsList = listSpec{
+	columns: map[string]string{
+		"last_seen": "s_last", "started": "s_first", "duration": "dateDiff('millisecond', s_first, s_last)",
+		"page_views": "s_views", "errors": "s_errors", "entry": "s_entry", "browser": "s_browser",
+	},
+	sort:     "last_seen",
+	asc:      map[string]bool{"entry": true, "browser": true},
+	tiebreak: []string{"session_id", "app", "deployment_environment"},
+	limit:    50,
+	maxLimit: 500,
 }
 
 // rumSessions lists sessions, newest first.
@@ -532,24 +587,26 @@ func (s *Server) rumSessions(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, 50, 500)
+	l, err := rumSessionsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
 	q := s.rumSessionSelect(sc).
 		Where("last_seen >= fromUnixTimestamp64Nano({t_from:Int64})").Param("t_from", from.UnixNano()).
 		Where("first_seen < fromUnixTimestamp64Nano({t_to:Int64})").Param("t_to", to.UnixNano()).
-		OrderBy("s_last DESC").Limit(limit)
+		OrderBy(rumSessionsList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	rumFilter{app: f.app, env: f.env}.apply(q)
 	// The visits of one person, where the application declared one (rum.md §3.7). The identity lives on
 	// the spans and not on the session rollup, so the rollup is narrowed by the session ids those spans
 	// carry rather than by a column it does not have. Only when asked for: without the parameter this
-	// costs nothing, and with it the subquery is bounded by the same window and the trace retention.
+	// costs nothing, and with it the subquery is bounded by the same window and the trace retention. The ids are
+	// not cut to the page: the page is cut from the sessions they select, so a smaller set would leave nothing
+	// for the next one. This is complete only up to rumMaxUserSessions, and has_more can't see past those.
 	if user := strings.TrimSpace(r.URL.Query().Get("user_id")); user != "" {
 		if len(user) > rum.MaxUserIDBytes {
 			return badRequest("user_id must be at most %d bytes", rum.MaxUserIDBytes)
 		}
-		ids, err := s.rumSessionIDsOfUser(r, sc, user, from, to, limit)
+		ids, err := s.rumSessionIDsOfUser(r, sc, user, from, to, min(rumMaxUserSessions, s.cfg.MaxRows))
 		if err != nil {
 			return err
 		}
@@ -570,7 +627,8 @@ func (s *Server) rumSessions(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions})
+	sessions, more := page(sessions, l)
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "has_more": more})
 	return nil
 }
 
@@ -602,16 +660,18 @@ func (s *Server) rumSessionIDsOfUser(
 	return out, rows.Err()
 }
 
-// rumSessionIDsSelect is that query on its own, so a test can build it without rows in the database.
+// rumSessionIDsSelect is that query on its own, so a test can build it without rows in the database. Newest first, because the limit
+// decides which of someone's visits exist at all.
 func rumSessionIDsSelect(sc *query.Scope, user string, from, to time.Time, limit int) *query.Select {
 	return sc.From(query.Spans).
-		Columns("DISTINCT attributes[{a_session:String}] AS s_id").
+		Columns("attributes[{a_session:String}] AS s_id").
 		Param("a_session", rum.AttrSessionID).
 		Where("attributes[{a_user:String}] = {u_id:String}").
 		Param("a_user", rum.AttrUserID).Param("u_id", user).
 		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64})").
 		Where("timestamp < fromUnixTimestamp64Nano({t_to:Int64})").
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
+		GroupBy("s_id").OrderBy("max(timestamp) DESC", "s_id").
 		Limit(limit)
 }
 

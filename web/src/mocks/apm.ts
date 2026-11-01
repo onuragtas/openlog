@@ -274,7 +274,7 @@ function mapData(w: { from: number; to: number; step: number }, focus?: string):
 
 // ---- traces ----
 
-function traces(w: { from: number; to: number }, url: URL): ApmTraceResult[] {
+function traces(w: { from: number; to: number }, url: URL) {
   const service = url.searchParams.get("service") ?? "frontend";
   const txn = url.searchParams.get("transaction");
   const minMs = Number(url.searchParams.get("min_duration_ms") ?? 0);
@@ -301,8 +301,7 @@ function traces(w: { from: number; to: number }, url: URL): ApmTraceResult[] {
       transaction_name: name,
     });
   }
-  if (url.searchParams.get("sort") === "duration") out.sort((a, b) => b.duration_ms - a.duration_ms);
-  return out.slice(0, Number(url.searchParams.get("limit") ?? 50));
+  return listPage(url, out, { timestamp: (t) => t.timestamp, duration: (t) => t.duration_ms }, { sort: "timestamp", limit: 50 });
 }
 
 // ---- error workflow (in memory; reset with resetMockApm) ----
@@ -329,6 +328,26 @@ function seedWorkflow(): void {
 }
 seedWorkflow();
 
+/** Sort and page like the server's listSpec (api.md "Lists"). What has no value goes last in either direction. */
+function listPage<T>(url: URL, rows: T[], keys: Record<string, (row: T) => string | number | null | undefined>, opts: { sort: string; asc?: string[]; limit?: number }): { rows: T[]; has_more: boolean } | Response {
+  const p = url.searchParams;
+  const sort = p.get("sort") ?? opts.sort;
+  const read = keys[sort];
+  if (!read) return fail("invalid_argument", `sort must be one of ${Object.keys(keys).sort().join(", ")}`);
+  const asc = p.has("dir") ? p.get("dir") === "asc" : (opts.asc ?? []).includes(sort);
+  const sorted = [...rows].sort((a, b) => {
+    const x = read(a);
+    const y = read(b);
+    if (x === null || x === undefined || x === "") return y === null || y === undefined || y === "" ? 0 : 1;
+    if (y === null || y === undefined || y === "") return -1;
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+    return asc ? c : -c;
+  });
+  const offset = Number(p.get("offset") ?? 0);
+  const limit = Number(p.get("limit") ?? opts.limit ?? sorted.length);
+  return { rows: sorted.slice(offset, offset + limit), has_more: offset + limit < sorted.length };
+}
+
 function serviceOfGroup(id: string): string | undefined {
   return Object.keys(GROUPS).find((svc) => GROUPS[svc]!.some((g) => g.group_id === id));
 }
@@ -352,17 +371,25 @@ function inbox(url: URL, services: Profile[], w: { from: number; to: number; ste
   let assignee = p.get("assignee") ?? "any";
   if (assignee === "me") assignee = mockUser().id;
   const q = (p.get("q") ?? "").toLowerCase();
-  const sort = p.get("sort") ?? "count";
   let all = services.flatMap((s) => inboxGroups(s, w));
   if (assignee === "none") all = all.filter((g) => !g.assignee);
   else if (assignee !== "any") all = all.filter((g) => g.assignee?.user_id === assignee);
   if (q) all = all.filter((g) => [g.error_type, g.message, g.service_name, g.last_span_name].join(" ").toLowerCase().includes(q));
   const counts = { unresolved: 0, resolved: 0, ignored: 0 };
   for (const g of all) counts[g.status]++;
-  let groups = statuses ? all.filter((g) => statuses.includes(g.status)) : all;
-  const key = sort === "last_seen" ? (g: ApmErrorGroup) => Date.parse(g.last_seen ?? "") : sort === "first_seen" ? (g: ApmErrorGroup) => Date.parse(g.first_seen ?? "") : (g: ApmErrorGroup) => g.count;
-  groups = [...groups].sort((a, b) => key(b) - key(a));
-  return HttpResponse.json({ groups: groups.slice(0, Number(p.get("limit") ?? 50)), step: `${w.step}s`, counts, truncated: false, workflow: true });
+  const groups = statuses ? all.filter((g) => statuses.includes(g.status)) : all;
+  const page = listPage(url, groups, {
+    count: (g) => g.count,
+    last_seen: (g) => Date.parse(g.last_seen ?? ""),
+    first_seen: (g) => Date.parse(g.first_seen ?? ""),
+    type: (g) => g.error_type,
+    service: (g) => g.service_name,
+    status: (g) => g.status,
+    assignee: (g) => g.assignee?.name || g.assignee?.email,
+    comments: (g) => g.comment_count,
+  }, { sort: "count", asc: ["type", "service", "status", "assignee"], limit: 50 });
+  if (page instanceof Response) return page;
+  return HttpResponse.json({ groups: page.rows, step: `${w.step}s`, counts, truncated: page.has_more, capped: false, has_more: page.has_more, workflow: true });
 }
 
 /** Trace ids of a transaction (logs mock: GET /logs?transaction=&transaction_service=). */
@@ -418,8 +445,22 @@ export const apmHandlers = [
     const w = window(url);
     if (w instanceof Response) return w;
     const env = url.searchParams.get("environment");
-    const list = env !== null && env !== ENV ? [] : PROFILES.map((p) => service(p, w));
-    return HttpResponse.json({ services: list, step: `${w.step}s` });
+    const terms = (url.searchParams.get("q") ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+    const list = (env !== null && env !== ENV ? [] : PROFILES.map((p) => service(p, w))).filter((s) => {
+      const text = [s.service_name, s.service_namespace, s.environment, s.language, s.version].join(" ").toLowerCase();
+      return terms.every((term) => text.includes(term));
+    });
+    const page = listPage(url, list, {
+      name: (s) => s.service_name,
+      environment: (s) => s.environment,
+      throughput: (s) => s.throughput,
+      error_rate: (s) => s.error_rate,
+      p95: (s) => s.p95_ms,
+      apdex: (s) => s.apdex,
+      last_seen: (s) => s.last_seen,
+    }, { sort: "name", asc: ["name", "environment"] });
+    if (page instanceof Response) return page;
+    return HttpResponse.json({ services: page.rows, step: `${w.step}s`, has_more: page.has_more, environments: [ENV] });
   })),
 
   http.get(`${API}/apm/services/:service`, withService((p) => {
@@ -442,14 +483,21 @@ export const apmHandlers = [
   })),
 
   http.get(`${API}/apm/services/:service/transactions`, withService((p, url, w) => {
-    const sort = url.searchParams.get("sort") ?? "time";
-    if (!["time", "throughput", "slowest", "errors"].includes(sort)) return fail("invalid_argument", "sort must be time, throughput, slowest or errors");
     const list = transactions(p, w);
     const total = list.reduce((s, t) => s + t.time_consumed_ms, 0);
     for (const t of list) t.time_share = total ? t.time_consumed_ms / total : 0;
-    const key = { time: (t: ApmTransaction) => t.time_consumed_ms, throughput: (t: ApmTransaction) => t.requests, slowest: (t: ApmTransaction) => t.p95_ms ?? -1, errors: (t: ApmTransaction) => t.errors }[sort as "time"];
-    list.sort((a, b) => key(b) - key(a));
-    return HttpResponse.json({ transactions: list.slice(0, Number(url.searchParams.get("limit") ?? 100)), apdex_t_ms: settingsFor(p.name).apdex_t_ms });
+    const page = listPage(url, list, {
+      time: (t) => t.time_consumed_ms,
+      throughput: (t) => t.requests,
+      avg: (t) => t.avg_ms,
+      slowest: (t) => t.p95_ms,
+      errors: (t) => t.errors,
+      error_rate: (t) => t.error_rate,
+      apdex: (t) => t.apdex,
+      name: (t) => t.transaction_name,
+    }, { sort: "time", asc: ["name"], limit: 100 });
+    if (page instanceof Response) return page;
+    return HttpResponse.json({ transactions: page.rows, apdex_t_ms: settingsFor(p.name).apdex_t_ms, has_more: page.has_more });
   })),
 
   http.get(`${API}/apm/services/:service/transaction`, withService((p, url, w) => {
@@ -637,11 +685,18 @@ export const apmHandlers = [
     const list = (QUERIES[p.name] ?? []).map((q) => ({ ...q, throughput: q.calls / mins, error_rate: q.calls ? q.errors / q.calls : 0, time_share: 0 }));
     const total = list.reduce((s, q) => s + q.time_consumed_ms, 0);
     for (const q of list) q.time_share = total ? q.time_consumed_ms / total : 0;
-    const sort = url.searchParams.get("sort") ?? "time";
-    const key = { time: (q: ApmDbQuery) => q.time_consumed_ms, calls: (q: ApmDbQuery) => q.calls, slowest: (q: ApmDbQuery) => q.avg_ms ?? 0, errors: (q: ApmDbQuery) => q.errors }[sort as "time"];
-    if (!key) return fail("invalid_argument", "sort must be time, calls, slowest or errors");
-    list.sort((a, b) => key(b) - key(a));
-    return HttpResponse.json({ queries: list });
+    const page = listPage<ApmDbQuery>(url, list, {
+      time: (q) => q.time_consumed_ms,
+      calls: (q) => q.calls,
+      slowest: (q) => q.avg_ms,
+      errors: (q) => q.errors,
+      error_rate: (q) => q.error_rate,
+      max: (q) => q.max_ms,
+      statement: (q) => q.statement,
+      database: (q) => q.db_name,
+    }, { sort: "time", asc: ["statement", "database"], limit: 100 });
+    if (page instanceof Response) return page;
+    return HttpResponse.json({ queries: page.rows, has_more: page.has_more });
   })),
 
   http.get(`${API}/apm/services/:service/hosts`, withService(() => HttpResponse.json({ hosts: [{ host_id: HOST_IDS.web, host_name: "web-1", first_seen: formatTs(Date.now() - 86_400_000), last_seen: formatTs(Date.now()), known: true }] }))),
@@ -713,7 +768,9 @@ export const apmHandlers = [
     if (w instanceof Response) return w;
     const min = url.searchParams.get("min_duration_ms");
     if (min !== null && !(Number(min) >= 0)) return fail("invalid_argument", "min_duration_ms must be a non-negative number");
-    return HttpResponse.json({ traces: traces(w, url) });
+    const list = traces(w, url);
+    if (list instanceof Response) return list;
+    return HttpResponse.json({ traces: list.rows, has_more: list.has_more });
   })),
 
   // Language agent versions (D-124): catalog unsupported (PHP), frontend outdated (Node.js), orders ok (Go),

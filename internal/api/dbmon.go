@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"net/http"
 	"sort"
 	"strconv"
@@ -20,8 +21,10 @@ import (
 // which is exactly apm_db_queries_1m.db_statement_normalized for the same statement.
 
 const (
-	dbMaxInstances  = 500
-	dbMaxQueries    = 200
+	dbMaxInstances = 500
+	// dbMaxQueries bounds one page. A smaller bound than the console's largest page would make it step over rows, since Next adds the
+	// limit it asked for to the offset and not the one it was given.
+	dbMaxQueries    = 1000
 	dbDefaultLimit  = 50
 	dbMaxSessions   = 1000
 	dbMaxInstanceID = 512
@@ -35,6 +38,8 @@ func (s *Server) dbRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/db/queries", s.dbQueries)
 	route("GET /api/v1/db/queries/{fingerprint}", s.dbQueryDetail)
 	route("GET /api/v1/db/activity", s.dbActivity)
+	route("GET /api/v1/db/activity/waits", s.dbActivityWaits)
+	route("GET /api/v1/db/activity/queries", s.dbActivityQueries)
 	route("GET /api/v1/db/sessions", s.dbSessions)
 	route("GET /api/v1/db/lookup", s.dbLookup)
 }
@@ -92,6 +97,8 @@ type dbInstanceJSON struct {
 	// TopWait is the wait event type with the most samples ("CPU" for samples without a wait).
 	TopWait  string `json:"top_wait"`
 	LastSeen string `json:"last_seen"`
+
+	last time.Time
 }
 
 type dbQueryJSON struct {
@@ -145,9 +152,104 @@ type dbCallerJSON struct {
 
 // ---- handlers ----
 
+// dbInstancesList sorts in Go, because two of its columns come from a second table: nothing here reaches a statement, so the values only
+// say which field a name reads. With no limit a request gets everything, as it did before there were pages.
+var dbInstancesList = listSpec{
+	columns: map[string]string{
+		"time": "total_time_ms", "calls": "calls", "avg": "avg_ms", "aas": "avg_active_sessions", "errors": "errors", "statements": "statements",
+		"instance": "instance", "host": "host_name", "wait": "top_wait", "last_seen": "last_seen",
+	},
+	sort:     "time",
+	asc:      map[string]bool{"instance": true, "host": true, "wait": true},
+	limit:    2 * dbMaxInstances,
+	maxLimit: 2 * dbMaxInstances,
+}
+
+// sortDBInstances orders the merged list, and the instance name makes the order total so a row can't swap between pages. What has no value
+// stays last in either direction, because a blank is not the smallest of anything.
+func sortDBInstances(rows []dbInstanceJSON, l listRequest) {
+	number := func(d *dbInstanceJSON) *float64 {
+		var v float64
+		switch l.sort {
+		case "avg":
+			return d.AvgMs
+		case "aas":
+			return d.AvgActiveSessions
+		case "calls":
+			v = float64(d.Calls)
+		case "errors":
+			v = float64(d.Errors)
+		case "statements":
+			v = float64(d.Statements)
+		case "last_seen":
+			v = float64(d.last.UnixMilli())
+		default:
+			v = d.TotalTimeMs
+		}
+		return &v
+	}
+	text := func(d *dbInstanceJSON) string {
+		switch l.sort {
+		case "instance":
+			return d.Instance
+		case "host":
+			return d.HostName
+		}
+		return d.TopWait
+	}
+	directed := func(c int) int {
+		if l.asc {
+			return c
+		}
+		return -c
+	}
+	compare := func(a, b *dbInstanceJSON) int {
+		if l.sort == "instance" || l.sort == "host" || l.sort == "wait" {
+			x, y := text(a), text(b)
+			if (x == "") != (y == "") {
+				return cmp.Compare(boolRank(x == ""), boolRank(y == ""))
+			}
+			return directed(cmp.Compare(strings.ToLower(x), strings.ToLower(y)))
+		}
+		x, y := number(a), number(b)
+		if x == nil || y == nil {
+			return cmp.Compare(boolRank(x == nil), boolRank(y == nil))
+		}
+		return directed(cmp.Compare(*x, *y))
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		if c := compare(&rows[i], &rows[j]); c != 0 {
+			return c < 0
+		}
+		return rows[i].Instance < rows[j].Instance
+	})
+}
+
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+// pageOfMerged cuts one page out of a list that was merged or sorted in Go, which is the only place its offset can apply.
+func pageOfMerged[T any](rows []T, l listRequest) ([]T, bool) {
+	if l.offset >= len(rows) {
+		return rows[:0], false
+	}
+	return page(rows[l.offset:], l)
+}
+
 // dbInstances lists the database instances that sent statement statistics or session samples in the range.
+//
+// The two reads each stop at dbMaxInstances, the second at the instances with the most samples, so past that many instances this is complete
+// only up to those caps: the page after the last one reports no more, and a sort by a column can miss an instance the caps left out.
 func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	l, err := dbInstancesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -156,7 +258,7 @@ func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.S
 		"anyLast(server_address) AS d_addr", "anyLast(server_port) AS d_port",
 		"sum(calls) AS d_calls", "sum(total_time_ms) AS d_time", "uniq(fingerprint) AS d_stmts", "sum(errors) AS d_err",
 		"max(timestamp) AS d_last",
-	), "timestamp", from, to).GroupBy("instance").OrderBy("d_time DESC").Limit(min(s.cfg.MaxRows, dbMaxInstances))
+	), "timestamp", from, to).GroupBy("instance").OrderBy("d_time DESC", "instance").Limit(min(s.cfg.MaxRows, dbMaxInstances))
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -174,7 +276,7 @@ func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.S
 		}
 		d.Throughput = float64(d.Calls) / secs
 		d.AvgMs = ratio(d.TotalTimeMs, float64(d.Calls))
-		d.LastSeen = formatTime(last)
+		d.LastSeen, d.last = formatTime(last), last
 		byInst[d.Instance] = &d
 		order = append(order, d.Instance)
 	}
@@ -188,7 +290,7 @@ func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.S
 		"instance", "anyLast(db_system) AS d_sys", "anyLast(host_id) AS d_host", "anyLast(host_name) AS d_hname",
 		"toUInt64(count()) AS d_n", "uniq(timestamp) AS d_ts", "topK(1)(if(wait_event_type = '', 'CPU', wait_event_type)) AS d_top",
 		"max(timestamp) AS d_last",
-	), "timestamp", from, to).GroupBy("instance").Limit(min(s.cfg.MaxRows, dbMaxInstances))
+	), "timestamp", from, to).GroupBy("instance").OrderBy("d_n DESC", "instance").Limit(min(s.cfg.MaxRows, dbMaxInstances))
 	rows, err = sc.Query(r.Context(), sq)
 	if err != nil {
 		return err
@@ -204,7 +306,7 @@ func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.S
 		}
 		d := byInst[inst]
 		if d == nil {
-			d = &dbInstanceJSON{Instance: inst, DBSystem: sys, HostID: host, HostName: hname, LastSeen: formatTime(last)}
+			d = &dbInstanceJSON{Instance: inst, DBSystem: sys, HostID: host, HostName: hname, LastSeen: formatTime(last), last: last}
 			byInst[inst] = d
 			order = append(order, inst)
 		}
@@ -220,8 +322,22 @@ func (s *Server) dbInstances(w http.ResponseWriter, r *http.Request, sc *query.S
 	for _, k := range order {
 		out = append(out, *byInst[k])
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"instances": out})
+	sortDBInstances(out, l)
+	out, more := pageOfMerged(out, l)
+	writeJSON(w, http.StatusOK, map[string]any{"instances": out, "has_more": more})
 	return nil
+}
+
+var dbQueriesList = listSpec{
+	columns: map[string]string{
+		"time": "d_time", "calls": "d_calls", "avg": "d_avg", "rows": "d_rows", "errors": "d_err", "reads": "d_read",
+		"rows_per_call": "d_rows / greatest(d_calls, 1)", "statement": "d_text",
+	},
+	sort:     "time",
+	asc:      map[string]bool{"statement": true},
+	tiebreak: []string{"fingerprint"},
+	limit:    dbDefaultLimit,
+	maxLimit: dbMaxQueries,
 }
 
 // dbQueries lists the statements of one instance, heaviest first.
@@ -234,14 +350,9 @@ func (s *Server) dbQueries(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
-	limit, err := s.apmLimit(r, dbDefaultLimit, dbMaxQueries)
+	l, err := dbQueriesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
-	}
-	order := map[string]string{"": "d_time DESC", "time": "d_time DESC", "calls": "d_calls DESC", "avg": "d_avg DESC",
-		"rows": "d_rows DESC", "errors": "d_err DESC", "reads": "d_read DESC"}[r.URL.Query().Get("sort")]
-	if order == "" {
-		return badRequest("sort must be time, calls, avg, rows, errors or reads")
 	}
 	q := dbInstanceWhere(dbRange(sc.From(query.DBQueryStats).Columns(
 		"fingerprint", "any(query_id) AS d_qid", "any(query_text) AS d_text", "groupUniqArray(5)(db_name) AS d_dbs",
@@ -255,7 +366,7 @@ func (s *Server) dbQueries(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if text := strings.TrimSpace(r.URL.Query().Get("q")); text != "" {
 		q.Where("positionCaseInsensitive(query_text, {d_q:String}) > 0").Param("d_q", text)
 	}
-	q.GroupBy("fingerprint").OrderBy(order, "fingerprint").Limit(limit)
+	q.GroupBy("fingerprint").OrderBy(dbQueriesList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -277,6 +388,7 @@ func (s *Server) dbQueries(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	out, more := page(out, l)
 	total, err := s.dbInstanceTime(r, sc, inst, from, to)
 	if err != nil {
 		return err
@@ -286,7 +398,7 @@ func (s *Server) dbQueries(w http.ResponseWriter, r *http.Request, sc *query.Sco
 			out[i].TimeShare = out[i].TotalTimeMs / total
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"queries": out, "total_time_ms": total})
+	writeJSON(w, http.StatusOK, map[string]any{"queries": out, "total_time_ms": total, "has_more": more})
 	return nil
 }
 
@@ -595,10 +707,7 @@ func (s *Server) dbActivity(w http.ResponseWriter, r *http.Request, sc *query.Sc
 	if err != nil {
 		return err
 	}
-	tq := dbInstanceWhere(dbRange(sc.From(query.DBSessionSamples).Columns(
-		"fingerprint", "any(query_text) AS d_text", "toUInt64(count()) AS d_n",
-		"topK(1)(if(wait_event_type = '', 'CPU', concat(wait_event_type, ':', wait_event))) AS d_wait",
-	), "timestamp", from, to), inst).Where("fingerprint != 0").GroupBy("fingerprint").OrderBy("d_n DESC", "fingerprint").Limit(20)
+	tq := dbActivityQueriesSelect(sc, inst, from, to).OrderBy("d_n DESC", "fingerprint").Limit(20)
 	rows, err = sc.Query(r.Context(), tq)
 	if err != nil {
 		return err
@@ -608,35 +717,166 @@ func (s *Server) dbActivity(w http.ResponseWriter, r *http.Request, sc *query.Sc
 	for _, n := range instants {
 		total += n
 	}
-	type topJSON struct {
-		Fingerprint       string  `json:"fingerprint"`
-		Text              string  `json:"text"`
-		Samples           uint64  `json:"samples"`
-		AvgActiveSessions float64 `json:"avg_active_sessions"`
-		TopWait           string  `json:"top_wait"`
-	}
-	top := []topJSON{}
-	for rows.Next() {
-		var fp uint64
-		var tj topJSON
-		var tw []string
-		if err := rows.Scan(&fp, &tj.Text, &tj.Samples, &tw); err != nil {
-			return err
-		}
-		tj.Fingerprint = fingerprintString(fp)
-		tj.AvgActiveSessions = float64(tj.Samples) / float64(max(total, 1))
-		if len(tw) > 0 {
-			tj.TopWait = tw[0]
-		}
-		top = append(top, tj)
-	}
-	if err := rows.Err(); err != nil {
+	top, err := scanDBActivityQueries(rows, total)
+	if err != nil {
 		return err
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"from": formatTime(from), "to": formatTime(to), "step": formatStep(step),
 		"series": series, "waits": waits, "top_queries": top,
 	})
+	return nil
+}
+
+// dbActivityTopJSON is one statement of an instance's load.
+type dbActivityTopJSON struct {
+	Fingerprint       string  `json:"fingerprint"`
+	Text              string  `json:"text"`
+	Samples           uint64  `json:"samples"`
+	AvgActiveSessions float64 `json:"avg_active_sessions"`
+	TopWait           string  `json:"top_wait"`
+}
+
+func dbActivityQueriesSelect(sc *query.Scope, inst string, from, to time.Time) *query.Select {
+	return dbInstanceWhere(dbRange(sc.From(query.DBSessionSamples).Columns(
+		"fingerprint", "any(query_text) AS d_text", "toUInt64(count()) AS d_n",
+		"topK(1)(if(wait_event_type = '', 'CPU', concat(wait_event_type, ':', wait_event))) AS d_wait",
+	), "timestamp", from, to), inst).Where("fingerprint != 0").GroupBy("fingerprint")
+}
+
+func scanDBActivityQueries(rows query.Rows, instants uint64) ([]dbActivityTopJSON, error) {
+	out := []dbActivityTopJSON{}
+	for rows.Next() {
+		var fp uint64
+		var tj dbActivityTopJSON
+		var tw []string
+		if err := rows.Scan(&fp, &tj.Text, &tj.Samples, &tw); err != nil {
+			return nil, err
+		}
+		tj.Fingerprint = fingerprintString(fp)
+		tj.AvgActiveSessions = float64(tj.Samples) / float64(max(instants, 1))
+		if len(tw) > 0 {
+			tj.TopWait = tw[0]
+		}
+		out = append(out, tj)
+	}
+	return out, rows.Err()
+}
+
+// dbSampleTotals is how many samples an instance has in the range and at how many instants. A share in a paged list has to be of all of these
+// and not of its own page, or the same row would change its number when it moved to another page.
+func dbSampleTotals(r *http.Request, sc *query.Scope, inst string, from, to time.Time) (samples, instants uint64, err error) {
+	rows, err := sc.Query(r.Context(), dbInstanceWhere(dbRange(sc.From(query.DBSessionSamples).Columns(
+		"toUInt64(count()) AS d_n", "toUInt64(uniq(timestamp)) AS d_ts",
+	), "timestamp", from, to), inst))
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		if err := rows.Scan(&samples, &instants); err != nil {
+			return 0, 0, err
+		}
+	}
+	return samples, instants, rows.Err()
+}
+
+var dbActivityWaitsList = listSpec{
+	columns:  map[string]string{"samples": "d_n", "type": "d_type", "event": "wait_event"},
+	sort:     "samples",
+	asc:      map[string]bool{"type": true, "event": true},
+	tiebreak: []string{"d_type", "wait_event"},
+	limit:    dbDefaultLimit,
+	maxLimit: dbMaxQueries,
+}
+
+func dbActivityWaitsSelect(sc *query.Scope, inst string, from, to time.Time, l listRequest) *query.Select {
+	return dbInstanceWhere(dbRange(sc.From(query.DBSessionSamples).Columns(
+		"if(wait_event_type = '', 'CPU', wait_event_type) AS d_type", "wait_event", "toUInt64(count()) AS d_n",
+	), "timestamp", from, to), inst).GroupBy("d_type", "wait_event").OrderBy(dbActivityWaitsList.order(l)...).Limit(l.fetch()).Offset(l.offset)
+}
+
+// dbActivityWaits serves GET /api/v1/db/activity/waits, every wait event of the range where /db/activity holds only the top ones. They are a
+// list of their own so that sorting them does not read the charts again.
+func (s *Server) dbActivityWaits(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
+	inst, err := dbInstanceParam(r)
+	if err != nil {
+		return err
+	}
+	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	l, err := dbActivityWaitsList.parse(r, s.cfg.MaxRows)
+	if err != nil {
+		return err
+	}
+	rows, err := sc.Query(r.Context(), dbActivityWaitsSelect(sc, inst, from, to, l))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	out := []dbWaitJSON{}
+	for rows.Next() {
+		var wj dbWaitJSON
+		if err := rows.Scan(&wj.Type, &wj.Event, &wj.Samples); err != nil {
+			return err
+		}
+		out = append(out, wj)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	out, more := page(out, l)
+	total, _, err := dbSampleTotals(r, sc, inst, from, to)
+	if err != nil {
+		return err
+	}
+	for i := range out {
+		out[i].Share = float64(out[i].Samples) / float64(max(total, 1))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"waits": out, "has_more": more})
+	return nil
+}
+
+var dbActivityQueriesList = listSpec{
+	columns:  map[string]string{"samples": "d_n", "statement": "d_text", "wait": "d_wait"},
+	sort:     "samples",
+	asc:      map[string]bool{"statement": true, "wait": true},
+	tiebreak: []string{"fingerprint"},
+	limit:    dbDefaultLimit,
+	maxLimit: dbMaxQueries,
+}
+
+// dbActivityQueries serves GET /api/v1/db/activity/queries, every statement the samples caught where /db/activity holds only the top ones.
+func (s *Server) dbActivityQueries(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
+	inst, err := dbInstanceParam(r)
+	if err != nil {
+		return err
+	}
+	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	l, err := dbActivityQueriesList.parse(r, s.cfg.MaxRows)
+	if err != nil {
+		return err
+	}
+	_, instants, err := dbSampleTotals(r, sc, inst, from, to)
+	if err != nil {
+		return err
+	}
+	rows, err := sc.Query(r.Context(), dbActivityQueriesSelect(sc, inst, from, to).OrderBy(dbActivityQueriesList.order(l)...).Limit(l.fetch()).Offset(l.offset))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	out, err := scanDBActivityQueries(rows, instants)
+	if err != nil {
+		return err
+	}
+	out, more := page(out, l)
+	writeJSON(w, http.StatusOK, map[string]any{"queries": out, "has_more": more})
 	return nil
 }
 
@@ -660,6 +900,9 @@ type dbSessionJSON struct {
 
 // dbSessions returns the latest sampling instant at or before `at` (default: now) within dbSnapshotWindow: every
 // non-idle session with what it runs, what it waits for and whom it blocks.
+//
+// It has no pages, because a blocking chain can only be drawn over the whole sample, so the console sorts what it holds. That makes it complete
+// only up to dbMaxSessions, the longest running ones, and has_more says when the sample was bigger than that.
 func (s *Server) dbSessions(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	inst, err := dbInstanceParam(r)
 	if err != nil {
@@ -701,7 +944,7 @@ func (s *Server) dbSessions(w http.ResponseWriter, r *http.Request, sc *query.Sc
 		"session_id", "state", "wait_event_type", "wait_event", "db_name", "db_user", "application", "client_address",
 		"duration_ms", "fingerprint", "query_text", "blocking_session_ids",
 	), inst).Where("timestamp = fromUnixTimestamp64Milli({d_at:Int64})").Param("d_at", last.UnixMilli()).
-		OrderBy("duration_ms DESC", "session_id").Limit(dbMaxSessions)
+		OrderBy("duration_ms DESC", "session_id").Limit(dbMaxSessions + 1)
 	rows, err = sc.Query(r.Context(), q)
 	if err != nil {
 		return err
@@ -725,8 +968,9 @@ func (s *Server) dbSessions(w http.ResponseWriter, r *http.Request, sc *query.Sc
 	if err := rows.Err(); err != nil {
 		return err
 	}
+	out, more := page(out, listRequest{limit: dbMaxSessions})
 	countBlocked(out)
-	writeJSON(w, http.StatusOK, map[string]any{"sampled_at": formatTime(last), "sessions": out})
+	writeJSON(w, http.StatusOK, map[string]any{"sampled_at": formatTime(last), "sessions": out, "has_more": more})
 	return nil
 }
 

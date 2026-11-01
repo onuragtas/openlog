@@ -2,13 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { MonitorSmartphone } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { authConfigQuery, changePassword, revokeSession, sessionsQuery, useMe } from "@/api/account";
+import { authConfigQuery, changePassword, revokeSession, sessionsQuery, useMe, type Session } from "@/api/account";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { timeOf, useLocalList } from "@/lib/list";
 import { ConfirmButton } from "./ConfirmButton";
 import { DateTimeText, FormError, SettingsSection } from "./common";
 
@@ -17,6 +19,13 @@ function shortAgent(ua: string): string {
 }
 
 /** Change password and manage the signed-in user's sessions. */
+const SESSION_COLUMNS = {
+  device: (s: Session) => (s.kind === "device" ? s.device_name : s.user_agent && shortAgent(s.user_agent)),
+  ip: (s: Session) => s.ip,
+  signed_in: (s: Session) => timeOf(s.created_at),
+  last_active: (s: Session) => timeOf(s.last_seen_at),
+};
+
 export function SecuritySettings() {
   const { t } = useTranslation();
   const id = useId();
@@ -25,6 +34,7 @@ export function SecuritySettings() {
   const isSession = me?.auth === "session";
   const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 8;
   const sessions = useQuery({ ...sessionsQuery(), enabled: isSession });
+  const list = useLocalList(sessions.data, SESSION_COLUMNS, "last_active", "desc");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -121,60 +131,63 @@ export function SecuritySettings() {
         ) : sessions.data.length === 0 ? (
           <EmptyState>{t("settings.security.sessionsEmpty")}</EmptyState>
         ) : (
-          <Table mobile="stack">
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("settings.columns.device")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.ip")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("settings.columns.signedIn")}</TableHead>
-                <TableHead>{t("settings.columns.lastActive")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("settings.columns.actions")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sessions.data.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <MonitorSmartphone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      {/* A device chose its own name, so show that rather than the user agent it happens to
-                          send: "Onur's iPhone" is what the person recognises when deciding what to sign out. */}
-                      <span className="break-all text-xs" title={s.kind === "device" ? s.device_name : s.user_agent}>
-                        {s.kind === "device"
-                          ? s.device_name || t("settings.security.unknownDevice")
-                          : s.user_agent
-                            ? shortAgent(s.user_agent)
-                            : t("settings.security.unknownDevice")}
-                      </span>
-                      {s.kind === "device" && <Badge variant="secondary">{t("settings.security.mobileDevice")}</Badge>}
-                      {s.current && <Badge variant="success">{t("settings.security.current")}</Badge>}
-                    </div>
-                  </TableCell>
-                  <TableCell label={t("settings.columns.ip")} className="hidden font-mono text-xs md:table-cell">
-                    {s.ip || "–"}
-                  </TableCell>
-                  <TableCell label={t("settings.columns.signedIn")} className="hidden md:table-cell">
-                    <DateTimeText value={s.created_at} />
-                  </TableCell>
-                  <TableCell label={t("settings.columns.lastActive")}>
-                    <DateTimeText value={s.last_seen_at} relative />
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {!s.current && (
-                      <ConfirmButton
-                        label={t("settings.revoke")}
-                        confirmLabel={t("settings.confirmRevoke")}
-                        pending={revoke.isPending && revoke.variables === s.id}
-                        onConfirm={() => revoke.mutate(s.id)}
-                      />
-                    )}
-                  </TableCell>
+          <>
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="device" defaultDir="asc" {...list.head}>{t("settings.columns.device")}</SortableHead>
+                  <SortableHead column="ip" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("settings.columns.ip")}</SortableHead>
+                  <SortableHead column="signed_in" className="hidden md:table-cell" {...list.head}>{t("settings.columns.signedIn")}</SortableHead>
+                  <SortableHead column="last_active" {...list.head}>{t("settings.columns.lastActive")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("settings.columns.actions")}</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <MonitorSmartphone className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        {/* A device chose its own name, so show that rather than the user agent it happens to
+                            send: "Onur's iPhone" is what the person recognises when deciding what to sign out. */}
+                        <span className="break-all text-xs" title={s.kind === "device" ? s.device_name : s.user_agent}>
+                          {s.kind === "device"
+                            ? s.device_name || t("settings.security.unknownDevice")
+                            : s.user_agent
+                              ? shortAgent(s.user_agent)
+                              : t("settings.security.unknownDevice")}
+                        </span>
+                        {s.kind === "device" && <Badge variant="secondary">{t("settings.security.mobileDevice")}</Badge>}
+                        {s.current && <Badge variant="success">{t("settings.security.current")}</Badge>}
+                      </div>
+                    </TableCell>
+                    <TableCell label={t("settings.columns.ip")} className="hidden font-mono text-xs md:table-cell">
+                      {s.ip || "–"}
+                    </TableCell>
+                    <TableCell label={t("settings.columns.signedIn")} className="hidden md:table-cell">
+                      <DateTimeText value={s.created_at} />
+                    </TableCell>
+                    <TableCell label={t("settings.columns.lastActive")}>
+                      <DateTimeText value={s.last_seen_at} relative />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {!s.current && (
+                        <ConfirmButton
+                          label={t("settings.revoke")}
+                          confirmLabel={t("settings.confirmRevoke")}
+                          pending={revoke.isPending && revoke.variables === s.id}
+                          onConfirm={() => revoke.mutate(s.id)}
+                        />
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </>
         )}
       </SettingsSection>
     </div>

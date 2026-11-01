@@ -35,7 +35,7 @@ test("APM: services → service tabs → trace with logs", async ({ page }) => {
   await expect(detail.getByRole("heading", { name: "GET /orders/report" })).toBeVisible();
   await expect(detail.getByTestId("latency-histogram").getByRole("listitem").first()).toBeVisible();
   await expect(detail.getByTestId("slowest-traces").getByRole("listitem")).toHaveCount(5);
-  await page.getByLabel("Sort by").selectOption("slowest");
+  await page.getByTestId("transactions-table").getByRole("button", { name: "p95" }).click();
   await expect(page).toHaveURL(/tsort=slowest/);
 
   // Errors: group detail with the stack trace (application frame emphasized).

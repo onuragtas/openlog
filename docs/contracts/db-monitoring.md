@@ -124,9 +124,11 @@ All `GET`, tenant-scoped, `from`/`to` like every read (default: the last hour). 
 
 | Endpoint | Answer |
 |---|---|
-| `/api/v1/db/instances` | instances with statement statistics or samples in the range: system, host, calls, throughput, total and average time, statements, errors, average active sessions, top wait type |
-| `/api/v1/db/queries?instance=&sort=time\|calls\|avg\|rows\|errors\|reads&db=&q=&limit=` | statements (≤ 200): fingerprint, text, calls, throughput, total/avg time, share of the instance's time, rows (per call), rows examined, errors, no-index executions, blocks, cache hit ratio |
+| `/api/v1/db/instances?sort=&dir=&limit=&offset=` | instances with statement statistics or samples in the range: system, host, calls, throughput, total and average time, statements, errors, average active sessions, top wait type |
+| `/api/v1/db/queries?instance=&sort=time\|calls\|avg\|rows\|rows_per_call\|errors\|reads\|statement&dir=&db=&q=&limit=&offset=` | statements (a page ≤ 1000, with `has_more`): fingerprint, text, calls, throughput, total/avg time, share of the instance's time, rows (per call), rows examined, errors, no-index executions, blocks, cache hit ratio |
 | `/api/v1/db/queries/{fingerprint}?instance=&step=` | one statement: totals, series (calls, throughput, avg and total time, rows per step), plans (newest first; `is_current`, `plan_change`), wait events of its samples, callers (APM services) |
 | `/api/v1/db/activity?instance=&step=` | average active sessions per wait type per step (samples ÷ sampling instants), top wait events, statements with the most samples |
-| `/api/v1/db/sessions?instance=&at=` | the latest sampling instant at or before `at` (ms, default now, within 5 minutes): sessions with state, wait, statement, `blocking_session_ids` and `blocks` (sessions waiting on it, transitively) |
+| `/api/v1/db/activity/waits?instance=&sort=&dir=&limit=&offset=` | every wait event of the range, paged, with its share of all the instance's samples |
+| `/api/v1/db/activity/queries?instance=&sort=&dir=&limit=&offset=` | every statement the samples caught, paged |
+| `/api/v1/db/sessions?instance=&at=` | the latest sampling instant at or before `at` (ms, default now, within 5 minutes): sessions with state, wait, statement, `blocking_session_ids` and `blocks` (sessions waiting on it, transitively). Not paged, since a chain needs the whole sample: at most the 1000 longest running, and `has_more` says when there were more |
 | `/api/v1/db/lookup?db_system=&statement=` | instances whose statistics hold a normalized statement: the link from an APM database call to this view |

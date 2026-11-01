@@ -5,15 +5,17 @@ import { ArrowDown, ArrowRight, ArrowUp, X } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { apmDeploymentCompareQuery, apmDeploymentsQuery, type ApmDeployment, type ApmPeriod } from "@/api/apm";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatApdex, formatMs, formatRate, formatRpm, type ServiceScope } from "@/lib/apm";
 import { COMPARE_METRICS, COMPARE_WINDOWS, compareDelta, versionLabel, type CompareMetric, type CompareWindow } from "@/lib/deployments";
 import { formatDateTime } from "@/lib/format";
+import { useLocalList } from "@/lib/list";
 import type { RangeSpec } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -39,12 +41,21 @@ function formatMetric(metric: CompareMetric, v: number | null | undefined, local
   }
 }
 
+// The server answers every deployment it detected, so the browser holds all of them and can sort them itself.
+type DeploymentSort = "time" | "change" | "environment";
+const NO_DEPLOYMENTS: ApmDeployment[] = [];
+const DEPLOYMENT_SORT: Record<DeploymentSort, (d: ApmDeployment) => string | number> = {
+  time: (d) => d.t,
+  change: (d) => versionLabel(d.version),
+  environment: (d) => [d.environment, d.service_namespace].filter(Boolean).join(" · "),
+};
+
 export function DeploymentsCard({ scope, range, onOpenErrorGroup }: { scope: ServiceScope; range: RangeSpec; onOpenErrorGroup?: (groupId: string) => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(apmDeploymentsQuery(scope, range));
   const [compare, setCompare] = useState<ApmDeployment | null>(null);
-  const deployments = [...(q.data?.deployments ?? [])].sort((a, b) => b.t - a.t);
+  const list = useLocalList<ApmDeployment, DeploymentSort>(q.data?.deployments ?? NO_DEPLOYMENTS, DEPLOYMENT_SORT, "time", "desc");
   const keyOf = (d: ApmDeployment) => `${d.t}|${d.service_namespace}|${d.environment}|${d.version}`;
 
   return (
@@ -59,58 +70,61 @@ export function DeploymentsCard({ scope, range, onOpenErrorGroup }: { scope: Ser
           <LoadingState />
         ) : q.isError ? (
           <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-        ) : deployments.length === 0 ? (
+        ) : list.total === 0 ? (
           <EmptyState className="py-6">{t("apm.deployments.empty")}</EmptyState>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("apm.deployments.time")}</TableHead>
-                <TableHead>{t("apm.deployments.change")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("apm.columns.environment")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("apm.deployments.compare")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deployments.map((d) => {
-                const open = compare !== null && keyOf(compare) === keyOf(d);
-                return (
-                  <TableRow key={keyOf(d)} data-state={open ? "selected" : undefined}>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      <time dateTime={d.timestamp}>{formatDateTime(d.t, locale)}</time>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
-                        {d.previous_version && !d.initial ? (
-                          <>
-                            <span className="text-muted-foreground">{versionLabel(d.previous_version)}</span>
-                            <ArrowRight className="size-3 text-muted-foreground" aria-label={t("apm.deployments.to")} />
-                          </>
-                        ) : null}
-                        <span className="font-semibold">{versionLabel(d.version)}</span>
-                        {d.initial && <Badge variant="muted">{t("apm.deployments.initial")}</Badge>}
-                        {d.rollback && <Badge variant="warning">{t("apm.deployments.rollback")}</Badge>}
-                      </div>
-                    </TableCell>
-                    <TableCell className="hidden text-xs md:table-cell">{[d.environment, d.service_namespace].filter(Boolean).join(" · ") || "–"}</TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant={open ? "secondary" : "outline"}
-                        size="sm"
-                        aria-pressed={open}
-                        aria-label={t("apm.deployments.compareLabel", { version: versionLabel(d.version) })}
-                        onClick={() => setCompare(open ? null : d)}
-                      >
-                        {t("apm.deployments.compare")}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="time" {...list.head}>{t("apm.deployments.time")}</SortableHead>
+                  <SortableHead column="change" defaultDir="asc" {...list.head}>{t("apm.deployments.change")}</SortableHead>
+                  <SortableHead column="environment" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("apm.columns.environment")}</SortableHead>
+                  <TableHead>
+                    <span className="sr-only">{t("apm.deployments.compare")}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {list.visible.map((d) => {
+                  const open = compare !== null && keyOf(compare) === keyOf(d);
+                  return (
+                    <TableRow key={keyOf(d)} data-state={open ? "selected" : undefined}>
+                      <TableCell className="whitespace-nowrap text-xs">
+                        <time dateTime={d.timestamp}>{formatDateTime(d.t, locale)}</time>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                          {d.previous_version && !d.initial ? (
+                            <>
+                              <span className="text-muted-foreground">{versionLabel(d.previous_version)}</span>
+                              <ArrowRight className="size-3 text-muted-foreground" aria-label={t("apm.deployments.to")} />
+                            </>
+                          ) : null}
+                          <span className="font-semibold">{versionLabel(d.version)}</span>
+                          {d.initial && <Badge variant="muted">{t("apm.deployments.initial")}</Badge>}
+                          {d.rollback && <Badge variant="warning">{t("apm.deployments.rollback")}</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden text-xs md:table-cell">{[d.environment, d.service_namespace].filter(Boolean).join(" · ") || "–"}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant={open ? "secondary" : "outline"}
+                          size="sm"
+                          aria-pressed={open}
+                          aria-label={t("apm.deployments.compareLabel", { version: versionLabel(d.version) })}
+                          onClick={() => setCompare(open ? null : d)}
+                        >
+                          {t("apm.deployments.compare")}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+          </div>
         )}
         {compare && (
           <div className="px-4 md:px-6">

@@ -109,8 +109,6 @@ export interface MapRenderOptions {
 export const ANIMATE_MAX_EDGES = 60;
 export const LABEL_MAX_EDGES = 120;
 export const VISIBLE_ONLY_MIN_NODES = 100;
-/** Rows of the connections table shown before "show all". */
-export const CONNECTIONS_CAP = 100;
 
 export function mapRenderOptions(nodeCount: number, edgeCount: number): MapRenderOptions {
   return {

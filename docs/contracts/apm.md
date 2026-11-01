@@ -170,7 +170,7 @@ concurrent detectors reopen a group once.
 **Inbox reads.** Candidates are the groups with occurrences in the range (at most 2000, most frequent first); when the
 filter selects resolved or ignored groups or an assignee, groups with a matching state row (at most 500) are added with
 `count` 0. Filters: `status` (list), `assignee` (`any`, `none`, `me`, user id), `q` (substring of type, message, service,
-span name), `sort` (`count`, `last_seen`, `first_seen`). `counts` are per status after the assignee and `q` filters.
+span name), `sort` (`count`, `last_seen`, `first_seen`, `type`, `service`, `status`, `assignee`, `comments`), `dir`, `limit` and `offset`. `counts` are per status after the assignee and `q` filters.
 Comments (1–4000 bytes, `apm_error_group_comments`) and the group's audit events ("activity") are shown in the detail.
 
 ## 4. Latency, throughput, Apdex
@@ -445,7 +445,7 @@ Endpoints and shapes: [api.md § APM](api.md#apm), [openapi.yaml](openapi.yaml) 
 | `GET /apm/services` | services with RED, Apdex, sparkline |
 | `GET /apm/services/{s}` | identity, attributes, hosts, Apdex T |
 | `GET /apm/services/{s}/overview` | timeseries (throughput, error rate, p50/p95/p99, Apdex) + totals + top transactions |
-| `GET /apm/services/{s}/transactions` | transactions list (`sort=time\|throughput\|slowest\|errors`) |
+| `GET /apm/services/{s}/transactions` | transactions list (sorted and paged, api.md "Lists") |
 | `GET /apm/services/{s}/transaction?name=&type=` | one transaction: totals, histogram, timeseries, slowest traces |
 | `GET /apm/services/{s}/errors` · `GET /apm/errors` | error inbox with workflow state and filters (§3.4) |
 | `GET /apm/services/{s}/errors/{group_id}` | group detail: stack, series, sample traces, affected dimensions (§3.3), state, comments, activity |
