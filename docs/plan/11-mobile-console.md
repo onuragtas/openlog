@@ -19,7 +19,7 @@ Kapsam dışı, bilerek:
 
 - **Telemetri gönderme.** Konsol uygulaması bir ajan değil. Kendi çökmelerini bildirmek isterse
   `agents/dart`'ı kullanır, ki bu da onu sözleşmenin bir müşterisi yapar, parçası değil.
-- **Yapılandırma yönetimi.** Alarm kuralı yazmak, dashboard düzenlemek, üye davet etmek masaüstü işleri.
+- **Yapılandırma yönetimi.** Alarm kuralı yazmak, dashboard düzenlemek masaüstü işleri (D-156 bu kapsamı daralttı: görüntüleme ve günlük işlemler web ile eşittir; güncel liste `.claude/skills/parity-check/parity-exceptions.txt`).
   Telefonda ekran alanı bunları dürüstçe göstermeye yetmez ve yanlış dokunuşun bedeli yüksektir.
 - **Dashboard düzenleme.** Görüntüleme §5'te var, düzenleme yok.
 
