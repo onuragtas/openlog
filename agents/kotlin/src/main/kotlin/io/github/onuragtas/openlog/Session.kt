@@ -11,6 +11,8 @@ internal const val SESSION_MAX_AGE_MS = 4L * 60 * 60 * 1000
 
 internal class SessionState(
     var sampleRate: Double,
+    /** Where this session falls in [0, 1) for sampling: the visitor's fixed place when there is one (analytics.md §2). */
+    private val roll: () -> Double = ::nextUnit,
     private val now: () -> Long = System::currentTimeMillis,
 ) {
     var id: String = ""
@@ -36,7 +38,7 @@ internal class SessionState(
         sampled = when {
             sampleRate >= 1 -> true
             sampleRate <= 0 -> false
-            else -> nextUnit() < sampleRate
+            else -> roll() < sampleRate
         }
     }
 

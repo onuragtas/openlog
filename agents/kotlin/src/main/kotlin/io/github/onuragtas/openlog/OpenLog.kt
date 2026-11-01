@@ -5,19 +5,17 @@ import java.net.URL
 
 // openlog mobile SDK for the JVM (docs/contracts/mobile-agent.md).
 //
-// What this does NOT do is as deliberate as what it does: no crash reporting. An unhandled crash is not
-// something the process lives to send, and capturing it for delivery on the next launch needs its own
-// design (§7). Claiming it here would lose crashes quietly. recordError reports what the application
-// catches, which is a smaller and honest promise.
+// What this does NOT do is as deliberate as what it does: it does not see an NDK crash or an ANR. Those are not JVM
+// exceptions, and reading them needs an Android API this plain JVM library does not have (mobile-crash.md §2).
 
 /** Reads `GET /v1/rum/config`, or null when it could not be read. */
 typealias ConfigFetch = (url: String, headers: Map<String, String>) -> Map<String, Any?>?
 
 /**
- * Pulls the three fields the config endpoint returns out of its body.
+ * Pulls the fields the config endpoint returns out of its body.
  *
  * **Not a JSON parser, and not pretending to be one.** This SDK has no dependencies and the response is
- * three known scalars; a hand-written general parser would be more code and more ways to be subtly wrong
+ * four known scalars; a hand-written general parser would be more code and more ways to be subtly wrong
  * than the problem deserves. Anything it cannot find is simply absent, which is the same as the call
  * having failed — and failure here is already silent by design.
  */
@@ -25,6 +23,7 @@ internal fun parseConfigFields(body: String): Map<String, Any?> {
     val out = LinkedHashMap<String, Any?>()
     Regex(""""service_name"\s*:\s*"([^"]*)"""").find(body)?.let { out["service_name"] = it.groupValues[1] }
     Regex(""""environment"\s*:\s*"([^"]*)"""").find(body)?.let { out["environment"] = it.groupValues[1] }
+    Regex(""""analytics_mode"\s*:\s*"([^"]*)"""").find(body)?.let { out["analytics_mode"] = it.groupValues[1] }
     Regex(""""sample_rate"\s*:\s*([0-9.eE+-]+)""").find(body)?.let {
         it.groupValues[1].toDoubleOrNull()?.let { rate -> out["sample_rate"] = rate }
     }
@@ -50,9 +49,18 @@ internal fun defaultFetchConfig(url: String, headers: Map<String, String>): Map<
 class OpenLog private constructor(
     private val session: SessionState,
     private val transport: Transport,
+    private val visitor: Visitor,
 ) {
     @Volatile
     private var userId: String = ""
+
+    /** The screen last opened, which is where a crash happened. */
+    @Volatile
+    private var route: String = ""
+
+    private var crashes: CrashStore? = null
+    private var crashHandler: Thread.UncaughtExceptionHandler? = null
+    private var previousHandler: Thread.UncaughtExceptionHandler? = null
 
     companion object {
         private val lock = Any()
@@ -76,8 +84,15 @@ class OpenLog private constructor(
             synchronized(lock) {
                 active?.let { return it }
                 val cfg = resolveConfig(options) // throws rather than starting a silently useless SDK
-                val sdk = OpenLog(SessionState(options.sampleRate), Transport(cfg, send))
+                val visitor = Visitor(options.analyticsCollection, options.visitorDirectory)
+                val session = SessionState(options.sampleRate, roll = {
+                    visitor.id.let { id -> if (id.isEmpty()) nextUnit() else visitorRoll(id) }
+                })
+                val sdk = OpenLog(session, Transport(cfg, send), visitor)
                 active = sdk
+                if (options.captureCrashes && options.crashDirectory != null) {
+                    sdk.startCrashCapture(CrashStore(options.crashDirectory))
+                }
 
                 // The operator's sample rate wins, so volume can be turned down without shipping a
                 // release. Until it answers the application reports with its own; failure is silent.
@@ -91,6 +106,9 @@ class OpenLog private constructor(
                         cfg.serviceName = conf["service_name"] as? String ?: ""
                         cfg.environment = conf["environment"] as? String ?: ""
                         (conf["sample_rate"] as? Double)?.let { sdk.session.sampleRate = it }
+                        // Only this answer lets the id reach the disk. A server without the field is one
+                        // without the feature.
+                        if (conf["analytics_mode"] == "visitors") visitor.confirm() else visitor.discard()
                     }
                 }, "openlog-config").apply { isDaemon = true }.start()
                 return sdk
@@ -102,6 +120,53 @@ class OpenLog private constructor(
         fun reset() {
             synchronized(lock) { active = null }
         }
+    }
+
+    /** Delivers what the last launch left, and installs the handler in front of whichever was already there. */
+    private fun startCrashCapture(store: CrashStore) {
+        crashes = store
+        // Listed before the handler exists, so this launch's own crash cannot be sent by a thread it is killing.
+        val waiting = store.pending()
+        if (waiting.isNotEmpty()) {
+            Thread({ deliverCrashes(store) { transport.sendBody(it) } }, "openlog-crashes").apply { isDaemon = true }.start()
+        }
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        val handler = Thread.UncaughtExceptionHandler { thread, error ->
+            try {
+                recordCrash(error)
+            } catch (_: Throwable) {
+                // Whatever went wrong here, the application's own handling of its crash still has to run.
+            }
+            if (previous != null) previous.uncaughtException(thread, error) else error.printStackTrace()
+        }
+        previousHandler = previous
+        crashHandler = handler
+        Thread.setDefaultUncaughtExceptionHandler(handler)
+    }
+
+    /** One write and nothing else: the process is going down (mobile-crash.md §2.1). */
+    private fun recordCrash(error: Throwable) {
+        val store = crashes ?: return
+        if (!session.shouldSend) return // a sampled-out session sends nothing at all, crash included
+        val id = newSessionId()
+        val type = error.javaClass.name
+        val span = buildSpan(
+            name = "error $type",
+            event = RumEvent.ERROR,
+            traceId = session.traceId,
+            spanId = newSpanId(),
+            startMs = System.currentTimeMillis(),
+            parentSpanId = session.screenSpanId,
+            attributes = commonAttributes() + listOf(
+                "openlog.rum.route" to route,
+                "openlog.rum.error.source" to "error",
+                "openlog.rum.crash.kind" to "uncaught_exception",
+                "openlog.rum.crash.id" to id,
+            ),
+            isError = true,
+            exception = Triple(type, error.message ?: type, error.stackTraceToString()),
+        )
+        store.write(id, transport.encode(listOf(span)))
     }
 
     /** The current session id, or "" when this session was not sampled. */
@@ -117,11 +182,22 @@ class OpenLog private constructor(
         userId = truncate(id.trim(), Limits.MAX_USER_ID_BYTES)
     }
 
+    /**
+     * Turns recognising this person across launches on or off, e.g. from a consent dialog (analytics.md §1). Off deletes
+     * the stored id and is remembered across launches. It stops collection and erases nothing already sent: that is
+     * `POST /api/v1/analytics/erase`, called from your backend with [visitorId].
+     */
+    fun setAnalyticsCollection(enabled: Boolean) = visitor.setEnabled(enabled)
+
+    /** The current visitor id, or "" when there is none. */
+    val visitorId: String get() = visitor.id
+
     /** A screen the person opened. [isColdStart] marks the first one of a launch. */
     @JvmOverloads
     fun recordScreen(name: String, isColdStart: Boolean = false, durationMs: Long = 0) {
         val route = truncate(name.trim(), Limits.MAX_NAME_BYTES)
         if (route.isEmpty()) return
+        this.route = route
         if (!session.touch()) session.newScreen()
         emit(
             RumEvent.SCREEN, "screen $route", durationMs = durationMs, spanId = session.screenSpanId,
@@ -180,6 +256,17 @@ class OpenLog private constructor(
         return out
     }
 
+    private fun commonAttributes(): List<Pair<String, Any?>> {
+        val base = ArrayList<Pair<String, Any?>>()
+        base.add("session.id" to session.id)
+        base.add("openlog.rum.page_view.id" to session.screenSpanId)
+        val user = userId
+        if (user.isNotEmpty()) base.add("user.id" to user)
+        val visitorId = visitor.id
+        if (visitorId.isNotEmpty()) base.add("openlog.rum.visitor.id" to visitorId)
+        return base
+    }
+
     private fun emit(
         event: String,
         name: String,
@@ -191,11 +278,7 @@ class OpenLog private constructor(
     ) {
         if (!session.shouldSend) return // a sampled-out session sends nothing at all
         session.touch()
-        val base = ArrayList<Pair<String, Any?>>()
-        base.add("session.id" to session.id)
-        base.add("openlog.rum.page_view.id" to session.screenSpanId)
-        val user = userId
-        if (user.isNotEmpty()) base.add("user.id" to user)
+        val base = commonAttributes()
 
         transport.add(
             buildSpan(
@@ -221,6 +304,10 @@ class OpenLog private constructor(
     fun flush() = transport.flush()
 
     fun shutdown() {
+        // Only if it is still ours: something installed after this has our handler behind it, and must keep it.
+        if (crashHandler != null && Thread.getDefaultUncaughtExceptionHandler() === crashHandler) {
+            Thread.setDefaultUncaughtExceptionHandler(previousHandler)
+        }
         transport.stop()
         reset()
     }

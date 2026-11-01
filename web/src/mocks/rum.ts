@@ -47,10 +47,10 @@ function vitalsOf(route: string): RumVital[] {
 }
 
 const RELEASES: RumRelease[] = [
-  { version: "1.4.2", sessions: 480, error_sessions: 6, crash_free_rate: 0.9875, first_seen: "", last_seen: "" },
-  { version: "1.4.1", sessions: 132, error_sessions: 21, crash_free_rate: 0.8409, first_seen: "", last_seen: "" },
-  // Older than the trace retention: the deployment is known, the sessions are gone.
-  { version: "1.3.9", sessions: 0, error_sessions: 0, crash_free_rate: 1, first_seen: "", last_seen: "" },
+  { version: "1.4.2", sessions: 480, error_sessions: 6, crashed_sessions: 2, capturing_sessions: 480, error_free_rate: 0.9875, session_crash_free_rate: 0.9958, crash_free_rate: 0.9875, first_seen: "", last_seen: "" },
+  { version: "1.4.1", sessions: 132, error_sessions: 21, crashed_sessions: 0, capturing_sessions: 0, error_free_rate: 0.8409, session_crash_free_rate: null, crash_free_rate: 0.8409, first_seen: "", last_seen: "" },
+  // Released before the session rollup existed: the deployment is known, the sessions are not.
+  { version: "1.3.9", sessions: 0, error_sessions: 0, crashed_sessions: 0, capturing_sessions: 0, error_free_rate: 1, session_crash_free_rate: null, crash_free_rate: 1, first_seen: "", last_seen: "" },
 ];
 
 /**
@@ -206,6 +206,67 @@ export const rumHandlers = [
       { timestamp: formatTs(now - 20 * 3_600_000), t: now - 20 * 3_600_000, service_namespace: "", environment: "production", version: "1.4.1", previous_version: "1.3.9", initial: false, rollback: true },
     ];
     return HttpResponse.json({ releases, deployments });
+  })),
+
+  http.get(`${API}/analytics/activity`, authed(() => {
+    const day = 86_400_000;
+    const today = Math.floor(Date.now() / day) * day;
+    const days = Array.from({ length: 30 }, (_, i) => {
+      const dau = 400 + 40 * Math.sin(i / 2);
+      return {
+        date: new Date(today - (29 - i) * day).toISOString().slice(0, 10),
+        dau,
+        wau: dau * 2.5,
+        mau: dau * 5,
+        new_users: 30,
+        stickiness: 0.2,
+      };
+    });
+    return HttpResponse.json({ days, collecting: true });
+  })),
+
+  http.get(`${API}/rum/crashes`, authed(() =>
+    HttpResponse.json({
+      crashes: [
+        { group_id: "00000000000000a1", type: "IllegalStateException", message: "cart is empty", kind: "uncaught_exception",
+          count: 12, sessions: 9, last_version: "1.4.2", last_seen: formatTs(Date.now() - 60_000), stack: "at a.b.c(SourceFile:1)" },
+      ],
+    }),
+  )),
+
+  http.get(`${API}/analytics/events`, authed(() =>
+    HttpResponse.json({
+      events: [
+        { name: "checkout_started", count: 1200, sessions: 800, users: 640 },
+        { name: "signup", count: 300, sessions: 290, users: 280 },
+      ],
+    }),
+  )),
+
+  http.get(`${API}/analytics/acquisition`, authed(({ request }) => {
+    const by = new URL(request.url).searchParams.get("by") ?? "referrer";
+    return HttpResponse.json({
+      by,
+      sources: [
+        { value: "", sessions: 900, users: 700 },
+        { value: "www.google.com", sessions: 500, users: 430 },
+      ],
+    });
+  })),
+
+  http.get(`${API}/analytics/retention`, authed(({ request }) => {
+    const grain = new URL(request.url).searchParams.get("grain") ?? "week";
+    const size = 200;
+    // Newer cohorts have had fewer periods to come back in, which is the triangle a retention table is read by.
+    const cohorts = Array.from({ length: 6 }, (_, c) => ({
+      cohort: new Date(Date.now() - (5 - c) * 7 * 86_400_000).toISOString().slice(0, 10),
+      size,
+      periods: Array.from({ length: 6 - c }, (_, period) => {
+        const rate = period === 0 ? 1 : 0.5 * 0.8 ** period;
+        return { period, users: Math.round(size * rate), rate };
+      }),
+    }));
+    return HttpResponse.json({ grain, cohorts, collecting: true, sampling_changed: false });
   })),
 
   http.get(`${API}/rum/funnel`, authed(({ request }) => {

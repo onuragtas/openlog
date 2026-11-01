@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	coltrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
@@ -65,6 +66,7 @@ const (
 	ReasonBadVital     = "invalid_vital"
 	ReasonBadCustom    = "invalid_custom_event"
 	ReasonNoSession    = "missing_session_id"
+	ReasonCrashTooOld  = "crash_too_old"
 )
 
 // Result reports what Sanitize did, so the caller can answer with an OTLP partial success and count metrics.
@@ -90,7 +92,7 @@ func (r Result) Message() string {
 		return ""
 	}
 	parts := make([]string, 0, len(r.Dropped))
-	for _, reason := range []string{ReasonTooManySpans, ReasonNotRUM, ReasonBadVital, ReasonNoSession} {
+	for _, reason := range []string{ReasonTooManySpans, ReasonNotRUM, ReasonBadVital, ReasonNoSession, ReasonCrashTooOld} {
 		if n := r.Dropped[reason]; n > 0 {
 			parts = append(parts, strconv.Itoa(n)+" "+reason)
 		}
@@ -132,6 +134,8 @@ var resourceAllowed = map[string]bool{
 	"service.version":         true,
 	"device.model.identifier": true,
 	"device.manufacturer":     true,
+	// A build says whether it can report crashes. Lying about it only misstates that application's own release health.
+	AttrCrashCapture: true,
 }
 
 // spanAllowed are the span attributes kept on a RUM span. Values are bounded; the ones that decide a rollup
@@ -281,6 +285,14 @@ func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 	if in[AttrOSName] == "" {
 		add(AttrOSName, sc.os)
 	}
+	// None of the analytics attributes are on spanAllowed, so each is here or nowhere. The mode is forced, and the
+	// visitor id survives only on a key whose operator chose to recognise visitors (analytics.md §1.2).
+	if key.analyticsOn() {
+		add(AttrAnalyticsMode, key.AnalyticsMode)
+	}
+	if key.AnalyticsMode == AnalyticsVisitors {
+		add(AttrVisitorID, hexOnly(in[AttrVisitorID], 32))
+	}
 
 	switch event {
 	case EventPageView:
@@ -289,6 +301,12 @@ func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 			kind = PageViewLoad
 		}
 		add(AttrPageViewKind, kind)
+		if key.analyticsOn() {
+			add(AttrReferrerHost, referrerHost(in[AttrReferrerHost]))
+			add(AttrUTMSource, truncate(strings.TrimSpace(in[AttrUTMSource]), MaxUTMBytes))
+			add(AttrUTMMedium, truncate(strings.TrimSpace(in[AttrUTMMedium]), MaxUTMBytes))
+			add(AttrUTMCampaign, truncate(strings.TrimSpace(in[AttrUTMCampaign]), MaxUTMBytes))
+		}
 	case EventVital:
 		name := strings.ToLower(strings.TrimSpace(in[AttrVitalName]))
 		if _, ok := Thresholds[name]; !ok {
@@ -306,6 +324,16 @@ func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 			add(AttrErrorSource, src)
 		} else {
 			add(AttrErrorSource, "error")
+		}
+		if kind := in[AttrCrashKind]; CrashKinds[kind] {
+			if reason := sanitizeCrashTime(sp, sc.Now); reason != "" {
+				return reason
+			}
+			add(AttrCrashKind, kind)
+			add(AttrCrashID, hexOnly(in[AttrCrashID], 32))
+			if in[AttrCrashSessionUnknown] == "true" {
+				add(AttrCrashSessionUnknown, "true")
+			}
 		}
 	case EventCustom:
 		// The name is what every query written against a custom event groups by, so an unnamed one is not a
@@ -389,6 +417,42 @@ func sanitizeSpan(sp *tracepb.Span, key Key, sc Scope) string {
 
 	sanitizeEvents(sp, event)
 	return ""
+}
+
+// sanitizeCrashTime keeps a crash at the moment it happened, which is why it may arrive days later, within what the trace
+// retention can hold. A timestamp in the future is a wrong device clock and would sit ahead of every chart, so it takes
+// the server's time instead.
+func sanitizeCrashTime(sp *tracepb.Span, now time.Time) string {
+	if now.IsZero() {
+		return ""
+	}
+	at := time.Unix(0, int64(sp.GetStartTimeUnixNano()))
+	switch {
+	case now.Sub(at) > MaxCrashAge:
+		return ReasonCrashTooOld
+	case at.After(now):
+		sp.StartTimeUnixNano = uint64(now.UnixNano())
+		sp.EndTimeUnixNano = sp.StartTimeUnixNano
+	}
+	return ""
+}
+
+// referrerHost returns v lower-cased when it is a bare host name, else "". Anything carrying a path, a query or a
+// user is refused rather than cut down: the SDK sends a host, so such a value is not from the SDK, and the part that
+// would be stored is the part that may be personal.
+func referrerHost(v string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	if len(v) > MaxReferrerHostBytes {
+		return ""
+	}
+	for _, r := range v {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '.', r == '-':
+		default:
+			return ""
+		}
+	}
+	return v
 }
 
 // validParamKey reports whether a custom event parameter name is one a query can address without quoting:

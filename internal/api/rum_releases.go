@@ -18,11 +18,10 @@ import (
 // sent by the SDK. So a mobile release is detected by exactly the code that detects a backend deployment
 // (apm.DetectDeployments), and nothing new had to learn what a release is.
 //
-// The crash-free rate cannot come from the same place. `rum_sessions` has no version column, and it is
-// written by a materialized view, which cannot be altered — the same wall identity and geography hit
-// (§3.7). So sessions are counted from the spans themselves, and **the consequence is stated rather than
-// discovered: this half reaches back only as far as the 7-day trace retention, while the release list
-// reaches 30 days.** A version older than a week shows its releases with no sessions against them.
+// The session half cannot come from the same place, because `rum_sessions` has no version column and a view
+// cannot be altered (§3.7). It reads rum_release_sessions_1h (0103_release_sessions), which reaches the same 30
+// days as the release list. A range starts at its first whole hour, and sessions before that migration are not
+// in it, so the rates of an upgraded installation start from then.
 
 // rumMaxReleases bounds the versions a list returns. An application with more distinct versions than this
 // in one window is not releasing, it is leaking build identifiers into service.version.
@@ -30,45 +29,133 @@ const rumMaxReleases = 200
 
 type rumReleaseJSON struct {
 	Version string `json:"version"`
-	// Sessions and ErrorSessions are distinct session ids seen in the range, and those of them that
-	// produced at least one error span.
+	// Sessions and ErrorSessions are the sessions seen in the range, and those of them that produced at
+	// least one error span. Estimates past a few thousand, like every count of people here.
 	Sessions      uint64 `json:"sessions"`
 	ErrorSessions uint64 `json:"error_sessions"`
-	// CrashFreeRate is 1 when every session was clean and 0 when none was; null has no meaning here, so a
-	// version with no sessions reports 0 sessions and a rate of 1 rather than an absent field.
+	// CrashedSessions had a crash, among the CapturingSessions of builds able to report one.
+	CrashedSessions   uint64 `json:"crashed_sessions"`
+	CapturingSessions uint64 `json:"capturing_sessions"`
+	// ErrorFreeRate is the share of sessions with no error span; with no sessions it is 1 and not absent.
+	ErrorFreeRate float64 `json:"error_free_rate"`
+	// CrashFreeRate is ErrorFreeRate under its old name, kept for one release because consoles already read
+	// it and the store's console updates slowly. It never measured crashes (mobile-crash.md §5).
 	CrashFreeRate float64 `json:"crash_free_rate"`
-	FirstSeen     string  `json:"first_seen"`
-	LastSeen      string  `json:"last_seen"`
+	// SessionCrashFreeRate is what the name above promised. It is null for a version with no capturing
+	// sessions, because 100% would be a false statement about a build that cannot report a crash.
+	SessionCrashFreeRate *float64 `json:"session_crash_free_rate"`
+	FirstSeen            string   `json:"first_seen"`
+	LastSeen             string   `json:"last_seen"`
 }
 
-// rumReleasesSelect counts sessions per version over the raw spans.
+// rumReleasesSelect reads sessions per version from the hourly rollup.
 //
 // It is a function of its own so a test can build it without data: the handler reaches this query only
 // after its filter parses, and a fragment the query layer refuses would otherwise be found in production
 // (the same lesson as rumTimelineSelect).
 func rumReleasesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit int) *query.Select {
-	q := sc.From(query.Spans).Columns(
-		"resource_attributes['service.version'] AS r_version",
-		// Distinct sessions, and those of them that produced an error: uniqExactIf counts a session once
-		// however many errors it had, which is what "crash-free session" means.
-		"uniqExact(attributes[{a_session:String}]) AS r_sessions",
-		"uniqExactIf(attributes[{a_session:String}], attributes[{a_event:String}] = {v_error:String}) AS r_errors",
-		"min(timestamp) AS r_first",
-		"max(timestamp) AS r_last",
+	q := sc.From(query.RumReleaseSessions).Columns(
+		"version AS r_version",
+		// A session counts once however many errors it had, which is what "error-free session" means.
+		"uniqCombined64Merge(sessions) AS r_sessions",
+		"uniqCombined64Merge(error_sessions) AS r_errors",
+		"uniqCombined64Merge(crashed_sessions) AS r_crashed",
+		"uniqCombined64Merge(capturing_sessions) AS r_capturing",
+		"min(first_seen) AS r_first",
+		"max(last_seen) AS r_last",
 	).
-		// The keys are bound parameters, not literals: the query layer refuses the token "openlog" anywhere
-		// in a fragment, and every RUM attribute key starts with it.
-		Param("a_session", rum.AttrSessionID).Param("a_event", rum.AttrEvent).Param("v_error", rum.EventError).
-		Where("service_name = {r_app:String}").Param("r_app", f.app).
-		// Only RUM spans: a backend service reporting under the same name has its own screens in APM.
-		Where("attributes[{a_event:String}] != ''").
-		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp < fromUnixTimestamp64Nano({t_to:Int64})").
-		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
+		Where("app = {r_app:String}").Param("r_app", f.app).
+		Where("hour >= toStartOfHour(fromUnixTimestamp({t_from:Int64})) AND hour < fromUnixTimestamp({t_to:Int64})").
+		Param("t_from", from.Unix()).Param("t_to", to.Unix()).
 		GroupBy("r_version").OrderBy("r_last DESC").Limit(limit)
 	if f.env != nil {
 		q.Where("deployment_environment = {r_env:String}").Param("r_env", *f.env)
 	}
 	return q
+}
+
+// sessionsFreeOf returns the share of total not in bad, with sketches allowed to disagree by a little.
+func sessionsFreeOf(bad, total uint64) float64 {
+	if total == 0 || bad >= total {
+		if total == 0 {
+			return 1
+		}
+		return 0
+	}
+	return float64(total-bad) / float64(total)
+}
+
+type rumCrashJSON struct {
+	GroupID  string  `json:"group_id"`
+	Type     string  `json:"type"`
+	Message  string  `json:"message"`
+	Kind     string  `json:"kind"`
+	Count    float64 `json:"count"`
+	Sessions uint64  `json:"sessions"`
+	Version  string  `json:"last_version"`
+	LastSeen string  `json:"last_seen"`
+	Stack    string  `json:"stack"`
+}
+
+// rumCrashesSelect lists crashes by error group over the raw spans, because the stack only lives there. Crashes
+// are rare and these rows are found by a bloom-filtered attribute, so this reads little, and it reaches the 7-day
+// trace retention. The workflow of a group stays in the APM inbox, which already has it.
+func rumCrashesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit int) *query.Select {
+	q := sc.From(query.Spans).Columns(
+		"error_group_id AS c_group",
+		"any(error_type) AS c_type",
+		"any(error_message) AS c_message",
+		"any(attributes[{a_kind:String}]) AS c_kind",
+		"sum(sample_weight) AS c_count",
+		"uniqExact(attributes[{a_session:String}]) AS c_sessions",
+		"argMax(resource_attributes['service.version'], timestamp) AS c_version",
+		"max(timestamp) AS c_last",
+		"argMax(events_attributes[1]['exception.stacktrace'], timestamp) AS c_stack",
+	).
+		Param("a_kind", rum.AttrCrashKind).Param("a_session", rum.AttrSessionID).
+		Where("service_name = {r_app:String}").Param("r_app", f.app).
+		Where("attributes[{a_kind:String}] != ''").
+		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp < fromUnixTimestamp64Nano({t_to:Int64})").
+		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
+		GroupBy("c_group").OrderBy("c_count DESC").Limit(limit)
+	if f.env != nil {
+		q.Where("deployment_environment = {r_env:String}").Param("r_env", *f.env)
+	}
+	return q
+}
+
+// rumCrashes serves GET /api/v1/rum/crashes.
+func (s *Server) rumCrashes(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
+	noStore(w)
+	f, err := parseRUMFilter(r, true)
+	if err != nil {
+		return err
+	}
+	from, to, err := s.timeRange(r)
+	if err != nil {
+		return err
+	}
+	rows, err := sc.Query(r.Context(), rumCrashesSelect(sc, f, from, to, min(rumMaxReleases, s.cfg.MaxRows)))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	crashes := []rumCrashJSON{}
+	for rows.Next() {
+		var c rumCrashJSON
+		var group uint64
+		var last time.Time
+		if err := rows.Scan(&group, &c.Type, &c.Message, &c.Kind, &c.Count, &c.Sessions, &c.Version, &last, &c.Stack); err != nil {
+			return err
+		}
+		c.GroupID, c.LastSeen = apm.GroupIDString(group), formatTime(last)
+		crashes = append(crashes, c)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"crashes": crashes})
+	return nil
 }
 
 // rumReleases serves GET /api/v1/rum/releases.
@@ -95,14 +182,16 @@ func (s *Server) rumReleases(w http.ResponseWriter, r *http.Request, sc *query.S
 	for rows.Next() {
 		var rel rumReleaseJSON
 		var first, last time.Time
-		if err := rows.Scan(&rel.Version, &rel.Sessions, &rel.ErrorSessions, &first, &last); err != nil {
+		if err := rows.Scan(&rel.Version, &rel.Sessions, &rel.ErrorSessions, &rel.CrashedSessions, &rel.CapturingSessions, &first, &last); err != nil {
 			rows.Close()
 			return err
 		}
 		rel.FirstSeen, rel.LastSeen = formatTime(first), formatTime(last)
-		rel.CrashFreeRate = 1
-		if rel.Sessions > 0 {
-			rel.CrashFreeRate = float64(rel.Sessions-rel.ErrorSessions) / float64(rel.Sessions)
+		rel.ErrorFreeRate = sessionsFreeOf(rel.ErrorSessions, rel.Sessions)
+		rel.CrashFreeRate = rel.ErrorFreeRate
+		if rel.CapturingSessions > 0 {
+			rate := sessionsFreeOf(rel.CrashedSessions, rel.CapturingSessions)
+			rel.SessionCrashFreeRate = &rate
 		}
 		releases = append(releases, rel)
 	}

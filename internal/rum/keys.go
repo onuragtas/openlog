@@ -5,11 +5,15 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	coltrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/onuragtas/openlog/internal/tenant"
@@ -57,6 +61,14 @@ type Key struct {
 	// SampleRate is the share of sessions the SDK is told to keep. The weight of every stored span is
 	// derived from it server-side, so a page cannot inflate its own traffic by claiming a sample rate.
 	SampleRate float64
+	// AnalyticsMode is how much product analytics this key stores (analytics.md §1.1). It is the operator's
+	// decision and is forced onto every span: see AttrAnalyticsMode.
+	AnalyticsMode string
+}
+
+// analyticsOn reports whether spans of this key reach the analytics tables at all.
+func (k Key) analyticsOn() bool {
+	return k.AnalyticsMode == AnalyticsSessions || k.AnalyticsMode == AnalyticsVisitors
 }
 
 // Key kinds, mirroring the `kind` column of browser_keys (0098_mobile_keys).
@@ -78,6 +90,8 @@ type Scope struct {
 	// not consulted by Resolve — and travels here only because it is the same thing: a fact about the
 	// request that the server establishes rather than the payload claims.
 	Country string
+	// Now is the server's clock, which a crash delivered late is judged by (mobile-crash.md §1). Zero skips the check.
+	Now time.Time
 	// browser and os are set per resource by Sanitize (useragent.go).
 	browser, os string
 }
@@ -150,9 +164,13 @@ type Keys struct {
 	touchMu sync.Mutex
 	touched map[string]struct{}
 
-	results  *prometheus.CounterVec
-	rejected *prometheus.CounterVec
-	lastErr  time.Time
+	namesMu    sync.Mutex
+	eventNames map[string]map[uint64]struct{} // key id -> hashes of the event names it has stored
+
+	results     *prometheus.CounterVec
+	rejected    *prometheus.CounterVec
+	cappedNames prometheus.Counter
+	lastErr     time.Time
 }
 
 // NewKeys creates a resolver. Call Run to flush last_used_at updates.
@@ -160,7 +178,11 @@ func NewKeys(store Store, o CacheOptions) *Keys {
 	o.defaults()
 	k := &Keys{
 		store: store, o: o, entries: map[string]entry{}, buckets: map[string]*bucket{},
-		touched: map[string]struct{}{},
+		touched: map[string]struct{}{}, eventNames: map[string]map[uint64]struct{}{},
+		cappedNames: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "openlog_rum_event_names_capped_total",
+			Help: "Custom events stored as (other) because their key is over its distinct event name bound.",
+		}),
 		results: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "openlog_rum_key_resolutions_total",
 			Help: "Browser key resolutions by result: hit, miss, negative, stale, unavailable, origin_denied, app_denied.",
@@ -171,7 +193,7 @@ func NewKeys(store Store, o CacheOptions) *Keys {
 		}, []string{"reason"}),
 	}
 	if o.Registerer != nil {
-		o.Registerer.MustRegister(k.results, k.rejected)
+		o.Registerer.MustRegister(k.results, k.rejected, k.cappedNames)
 	}
 	return k
 }
@@ -299,6 +321,64 @@ func (k *Keys) Allow(key Key, n int, now time.Time) (bool, time.Duration) {
 		k.Rejected("rate_limited", n)
 	}
 	return ok, wait
+}
+
+// CapEventNames bounds the distinct custom event names a key can store, rewriting the ones past the bound to
+// OtherEventName (analytics.md §4). Event names reach a 90-day table from a public key, so without this a copied key
+// could mint names without limit, which is exactly what rum.md §3.3 refuses for routes.
+//
+// It runs after Sanitize and only for a key with analytics on: a key in 'off' mode behaves as it did before this
+// feature existed. Like the rate limit the set is **per ingest pod**, so the ceiling with p pods is p × the bound, and
+// it lasts as long as the pod. Hashes rather than names are kept, so the memory held does not depend on what a page
+// chose to send.
+func (k *Keys) CapEventNames(req *coltrace.ExportTraceServiceRequest, key Key) {
+	if !key.analyticsOn() {
+		return
+	}
+	for _, rs := range req.GetResourceSpans() {
+		for _, ss := range rs.GetScopeSpans() {
+			for _, sp := range ss.GetSpans() {
+				k.capEventName(sp, key.KeyID)
+			}
+		}
+	}
+}
+
+func (k *Keys) capEventName(sp *tracepb.Span, keyID string) {
+	var name *commonpb.KeyValue
+	for _, kv := range sp.GetAttributes() {
+		if kv.GetKey() == AttrCustomName {
+			name = kv
+			break
+		}
+	}
+	if name == nil {
+		return
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(name.GetValue().GetStringValue()))
+	sum := h.Sum64()
+
+	k.namesMu.Lock()
+	seen, ok := k.eventNames[keyID]
+	if !ok {
+		if len(k.eventNames) >= k.o.MaxEntries {
+			k.eventNames = map[string]map[uint64]struct{}{}
+		}
+		seen = map[uint64]struct{}{}
+		k.eventNames[keyID] = seen
+	}
+	_, known := seen[sum]
+	allowed := known || len(seen) < MaxEventNamesPerKey
+	if allowed && !known {
+		seen[sum] = struct{}{}
+	}
+	k.namesMu.Unlock()
+
+	if !allowed {
+		name.Value = str(AttrCustomName, OtherEventName).GetValue()
+		k.cappedNames.Inc()
+	}
 }
 
 func (k *Keys) logStoreError(err error, now time.Time) {

@@ -302,6 +302,7 @@ in `openlog.table_settings` (`ttl:<table>`). Idempotent; nothing runs while tier
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_APM` | `7` | The 8 `apm_*` rollup tables of `OPENLOG_APM_RETENTION_DAYS` |
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_ALERTS` | `7` | `alert_evaluations_local` (30 d) |
 | `OPENLOG_STORAGE_COLD_AFTER_DAYS_RUM` | `7` | `rum_page_views_1m_local`, `rum_vitals_1m_local`, `rum_sessions_local` (30 d, D-136) |
+| `OPENLOG_STORAGE_COLD_AFTER_DAYS_ANALYTICS` | `30` | `analytics_events_local` (90 d), `analytics_actors_local`, `analytics_actor_days_local` (395 d) ([analytics.md](analytics.md)) |
 | `OPENLOG_STORAGE_WARM_AFTER_DAYS_<CLASS>` | `0` | Same classes: days after which parts move to volume `warm` (must be below the cold age when both are set; requires a `warm` volume on every replica) |
 
 **ClickHouse server variables** (not read by openlog; used by `deploy/compose/clickhouse/storage-tiered.xml` through

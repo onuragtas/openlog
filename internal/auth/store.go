@@ -192,7 +192,9 @@ type BrowserKey struct {
 	RateLimitPerMinute int
 	// SampleRate is the share of sessions the SDK keeps (0 < x <= 1); the stored sampling weight is
 	// derived from it, so a page cannot inflate its own traffic.
-	SampleRate     float64
+	SampleRate float64
+	// AnalyticsMode is AnalyticsOff, AnalyticsSessions or AnalyticsVisitors (analytics.md §1.1).
+	AnalyticsMode  string
 	CreatedBy      string
 	CreatedByEmail string
 	CreatedAt      time.Time
@@ -213,6 +215,9 @@ type BrowserKeyInput struct {
 	AppIDs             []string
 	RateLimitPerMinute int
 	SampleRate         float64
+	// AnalyticsMode empty means "not stated": visitors on create, and the current value on update. An update that
+	// omits it must keep the key's mode, or an older console saving a rename would switch collection on.
+	AnalyticsMode string
 }
 
 // APIKey is a Query and management API key. The plaintext is never stored.

@@ -114,7 +114,8 @@ func (p *Plan) Table() string {
 		"Log": "logs", "Span": "spans", "Transaction": "spans", "Metric": "metrics", "Host": "hosts",
 		"Container": "containers", "Profile": "profiles",
 		"RumPageView": "rum_page_views_1m", "RumVital": "rum_vitals_1m", "RumSession": "rum_sessions",
-		"DbQuery": "db_query_stats",
+		"AnalyticsEvent": "analytics_events",
+		"DbQuery":        "db_query_stats",
 	}[p.Event.name]
 }
 

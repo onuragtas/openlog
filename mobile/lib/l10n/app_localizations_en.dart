@@ -4254,7 +4254,7 @@ class LEn extends L {
   String get rumReleaseDeployments => 'Deployments';
 
   @override
-  String get rumReleaseCrashFree => 'Crash-free';
+  String get rumReleaseCrashFree => 'Error-free';
 
   @override
   String get rumReleaseSessions => 'Sessions';

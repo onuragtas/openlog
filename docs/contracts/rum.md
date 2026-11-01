@@ -33,7 +33,9 @@ collectable without a consent banner.
 **That last sentence stops being true the moment an application calls `identify()`** (§3.7). A session tied to
 an account id recognises a person across visits by construction, and whether that is lawful without consent is
 the application's question, not openlog's — openlog neither derives an identity nor sets one by default. The
-session id itself stays what it is described as above; identity is a field an application fills deliberately. `sessionStorage` being unavailable (private modes, sandboxed frames) degrades to an
+session id itself stays what it is described as above; identity is a field an application fills deliberately. **The
+same goes for a key in `visitors` mode** ([analytics.md](analytics.md) §1), which is what a new key starts in: the
+persistent visitor id recognises someone across visits, and sampling becomes once per visitor. `sessionStorage` being unavailable (private modes, sandboxed frames) degrades to an
 in-memory id; it never throws.
 
 Sampling is decided **once per session**, not per event. Half a session is not a cheaper session, it is an
@@ -183,18 +185,9 @@ has both, the name forced from the key and the version sent by the SDK. So a mob
 exactly the code that detects a backend deployment ([apm.md](apm.md) §12), including its rollback and
 first-version cases. Nothing new had to learn what a release is.
 
-The crash-free rate could not come from the same place. `rum_sessions` has no version column and is written
-by a materialized view, which cannot be altered (§3.7) — so sessions are counted from the spans:
-`uniqExact` of session ids per version, and `uniqExactIf` of those that produced at least one `error` span.
-A session with twelve errors is one unhappy session, not twelve.
-
-**The two halves therefore see different distances, and the response does not hide it:** releases reach back
-30 days (the version rollup), sessions only 7 (trace retention). A version older than a week appears in the
-list with no sessions against it. Carrying session counts for thirty days needs its own table, which is a
-decision about storage volume and should be made on purpose rather than arrived at through a migration.
-
-A version with no sessions reports a crash-free rate of `1` rather than an absent field: null would have to
-mean both "nothing broke" and "nothing is known", and a chart cannot draw the difference.
+The session half could not come from the same place. `rum_sessions` has no version column and is written by a materialized
+view, which cannot be altered (§3.7). It reads `rum_release_sessions_1h`, which counts sessions per version per hour for the
+same 30 days as the release list. **What a release's rates mean is [mobile-crash.md](mobile-crash.md) §5.**
 
 ### 2.8 Funnels
 
@@ -218,9 +211,8 @@ Two limits are stated rather than discovered. Between 2 and 6 steps: one step is
 the answer is a report. And, like everything that reads the spans rather than a rollup, it reaches back only
 as far as the **7-day trace retention** (§3.7).
 
-**Retention (cohorts) is deliberately not here yet.** It needs identity across sessions, which exists only
-for applications that call `identify()` (§3.7), and it would be bounded by the same seven days — which is
-too short for the question retention actually asks. Shipping half of it would be worse than saying so.
+**Retention (cohorts) is not here:** it needs identity across sessions and more than seven days, so it has its
+own tables and its own contract, [analytics.md](analytics.md).
 
 ## 3. The browser key
 

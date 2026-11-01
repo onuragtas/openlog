@@ -50,6 +50,8 @@ const (
 	// credential operation.
 	ActListBrowserKeys   Action = "browser_keys.list"
 	ActManageBrowserKeys Action = "browser_keys.manage"
+	// Deleting one person's analytics data (analytics.md §7).
+	ActEraseAnalytics Action = "analytics.erase"
 	// A source map is not a credential, but uploading one decides how every browser stack of an
 	// application reads, so it is managed like the key that produced those stacks (rum.md §8).
 	ActListSourceMaps   Action = "source_maps.list"
@@ -159,6 +161,8 @@ var matrix = map[Action]Permission{
 	ActManageIntegrationSettings: {Min: RoleAdmin},
 	ActManageCloudConnections:    {Min: RoleAdmin},
 	ActExportUsage:               {Min: RoleAdmin},
+	// Not user-only: this is usually an application's backend answering a data subject request.
+	ActEraseAnalytics: {Min: RoleAdmin},
 
 	// Identity, credentials and the installation itself: signed-in users only.
 	ActManageMembers:       {Min: RoleAdmin, UserOnly: true},

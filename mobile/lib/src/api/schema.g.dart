@@ -3403,6 +3403,32 @@ enum BrowserKeyKind {
   }
 }
 
+/// BrowserKeyAnalyticsMode of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum BrowserKeyAnalyticsMode {
+  off('off'),
+  sessions('sessions'),
+  visitors('visitors'),
+  unknown('');
+
+  const BrowserKeyAnalyticsMode(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static BrowserKeyAnalyticsMode fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// SSORoleMappingRole of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -20106,6 +20132,7 @@ class BrowserKey {
     required this.appIds,
     required this.rateLimitPerMinute,
     required this.sampleRate,
+    this.analyticsMode,
     required this.createdByEmail,
     required this.createdAt,
     required this.updatedAt,
@@ -20127,6 +20154,12 @@ class BrowserKey {
       appIds: _req(m, 'app_ids', path, (v, p) => _list<String>(v, p, _str)),
       rateLimitPerMinute: _req(m, 'rate_limit_per_minute', path, _int),
       sampleRate: _req(m, 'sample_rate', path, _num),
+      analyticsMode: _opt(
+        m,
+        'analytics_mode',
+        path,
+        BrowserKeyAnalyticsMode.fromJson,
+      ),
       createdByEmail: _req(m, 'created_by_email', path, _str),
       createdAt: _req(m, 'created_at', path, _time),
       updatedAt: _req(m, 'updated_at', path, _time),
@@ -20147,6 +20180,7 @@ class BrowserKey {
     'app_ids': appIds,
     'rate_limit_per_minute': rateLimitPerMinute,
     'sample_rate': sampleRate,
+    if (analyticsMode != null) 'analytics_mode': analyticsMode!.wire,
     'created_by_email': createdByEmail,
     'created_at': createdAt.toUtc().toIso8601String(),
     'updated_at': updatedAt.toUtc().toIso8601String(),
@@ -20166,6 +20200,7 @@ class BrowserKey {
   final List<String> appIds;
   final int rateLimitPerMinute;
   final double sampleRate;
+  final BrowserKeyAnalyticsMode? analyticsMode;
   final String createdByEmail;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -20601,13 +20636,17 @@ class RumEvent {
   final int statusCode;
 }
 
-/// One version of the application over the requested range. Counted from the spans, so bounded by the trace retention rather than by the 30 days the release list reaches.
+/// One version of the application over the requested range, from an hourly rollup that reaches the same 30 days as the release list. Counts past a few thousand are estimates. The crash fields are optional because the store's console also talks to servers older than they are.
 class RumRelease {
   const RumRelease({
     required this.version,
     required this.sessions,
     required this.errorSessions,
+    this.crashedSessions,
+    this.capturingSessions,
+    this.errorFreeRate,
     required this.crashFreeRate,
+    this.sessionCrashFreeRate,
     required this.firstSeen,
     required this.lastSeen,
   });
@@ -20618,7 +20657,11 @@ class RumRelease {
       version: _req(m, 'version', path, _str),
       sessions: _req(m, 'sessions', path, _int),
       errorSessions: _req(m, 'error_sessions', path, _int),
+      crashedSessions: _opt(m, 'crashed_sessions', path, _int),
+      capturingSessions: _opt(m, 'capturing_sessions', path, _int),
+      errorFreeRate: _opt(m, 'error_free_rate', path, _num),
       crashFreeRate: _req(m, 'crash_free_rate', path, _num),
+      sessionCrashFreeRate: _opt(m, 'session_crash_free_rate', path, _num),
       firstSeen: _req(m, 'first_seen', path, _time),
       lastSeen: _req(m, 'last_seen', path, _time),
     );
@@ -20628,7 +20671,11 @@ class RumRelease {
     'version': version,
     'sessions': sessions,
     'error_sessions': errorSessions,
+    'crashed_sessions': ?crashedSessions,
+    'capturing_sessions': ?capturingSessions,
+    'error_free_rate': ?errorFreeRate,
     'crash_free_rate': crashFreeRate,
+    'session_crash_free_rate': ?sessionCrashFreeRate,
     'first_seen': firstSeen.toUtc().toIso8601String(),
     'last_seen': lastSeen.toUtc().toIso8601String(),
   };
@@ -20636,7 +20683,11 @@ class RumRelease {
   final String version;
   final int sessions;
   final int errorSessions;
+  final int? crashedSessions;
+  final int? capturingSessions;
+  final double? errorFreeRate;
   final double crashFreeRate;
+  final double? sessionCrashFreeRate;
   final DateTime firstSeen;
   final DateTime lastSeen;
 }

@@ -50,6 +50,7 @@ type browserKeyJSON struct {
 	AppIDs             []string `json:"app_ids"`
 	RateLimitPerMinute int      `json:"rate_limit_per_minute"`
 	SampleRate         float64  `json:"sample_rate"`
+	AnalyticsMode      string   `json:"analytics_mode"`
 	CreatedByEmail     string   `json:"created_by_email"`
 	CreatedAt          string   `json:"created_at"`
 	UpdatedAt          string   `json:"updated_at"`
@@ -73,7 +74,7 @@ func browserKeyResponse(k auth.BrowserKey) browserKeyJSON {
 		ID: k.ID, Name: k.Name, Prefix: k.Prefix, Key: k.Value,
 		ServiceName: k.ServiceName, Environment: k.Environment,
 		Kind: kind, Origins: origins, AppIDs: appIDs,
-		RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate,
+		RateLimitPerMinute: k.RateLimitPerMinute, SampleRate: k.SampleRate, AnalyticsMode: k.AnalyticsMode,
 		CreatedByEmail: k.CreatedByEmail, CreatedAt: formatTime(k.CreatedAt), UpdatedAt: formatTime(k.UpdatedAt),
 		LastUsedAt: optTime(k.LastUsedAt), RevokedAt: optTime(k.RevokedAt),
 	}
@@ -102,6 +103,7 @@ type browserKeyInputJSON struct {
 	AppIDs             []string `json:"app_ids"`
 	RateLimitPerMinute int      `json:"rate_limit_per_minute"`
 	SampleRate         float64  `json:"sample_rate"`
+	AnalyticsMode      string   `json:"analytics_mode"`
 }
 
 // decodeBrowserKeyInput reads and validates the body. Origin syntax is checked here rather than in
@@ -115,7 +117,7 @@ func decodeBrowserKeyInput(r *http.Request) (auth.BrowserKeyInput, error) {
 	// accept a key carrying two scopes, and internal/auth then has to decide which of them bounds it.
 	out := auth.BrowserKeyInput{
 		Name: in.Name, ServiceName: in.ServiceName, Environment: in.Environment, Kind: in.Kind,
-		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate,
+		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate, AnalyticsMode: in.AnalyticsMode,
 	}
 	switch in.Kind {
 	case auth.KeyKindMobile:

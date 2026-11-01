@@ -81,18 +81,27 @@ final class Transport {
         queue.removeAll()
         lock.unlock()
 
-        guard let body = try? JSONSerialization.data(withJSONObject: buildPayload(spans: batch, resource: resource())) else {
+        guard let body = encode(batch) else {
             done?()  // an unencodable payload is dropped rather than retried: it will not encode next time
             return
         }
+        sendBody(body) { [weak self] status in
+            self?.finish(status: status, batch: batch)
+            done?()
+        }
+    }
+
+    /// One request body. A crash report is encoded when it is recorded, and carries the build that crashed.
+    func encode(_ spans: [[String: Any]], version: String? = nil) -> Data? {
+        try? JSONSerialization.data(withJSONObject: buildPayload(spans: spans, resource: resource(version: version)))
+    }
+
+    func sendBody(_ body: Data, done: @escaping (Int) -> Void) {
         send(cfg.rumURL, [
             "content-type": "application/json",
             "openlog-browser-key": cfg.options.key,
             "openlog-app-id": cfg.options.appID,
-        ], body) { [weak self] status in
-            self?.finish(status: status, batch: batch)
-            done?()
-        }
+        ], body, done)
     }
 
     private func finish(status: Int, batch: [[String: Any]]) {
@@ -113,13 +122,15 @@ final class Transport {
         schedule()
     }
 
-    private func resource() -> [(String, Any?)] {
+    private func resource(version: String? = nil) -> [(String, Any?)] {
         [
-            ("service.version", cfg.options.serviceVersion),
+            ("service.version", version ?? cfg.options.serviceVersion),
             ("device.model.identifier", cfg.options.deviceModel),
             ("device.manufacturer", cfg.options.deviceManufacturer),
             ("os.name", cfg.options.osName),
             ("os.version", cfg.options.osVersion),
+            // Without this a version that cannot report a crash would read as 100% crash-free (mobile-crash.md §5).
+            ("openlog.rum.crash.capture", cfg.options.captureCrashes ? "1" : nil),
         ]
     }
 

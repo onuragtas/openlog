@@ -86,18 +86,21 @@ internal class Transport(
             batch = ArrayList(queue)
             queue.clear()
         }
-        val body = jsonEncode(buildPayload(batch, resource()))
-        val status = send(
-            cfg.rumUrl,
-            mapOf(
-                "content-type" to "application/json",
-                "openlog-browser-key" to cfg.options.key,
-                "openlog-app-id" to cfg.options.appId,
-            ),
-            body,
-        )
-        finish(status, batch)
+        finish(sendBody(encode(batch)), batch)
     }
+
+    /** One request body. A crash report is encoded when it happens, so it carries the build that crashed. */
+    fun encode(spans: List<Map<String, Any?>>): String = jsonEncode(buildPayload(spans, resource()))
+
+    fun sendBody(body: String): Int = send(
+        cfg.rumUrl,
+        mapOf(
+            "content-type" to "application/json",
+            "openlog-browser-key" to cfg.options.key,
+            "openlog-app-id" to cfg.options.appId,
+        ),
+        body,
+    )
 
     private fun finish(status: Int, batch: List<Map<String, Any?>>) {
         if (status == 401 || status == 403) {
@@ -121,6 +124,8 @@ internal class Transport(
         "device.manufacturer" to cfg.options.deviceManufacturer,
         "os.name" to cfg.options.osName,
         "os.version" to cfg.options.osVersion,
+        // Without this a version that cannot report a crash would read as 100% crash-free (mobile-crash.md §5).
+        "openlog.rum.crash.capture" to if (cfg.options.captureCrashes && cfg.options.crashDirectory != null) "1" else null,
     )
 
     private fun log(message: String) {

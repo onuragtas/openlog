@@ -9,6 +9,8 @@
 // before it reaches Kafka.
 package rum
 
+import "time"
+
 // Attribute names of the openlog browser SDK (semantic-conventions.md §10). Where OpenTelemetry has a name
 // for a concept — `session.id`, `browser.*`, `url.*`, `device.type` — openlog uses it; the openlog-specific
 // ones carry the `openlog.rum.` prefix.
@@ -73,6 +75,32 @@ const (
 	// value; it cannot tell an account id from an e-mail address.
 	AttrUserID = "user.id"
 
+	// AttrVisitorID is a random, persistent id for one browser or application install (analytics.md §1.2). It is
+	// what recognises someone across visits, so it is kept only when the key's analytics mode says so: it must
+	// not arrive simply by being sent.
+	AttrVisitorID = "openlog.rum.visitor.id"
+
+	// AttrAnalyticsMode is **set by the server** from the key, and it is what the views of 0102_analytics filter
+	// on. It is forced because a value a page could send would be a page opting itself into long-lived storage.
+	AttrAnalyticsMode = "openlog.analytics.mode"
+
+	// Attribution of the first page view of a session (analytics.md §3). The referrer is a host and never a URL,
+	// because paths carry personal data.
+	AttrReferrerHost = "openlog.rum.referrer.host"
+	AttrUTMSource    = "openlog.rum.utm.source"
+	AttrUTMMedium    = "openlog.rum.utm.medium"
+	AttrUTMCampaign  = "openlog.rum.utm.campaign"
+
+	// A crash is an error span, because the error inbox and rum_sessions read that (mobile-crash.md §1). AttrCrashKind
+	// is what says the error was fatal, from a closed list since release health counts it. AttrCrashID stays the same
+	// across retried deliveries. AttrCrashSessionUnknown says the session is a guess, since MetricKit carries none.
+	AttrCrashKind           = "openlog.rum.crash.kind"
+	AttrCrashID             = "openlog.rum.crash.id"
+	AttrCrashSessionUnknown = "openlog.rum.crash.session_unknown"
+	// AttrCrashCapture is a resource attribute saying this build can report crashes at all. Without it a version
+	// that cannot would read as 100% crash-free.
+	AttrCrashCapture = "openlog.rum.crash.capture"
+
 	// AttrGeoCountry is the ISO 3166-1 alpha-2 country of the visitor, **set by the server** from a header
 	// a trusted proxy or CDN wrote (OPENLOG_RUM_GEO_HEADER). It is forced like service.name rather than
 	// allowlisted: a value a page could send would be a value a page could invent.
@@ -126,6 +154,32 @@ const (
 // MaxUserIDBytes bounds a user id. It is generous for an opaque account key and far too short for a
 // document: the value decides nothing on the server, so the only risk it carries is size.
 const MaxUserIDBytes = 128
+
+// CrashKinds lists what AttrCrashKind may say.
+var CrashKinds = map[string]bool{"uncaught_exception": true, "signal": true, "anr": true, "out_of_memory": true}
+
+// MaxCrashAge is how late a crash may be delivered. Past this it would land outside the trace retention.
+const MaxCrashAge = 7 * 24 * time.Hour
+
+// Analytics modes of a key, mirroring the `analytics_mode` column of browser_keys (0104_analytics_mode).
+const (
+	// AnalyticsOff stores nothing past the spans. An empty mode means the same.
+	AnalyticsOff = "off"
+	// AnalyticsSessions keeps events and attribution for longer, without recognising anybody across visits.
+	AnalyticsSessions = "sessions"
+	// AnalyticsVisitors adds the visitor id, and with it DAU, MAU, new users and retention.
+	AnalyticsVisitors = "visitors"
+)
+
+// Bounds of the analytics attributes.
+const (
+	MaxUTMBytes          = 128
+	MaxReferrerHostBytes = 253
+	// MaxEventNamesPerKey bounds the distinct event names one key may store per ingest pod (analytics.md §4).
+	MaxEventNamesPerKey = 500
+	// OtherEventName is what a name past that bound is stored as.
+	OtherEventName = "(other)"
+)
 
 // Event kinds of AttrEvent.
 const (

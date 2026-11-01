@@ -1464,6 +1464,10 @@ Rebuilt for every request, never merged with what the page sent.
 | `url.path`, `url.full`, `url.domain` | accepted | The page's own URL, query and fragment already dropped |
 | `openlog.rum.timing.*` | accepted | Navigation Timing phases in milliseconds: `ttfb_ms`, `dns_ms`, `connect_ms`, `tls_ms`, `response_ms`, `dom_interactive_ms`, `dom_content_loaded_ms`, `load_event_ms` |
 | `user.id` | accepted | The application's own identifier for the person, set through `identify()` and bounded to 128 bytes. **openlog never derives it and cannot tell an opaque account key from an e-mail address** — rum.md §3.7 asks the operator for the former |
+| `openlog.rum.crash.kind`, `.id`, `.session_unknown` | accepted | On an `error` span. The kind comes from a closed list ([mobile-crash.md](mobile-crash.md) §1) |
+| `openlog.rum.visitor.id` | accepted | 32 hex characters, a random persistent id. Kept only when the key is in `visitors` mode ([analytics.md](analytics.md) §1.2) |
+| `openlog.analytics.mode` | forced | `sessions` or `visitors`, from the key. Absent in `off` mode. The analytics views filter on it |
+| `openlog.rum.referrer.host`, `openlog.rum.utm.source`, `.medium`, `.campaign` | accepted | On a `page_view` of a key with analytics on. The referrer is a bare host, the others are bounded to 128 bytes |
 | `geo.country.iso_code` | forced | ISO 3166-1 alpha-2, read from the header named by `OPENLOG_RUM_GEO_HEADER` and written by the server. A value the page sent is dropped: a country a page can send is a country a page can invent. Empty when no trusted proxy resolved one; **no visitor address is ever stored** |
 | `http.request.method`, `http.response.status_code`, `server.address`, `error.type` | accepted | On a `resource` span, so a browser fetch/XHR looks like any other HTTP client span |
 | `openlog.rum.resource.initiator` | accepted | What loaded the asset: `script`, `link`, `img`, `css`, `font`, … — the browser's own `initiatorType` |

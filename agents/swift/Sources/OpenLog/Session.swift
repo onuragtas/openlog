@@ -20,12 +20,15 @@ final class SessionState {
     private(set) var sampled: Bool = false
 
     private let now: () -> Date
+    /// Where this session falls in [0, 1) for sampling: the visitor's fixed place when there is one (analytics.md §2).
+    private let roll: () -> Double
     private var startedAt = Date()
     private var lastSeenAt = Date()
 
-    init(sampleRate: Double, now: @escaping () -> Date = Date.init) {
+    init(sampleRate: Double, now: @escaping () -> Date = Date.init, roll: @escaping () -> Double = nextUnit) {
         self.sampleRate = sampleRate
         self.now = now
+        self.roll = roll
         start(at: now())
     }
 
@@ -35,7 +38,7 @@ final class SessionState {
         screenSpanID = newSpanID()
         startedAt = date
         lastSeenAt = date
-        sampled = sampleRate >= 1 ? true : (sampleRate <= 0 ? false : nextUnit() < sampleRate)
+        sampled = sampleRate >= 1 ? true : (sampleRate <= 0 ? false : roll() < sampleRate)
     }
 
     /// Records activity, starting a new session when the old one expired. Returns true when a new session

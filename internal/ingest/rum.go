@@ -40,6 +40,7 @@ type RUMKeys interface {
 	Resolve(ctx context.Context, value string, sc rum.Scope) (rum.Key, error)
 	Allow(key rum.Key, n int, now time.Time) (bool, time.Duration)
 	Rejected(reason string, n int)
+	CapEventNames(req *coltrace.ExportTraceServiceRequest, key rum.Key)
 }
 
 // SetRUMGeoHeader names the header a trusted proxy writes the visitor's country into
@@ -139,6 +140,7 @@ func (s *Service) rumScope(r *http.Request) rum.Scope {
 	sc := rum.Scope{
 		Origin: r.Header.Get("Origin"),
 		AppID:  strings.TrimSpace(r.Header.Get(rumAppIDHeader)),
+		Now:    s.now(),
 	}
 	if s.rumGeoHeader != "" {
 		sc.Country = rum.ParseCountry(r.Header.Get(s.rumGeoHeader))
@@ -193,6 +195,9 @@ func (s *Service) rumConfig(w http.ResponseWriter, r *http.Request) {
 		"service_name": key.ServiceName,
 		"environment":  key.Environment,
 		"sample_rate":  key.SampleRate,
+		// Whether the SDK may keep a visitor id on the device at all (analytics.md §1). Sanitize enforces the same
+		// thing on what arrives; this is what stops it being written in the first place.
+		"analytics_mode": key.AnalyticsMode,
 	})
 }
 
@@ -242,6 +247,7 @@ func (s *Service) rumExport(w http.ResponseWriter, r *http.Request) {
 	for reason, n := range res.Dropped {
 		s.rum.Rejected(reason, n)
 	}
+	s.rum.CapEventNames(req, key)
 	// Malformed span ids are the same class of problem here as on /v1/traces; reuse the same filter so a
 	// browser cannot write a row the trace view then cannot open.
 	badIDs := filterSpans(req)

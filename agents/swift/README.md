@@ -79,6 +79,9 @@ second authentication factor, and this SDK will not pretend otherwise. The full 
 | `maxBatchSize` | `32` | Spans buffered before an early send |
 | `flushInterval` | `5` (seconds) | How often a non-empty queue is sent |
 | `debug` | `false` | Log what the SDK does |
+| `analyticsCollection` | `true` | Recognise a person across launches, for DAU, MAU and retention. This stores a persistent id, which may need consent: see [Product analytics](../../docs/guide/product-analytics.md) |
+| `captureCrashes`, `crashDirectory` | `false`, Application Support | Report crashes on a later launch. See [Crash reporting](../../docs/guide/crash-reporting.md) |
+| `visitorDefaults` | `.standard` | Where the visitor id is kept. `nil` keeps none and sends none |
 
 ## Sampling and sessions
 
@@ -91,9 +94,7 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 ## What it does not do
 
-**No crash reporting.** An unhandled crash is not something the process lives to send, and capturing it for
-delivery on the next launch needs its own design. Claiming it here would lose crashes quietly.
-`record(error:)` reports what your code catches, which is a different and smaller promise.
+**No out-of-memory reports.** Exceptions, signals and traps are reported when `captureCrashes` is on: see [Crash reporting](../../docs/guide/crash-reporting.md).
 
 **No symbolication.** Browser stacks are un-minified with uploaded source maps; dSYM has no equivalent yet.
 

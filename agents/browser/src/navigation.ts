@@ -44,6 +44,29 @@ export function navigationTimings(): { timings: NavigationTimings; durationMs: n
   return { timings, durationMs: Math.max(0, Math.round(duration * 100) / 100) };
 }
 
+/**
+ * How the session started, for its first page view (analytics.md §3). The referrer is a host, because paths carry
+ * personal data, and these three are the only query parameters the SDK ever reads: `utm_term` and `utm_content` are
+ * the two that free text ends up in. On a route change the document referrer is stale, so `isLoad` keeps it out.
+ */
+export function landingAttribution(isLoad: boolean): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    if (isLoad && document.referrer) {
+      const host = new URL(document.referrer).hostname;
+      if (host !== location.hostname) out['openlog.rum.referrer.host'] = host;
+    }
+    const q = new URLSearchParams(location.search);
+    for (const k of ['source', 'medium', 'campaign']) {
+      const v = q.get(`utm_${k}`);
+      if (v) out[`openlog.rum.utm.${k}`] = v;
+    }
+  } catch {
+    /* a malformed referrer is no attribution, not an error in somebody's page */
+  }
+  return out;
+}
+
 /** Runs fn once the load event has fired (immediately when it already has). */
 export function afterLoad(fn: () => void): void {
   if (document.readyState === 'complete') {

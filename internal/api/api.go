@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/onuragtas/openlog/internal/alert"
+	"github.com/onuragtas/openlog/internal/analytics"
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/cloudconnect"
@@ -41,6 +42,7 @@ import (
 type Server struct {
 	cfg      config.API
 	db       *query.DB
+	erasures analytics.Store // nil without PostgreSQL
 	authn    auth.Authenticator
 	accounts *auth.Service // nil in OPENLOG_AUTH_MODE=static
 	log      *slog.Logger
@@ -179,27 +181,28 @@ func (s *Server) Handler() http.Handler {
 	s.fleetRoutes(mux)
 	s.alertRoutes(mux)
 	s.integrationSettingsRoutes(mux)
-	s.oqlRoutes(mux)          // oql.go
-	s.dashboardRoutes(mux)    // dashboards.go
-	s.tailSamplingRoutes(mux) // tailsampling.go (D-075)
-	s.usageRoutes(mux)        // usage.go (D-079..D-081)
-	s.diskSpaceRoutes(mux)    // diskspace.go: ClickHouse disk usage and the levels it is reported at
-	s.ssoRoutes(mux)          // sso.go: single sign-on, domains, SCIM (D-077, D-078)
-	s.onboardingRoutes(mux)   // onboarding.go: "Add data" install command inputs
-	s.operatorRoutes(mux)     // operator.go: SaaS operator console, lifecycle, support access (D-105, D-106)
-	s.privacyRoutes(mux)      // privacy.go: data exports, account and organization deletion (D-107)
-	s.statusPageRoutes(mux)   // statuspage.go: public status page and incidents (D-108)
-	s.sloRoutes(mux)          // slos.go: service level objectives, error budgets and burn rates
-	s.syntheticsRoutes(mux)   // synthetics.go: scheduled outside-in checks (D-132)
-	s.jobRoutes(mux)          // jobs.go: cron and heartbeat monitoring (D-141)
-	s.vulnRoutes(mux)         // vulnerabilities.go: vulnerable packages per host (D-142)
-	s.rumRoutes(mux)          // rum.go: real user monitoring reads (rum.md, D-136)
-	s.dbRoutes(mux)           // dbmon.go: database query performance (db-monitoring.md, D-138)
-	s.profileRoutes(mux)      // profiles.go: continuous profiling flame graphs (schema 0095_profiles)
-	s.browserKeyRoutes(mux)   // browserkeys.go: the RUM SDK's public keys (D-136)
-	s.sourceMapRoutes(mux)    // sourcemaps.go: source maps that un-minify browser stacks (rum.md §8)
-	s.cloudRoutes(mux)        // cloudconnect.go: managed cloud service metrics (D-135)
-	s.costRoutes(mux)         // cost.go: per-host, per-service and per-container cost estimates (D-134)
+	s.oqlRoutes(mux)            // oql.go
+	s.dashboardRoutes(mux)      // dashboards.go
+	s.tailSamplingRoutes(mux)   // tailsampling.go (D-075)
+	s.usageRoutes(mux)          // usage.go (D-079..D-081)
+	s.diskSpaceRoutes(mux)      // diskspace.go: ClickHouse disk usage and the levels it is reported at
+	s.ssoRoutes(mux)            // sso.go: single sign-on, domains, SCIM (D-077, D-078)
+	s.onboardingRoutes(mux)     // onboarding.go: "Add data" install command inputs
+	s.operatorRoutes(mux)       // operator.go: SaaS operator console, lifecycle, support access (D-105, D-106)
+	s.privacyRoutes(mux)        // privacy.go: data exports, account and organization deletion (D-107)
+	s.statusPageRoutes(mux)     // statuspage.go: public status page and incidents (D-108)
+	s.sloRoutes(mux)            // slos.go: service level objectives, error budgets and burn rates
+	s.syntheticsRoutes(mux)     // synthetics.go: scheduled outside-in checks (D-132)
+	s.jobRoutes(mux)            // jobs.go: cron and heartbeat monitoring (D-141)
+	s.vulnRoutes(mux)           // vulnerabilities.go: vulnerable packages per host (D-142)
+	s.rumRoutes(mux)            // rum.go: real user monitoring reads (rum.md, D-136)
+	s.analyticsEraseRoutes(mux) // analytics_erase.go: deleting one person's analytics data (analytics.md §7)
+	s.dbRoutes(mux)             // dbmon.go: database query performance (db-monitoring.md, D-138)
+	s.profileRoutes(mux)        // profiles.go: continuous profiling flame graphs (schema 0095_profiles)
+	s.browserKeyRoutes(mux)     // browserkeys.go: the RUM SDK's public keys (D-136)
+	s.sourceMapRoutes(mux)      // sourcemaps.go: source maps that un-minify browser stacks (rum.md §8)
+	s.cloudRoutes(mux)          // cloudconnect.go: managed cloud service metrics (D-135)
+	s.costRoutes(mux)           // cost.go: per-host, per-service and per-container cost estimates (D-134)
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, &apiError{http.StatusNotFound, "not_found", "no such endpoint"})
 	})

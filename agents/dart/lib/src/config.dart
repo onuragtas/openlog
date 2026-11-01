@@ -28,6 +28,9 @@ class OpenlogOptions {
     this.maxBatchSize = 32,
     this.flushInterval = const Duration(seconds: 5),
     this.debug = false,
+    this.analyticsCollection = true,
+    this.visitorDirectory,
+    this.captureCrashes = false,
   });
 
   /// The mobile key (`olb_…`). Public by construction: it ships inside the application binary, and the
@@ -54,6 +57,20 @@ class OpenlogOptions {
   final int maxBatchSize;
   final Duration flushInterval;
   final bool debug;
+
+  /// Recognise a person across launches, which is what DAU, MAU and retention need (analytics.md §1). On by default,
+  /// as in Firebase. **This stores a persistent id on the device, and whether that needs consent is your question.**
+  /// If it does, pass false and call `setAnalyticsCollection(true)` once they agree.
+  final bool analyticsCollection;
+
+  /// A directory private to the application, e.g. `getApplicationSupportDirectory()` of path_provider. Pure Dart has
+  /// no way to find one. Without it no visitor id is sent, rather than a new one per launch.
+  final String? visitorDirectory;
+
+  /// Says this build reports its uncaught errors, which release health needs to tell a crash-free version from one that
+  /// cannot report a crash (mobile-crash.md §5). Pure Dart cannot install the Flutter handlers itself: turn this on and
+  /// wire `recordFatal` as the README shows.
+  final bool captureCrashes;
 }
 
 /// Options after validation, with the URLs derived once.

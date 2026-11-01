@@ -40,7 +40,7 @@ Presenting a browser key here, or a mobile key without a matching app id, answer
 ## 2. Configuration
 
 ```
-GET /v1/rum/config      → {"service_name", "environment", "sample_rate"}
+GET /v1/rum/config      → {"service_name", "environment", "sample_rate", "analytics_mode"}
 openlog-browser-key: olb_…
 openlog-app-id: com.example.shop
 ```
@@ -75,6 +75,7 @@ Three kinds of attribute, and the difference is the security model rather than n
 | `openlog.rum.page_view.id` | no | 16 hex characters, tying one screen's spans together |
 | `openlog.rum.route` | no | The screen. Send the route your navigator knows (`/orders/:id`); openlog normalises whatever arrives |
 | `user.id` | no | Your own identifier for the person, set on sign-in ([rum.md](rum.md) §3.7). **Send an opaque, stable id — not an e-mail address or a name.** openlog stores it and never interprets it |
+| `openlog.rum.visitor.id` | no | 32 random hex characters kept on the device, which DAU, MAU and retention count ([analytics.md](analytics.md) §1.2). Dropped unless the key is in `visitors` mode. Store it only once `analytics_mode` in §2 says `visitors`, and never send a new one per launch: that counts every launch as a new person |
 
 A **screen** is a `page_view` span: send one per screen the person opens, with
 `openlog.rum.page_view.kind = "route_change"` for navigation within the app and `"load"` for a cold start.
@@ -101,6 +102,9 @@ hours.
 **Sample once per session, not per event.** Half a session is not a cheaper session, it is an unreadable
 one. A sampled-out session sends nothing at all. Do not put a sampling ratio in the payload: the server
 stamps the weight from the key, so weighted counts cannot be inflated by a client claiming one.
+
+**With a visitor id, sample once per visitor instead** ([analytics.md](analytics.md) §2), or a loyal user looks as if they
+left on every visit that was sampled out.
 
 ## 5. Limits
 
@@ -129,8 +133,7 @@ Retry `429` and `503` with backoff; never retry `401` or `403` — nothing about
 
 ## 7. Not in this contract yet
 
-- **Crash reporting.** An unhandled native crash is not an `error` span the process lives to send. Offline
-  capture and next-launch delivery need their own design, and pretending otherwise would lose crashes.
+- **Crash reporting** is [mobile-crash.md](mobile-crash.md).
 - **Symbolication.** Browser stacks are un-minified with uploaded source maps ([rum.md](rum.md) §8); dSYM
   and ProGuard mapping have no equivalent yet.
 - **Attestation.** Play Integrity and App Attest are the upgrade path for §1, deliberately not claimed here.

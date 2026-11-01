@@ -46,6 +46,12 @@ export interface OpenLogBrowserOptions {
    * installation stores and is billed for. Only the slowest few of each page view are sent when it is on.
    */
   captureResources?: boolean;
+  /**
+   * Recognise a visitor across visits, which is what DAU, MAU and retention need (analytics.md §1). On by default, as
+   * in Google Analytics and Firebase. **This stores a persistent id on the visitor's device, and whether that needs
+   * their consent is your question.** If it does, pass `false` and call `setAnalyticsCollection(true)` once they agree.
+   */
+  analyticsCollection?: boolean;
   /** Log what the SDK does to the console. Never on by default. */
   debug?: boolean;
 }
@@ -70,6 +76,7 @@ const DEFAULTS = {
   captureConsoleErrors: false,
   captureRequests: true,
   captureResources: false,
+  analyticsCollection: true,
   debug: false,
 };
 

@@ -256,12 +256,14 @@ rather than stopping a program ([rum.md §3.6](rum.md)).
 
 ### `GET /api/v1/browser-keys`
 `{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "service_name", "environment", "origins": [],
-"rate_limit_per_minute", "sample_rate", "created_by_email", "created_at", "updated_at", "last_used_at",
+"rate_limit_per_minute", "sample_rate", "analytics_mode", "created_by_email", "created_at", "updated_at", "last_used_at",
 "revoked_at"}]}` (revoked keys included). The value itself is never returned by a read.
 
 ### `POST /api/v1/browser-keys`
 Body: `{"name" (1–200), "service_name" (1–512), "environment"? (≤ 256), "origins" (1–50),
-"rate_limit_per_minute"? (default 6000, 60–10000000), "sample_rate"? (default 1, 0 < x ≤ 1)}`.
+"rate_limit_per_minute"? (default 6000, 60–10000000), "sample_rate"? (default 1, 0 < x ≤ 1),
+"analytics_mode"? (`off`, `sessions` or `visitors`; default `visitors`, [analytics.md](analytics.md) §1.1)}`. On
+`PUT`, an omitted `analytics_mode` keeps the current value.
 
 `201 {"browser_key": {…}, "key": "olb_…"}` — the value is returned here and nowhere else.
 
@@ -1824,14 +1826,55 @@ bounded by the **trace** retention: an older session still has its summary and `
 `404` when the session is unknown.
 
 ### `GET /api/v1/rum/releases?app=&environment=&from=&to=&gap=`
-`{"releases": [{"version", "sessions", "error_sessions", "crash_free_rate", "first_seen", "last_seen"}],
-"deployments": [{…}]}` ([rum.md](rum.md) §2.7). `deployments` is the same detection APM uses
-(`GET /apm/services/{s}/deployments`), because a RUM span feeds the same version rollup.
+`{"releases": [{"version", "sessions", "error_sessions", "crashed_sessions", "capturing_sessions", "error_free_rate",
+"crash_free_rate", "session_crash_free_rate", "first_seen", "last_seen"}], "deployments": […]}`
+([rum.md](rum.md) §2.7, [mobile-crash.md](mobile-crash.md) §5). Sessions come from an hourly rollup that reaches 30 days, so a
+range starts at its first whole hour.
 
-**The two halves see different distances.** `deployments` reaches back 30 days (the version rollup);
-`sessions` and `error_sessions` are counted from the spans and so reach only the 7-day trace retention. A
-version older than a week appears with no sessions against it. `crash_free_rate` is `1` for a version with
-no sessions: null would have to mean both "nothing broke" and "nothing is known".
+`session_crash_free_rate` is the share of sessions with no crash, among builds able to report one, and `null` for a version
+with none: 100% would claim something nobody measured. `error_free_rate` counts every error and is `1` with no sessions.
+`crash_free_rate` is the same number as `error_free_rate`: it never measured crashes, and stays for one release for older consoles.
+
+### `GET /api/v1/rum/crashes?app=&environment=&from=&to=`
+`{"crashes": [{"group_id", "type", "message", "kind", "count", "sessions", "last_version", "last_seen", "stack"}]}`, most
+frequent first ([mobile-crash.md](mobile-crash.md) §6). Bounded by the 7-day trace retention, since the stack lives on the span.
+`group_id` is the error group in the APM inbox, where it is assigned and resolved.
+
+### `GET /api/v1/analytics/activity?app=&environment=&from=&to=`
+`{"days": [{"date", "dau", "wau", "mau", "new_users", "stickiness"}], "collecting"}` ([analytics.md](analytics.md) §6).
+The range defaults to 30 days and is at most 92. Counts are extrapolated by the sampling weight, so they are numbers
+rather than integers. An application with no actors answers `collecting: false`.
+
+### `GET /api/v1/analytics/retention?app=&environment=&grain=&from=&to=`
+`{"grain", "cohorts": [{"cohort", "size", "periods": [{"period", "users", "rate"}]}], "collecting",
+"sampling_changed"}`. `grain` is `day`, `week` (default) or `month`; period 0 is the cohort itself. The range is at
+most 395 days. `sampling_changed` means some of the drop is people leaving the sample rather than the product.
+
+### `POST /api/v1/analytics/erase` `{"app", "visitor_id" | "user_id"}`
+Queues the deletion of one person's analytics data ([analytics.md](analytics.md) §7). Admin role, API keys allowed.
+`202 {"id", "app", "status": "pending", "requested_at", "completed_at": null, "note"}`. The id is not written to the audit log.
+
+### `GET /api/v1/analytics/erase/{id}`
+The same object. `status` becomes `submitted` once the deletions are handed to ClickHouse, which applies them in the
+background. The identifier on raw spans expires with the 7-day trace retention.
+
+### `GET /api/v1/analytics/overview?app=&environment=&from=&to=`
+`{"days": [{"date", "page_views", "events", "sessions"}], "totals": {"page_views", "events", "sessions"}, "collecting"}`.
+At most 90 days, like the three below.
+
+### `GET /api/v1/analytics/events?app=&environment=&name=&param=&from=&to=`
+`{"events": [{"name", "count", "sessions", "users"}]}`, most frequent first, at most 200. With `name` and `param`
+together, `name` in each row is a value of that parameter of that event. `(other)` holds what is past the key's bound on
+distinct event names ([analytics.md](analytics.md) §4). `users` is 0 unless the key is in `visitors` mode.
+
+### `GET /api/v1/analytics/acquisition?app=&environment=&by=&from=&to=`
+`{"by", "sources": [{"value", "sessions", "users"}]}`. `by` is `referrer` (default), `source`, `medium` or `campaign`.
+An empty `value` is a direct visit.
+
+### `GET /api/v1/analytics/funnel?app=&environment=&step=&step=&by=&window=&from=&to=`
+`{"steps": [{"step", "sessions", "rate"}], "by", "window_seconds"}`. As the funnel below, but up to 90 days and a step
+may also be a route. `by` is `session` (default, `window` 30m, at most 24h) or `user` (`window` 7d, at most 90d), which
+follows one person across sessions; `sessions` in a step then counts people.
 
 ### `GET /api/v1/rum/funnel?app=&environment=&step=&step=&window=&from=&to=`
 `{"steps": [{"step", "sessions", "rate"}], "window_seconds"}` ([rum.md](rum.md) §2.8). Between 2 and 6

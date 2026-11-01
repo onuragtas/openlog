@@ -37,6 +37,18 @@ public struct Options {
     public var flushInterval: TimeInterval
     public var debug: Bool
 
+    /// Recognise a person across launches, which is what DAU, MAU and retention need (analytics.md §1). On by default,
+    /// as in Firebase. **This stores a persistent id on the device, and whether that needs consent is your question.**
+    /// If it does, pass false and call `setAnalyticsCollection(true)` once they agree.
+    public var analyticsCollection: Bool
+    /// Where the visitor id is kept. nil keeps none and sends none, rather than a new one per launch.
+    public var visitorDefaults: UserDefaults?
+    /// Report crashes on a later launch (mobile-crash.md §2). Off by default, because it installs a global handler in
+    /// your process; one already installed is always called afterwards. MetricKit needs iOS 14 or macOS 12.
+    public var captureCrashes: Bool
+    /// Where reports wait for the next launch. nil means Application Support.
+    public var crashDirectory: URL?
+
     public init(
         key: String,
         endpoint: String,
@@ -49,7 +61,11 @@ public struct Options {
         sampleRate: Double = 1,
         maxBatchSize: Int = 32,
         flushInterval: TimeInterval = 5,
-        debug: Bool = false
+        debug: Bool = false,
+        analyticsCollection: Bool = true,
+        visitorDefaults: UserDefaults? = .standard,
+        captureCrashes: Bool = false,
+        crashDirectory: URL? = nil
     ) {
         self.key = key
         self.endpoint = endpoint
@@ -63,6 +79,10 @@ public struct Options {
         self.maxBatchSize = maxBatchSize
         self.flushInterval = flushInterval
         self.debug = debug
+        self.analyticsCollection = analyticsCollection
+        self.visitorDefaults = visitorDefaults
+        self.captureCrashes = captureCrashes
+        self.crashDirectory = crashDirectory
     }
 }
 

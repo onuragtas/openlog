@@ -1,9 +1,6 @@
 // openlog mobile SDK for Apple platforms (docs/contracts/mobile-agent.md).
 //
-// What this does NOT do is as deliberate as what it does: no crash reporting. An unhandled crash is not
-// something the process lives to send, and capturing it for delivery on the next launch needs its own
-// design (mobile-agent.md §7). Claiming it here would lose crashes quietly. `record(error:)` reports what
-// the application catches, which is a smaller and honest promise.
+// Crashes are captured when asked for (Crash.swift). `record(error:)` reports what the application catches.
 
 import Foundation
 
@@ -29,12 +26,25 @@ public final class OpenLog {
 
     private let session: SessionState
     private let transport: Transport
+    private let visitor: Visitor
     private let lock = NSLock()
     private var userID = ""
+    /// The screen last opened, which is where a crash happened.
+    private var route = ""
+    private var crashes: CrashStore?
+    private var crashDiagnostics: AnyObject?
+    private let lastSessionStore: UserDefaults?
+    /// The session the previous launch ended in, read before this launch overwrites it.
+    private var previousSession: LastSession?
+    private var rememberedSession = ""
+    private let version: String
 
-    private init(session: SessionState, transport: Transport) {
+    private init(session: SessionState, transport: Transport, visitor: Visitor, options: Options) {
         self.session = session
         self.transport = transport
+        self.visitor = visitor
+        version = options.serviceVersion
+        lastSessionStore = options.captureCrashes ? options.visitorDefaults : nil
     }
 
     /// Starts the SDK. Calling it twice returns the first instance rather than starting a second.
@@ -51,7 +61,13 @@ public final class OpenLog {
         activeLock.unlock()
 
         let cfg = try resolveConfig(options)  // throws rather than starting a silently useless SDK
-        let sdk = OpenLog(session: SessionState(sampleRate: options.sampleRate), transport: Transport(cfg: cfg, send: send))
+        let visitor = Visitor(enabled: options.analyticsCollection, defaults: options.visitorDefaults)
+        let session = SessionState(sampleRate: options.sampleRate, roll: {
+            let id = visitor.id
+            return id.isEmpty ? nextUnit() : visitorRoll(id)
+        })
+        let sdk = OpenLog(session: session, transport: Transport(cfg: cfg, send: send), visitor: visitor, options: options)
+        if options.captureCrashes { sdk.startCrashCapture(options) }
 
         activeLock.lock()
         active = sdk
@@ -65,8 +81,84 @@ public final class OpenLog {
             cfg.serviceName = conf["service_name"] as? String ?? ""
             cfg.environment = conf["environment"] as? String ?? ""
             if let rate = conf["sample_rate"] as? Double { sdk.session.sampleRate = rate }
+            // Only this answer lets the id reach the device. A server without the field is one without the feature.
+            if conf["analytics_mode"] as? String == "visitors" { visitor.confirm() } else { visitor.discard() }
         }
         return sdk
+    }
+
+    /// Delivers what an earlier launch left, and starts listening for this one.
+    private func startCrashCapture(_ options: Options) {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        guard let dir = options.crashDirectory ?? support?.appendingPathComponent("openlog-crashes") else { return }
+        let store = CrashStore(directory: dir)
+        crashes = store
+        previousSession = LastSession.read(lastSessionStore)
+        rememberSession()
+        deliverCrashes(store, send: { [transport] body, done in transport.sendBody(body, done: done) })
+        installExceptionHandler(self)
+        #if canImport(MetricKit) && (os(iOS) || os(macOS))
+        if #available(iOS 14.0, macOS 12.0, *) { crashDiagnostics = CrashDiagnostics(sdk: self) }
+        #endif
+    }
+
+    /// Kept on every new session, because a process killed by the system gets no chance to say anything.
+    private func rememberSession() {
+        guard lastSessionStore != nil, session.id != rememberedSession else { return }
+        rememberedSession = session.id
+        LastSession(id: session.id, version: version).write(lastSessionStore)
+    }
+
+    /// An uncaught Objective-C exception. One write and nothing else: the process is going down.
+    func record(exception: NSException) {
+        guard session.shouldSend else { return }  // a sampled-out session sends nothing at all, crash included
+        lock.lock()
+        let screen = route
+        lock.unlock()
+        writeCrash(
+            kind: "uncaught_exception", type: exception.name.rawValue, message: exception.reason ?? exception.name.rawValue,
+            stack: exception.callStackSymbols.joined(separator: "\n"), sessionID: session.id, sessionUnknown: false,
+            screen: screen, version: nil, at: Date()
+        )
+    }
+
+    /// A crash the operating system recorded about an earlier launch. It carries no session, so it takes the one that
+    /// launch ended in, if the build matches. It cannot be sampled against that session, so it follows this one.
+    func record(signal: Int32?, reason: String, stack: String, version crashed: String, at: Date) {
+        guard session.shouldSend else { return }
+        let known = previousSession.flatMap { $0.version == crashed ? $0.id : nil }
+        writeCrash(
+            kind: "signal", type: signalName(signal), message: reason.isEmpty ? signalName(signal) : reason, stack: stack,
+            sessionID: known ?? newSessionID(), sessionUnknown: known == nil, screen: "", version: crashed, at: at
+        )
+        if let crashes { deliverCrashes(crashes, send: { [transport] body, done in transport.sendBody(body, done: done) }) }
+    }
+
+    private func writeCrash(
+        kind: String, type: String, message: String, stack: String, sessionID: String, sessionUnknown: Bool,
+        screen: String, version: String?, at: Date
+    ) {
+        guard let crashes else { return }
+        let id = newSessionID()
+        let span = buildSpan(
+            name: "error \(type)",
+            event: RumEvent.error,
+            traceID: newTraceID(),
+            spanID: newSpanID(),
+            startMs: Int64(at.timeIntervalSince1970 * 1000),
+            attributes: [
+                ("session.id", sessionID),
+                ("openlog.rum.route", screen),
+                ("openlog.rum.error.source", "error"),
+                ("openlog.rum.crash.kind", kind),
+                ("openlog.rum.crash.id", id),
+                ("openlog.rum.crash.session_unknown", sessionUnknown ? "true" : ""),
+                ("openlog.rum.visitor.id", visitor.id),
+            ],
+            isError: true,
+            exception: (type: type, message: message, stacktrace: stack)
+        )
+        if let body = transport.encode([span], version: version) { crashes.write(id: id, body: body) }
     }
 
     /// Drops the active instance (tests, and shutdown()).
@@ -90,10 +182,21 @@ public final class OpenLog {
         lock.unlock()
     }
 
+    /// Turns recognising this person across launches on or off, e.g. from a consent dialog (analytics.md §1). Off
+    /// deletes the stored id and is remembered across launches. It stops collection and erases nothing already sent:
+    /// that is `POST /api/v1/analytics/erase`, called from your backend with `visitorID`.
+    public func setAnalyticsCollection(_ enabled: Bool) { visitor.setEnabled(enabled) }
+
+    /// The current visitor id, or "" when there is none.
+    public var visitorID: String { visitor.id }
+
     /// A screen the person opened. `isColdStart` marks the first one of a launch.
     public func record(screen name: String, isColdStart: Bool = false, durationMs: Int64 = 0) {
         let route = truncate(name.trimmingCharacters(in: .whitespaces), Limits.maxNameBytes)
         if route.isEmpty { return }
+        lock.lock()
+        self.route = route
+        lock.unlock()
         if !session.touch() { session.newScreen() }
         emit(RumEvent.screen, "screen \(route)", durationMs: durationMs, spanID: session.screenSpanID, attributes: [
             ("openlog.rum.route", route),
@@ -154,6 +257,7 @@ public final class OpenLog {
     ) {
         guard session.shouldSend else { return }  // a sampled-out session sends nothing at all
         session.touch()
+        rememberSession()
         lock.lock()
         let user = userID
         lock.unlock()
@@ -163,6 +267,8 @@ public final class OpenLog {
             ("openlog.rum.page_view.id", session.screenSpanID),
         ]
         if !user.isEmpty { base.append(("user.id", user)) }
+        let visitorID = visitor.id
+        if !visitorID.isEmpty { base.append(("openlog.rum.visitor.id", visitorID)) }
 
         transport.add(buildSpan(
             name: name,
@@ -186,6 +292,10 @@ public final class OpenLog {
     public func flush(done: (() -> Void)? = nil) { transport.flush(done: done) }
 
     public func shutdown(done: (() -> Void)? = nil) {
+        if crashes != nil { removeExceptionHandler() }
+        #if canImport(MetricKit) && (os(iOS) || os(macOS))
+        if #available(iOS 14.0, macOS 12.0, *) { (crashDiagnostics as? CrashDiagnostics)?.stop() }
+        #endif
         transport.stop(done: done)
         OpenLog.reset()
     }

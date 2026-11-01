@@ -8,8 +8,10 @@ import { login } from "@/api/account";
 import i18n from "@/i18n";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { MOCK_RUM_APP, MOCK_RUM_SESSION_ID } from "@/mocks/rum";
+import { RumAnalyticsTab } from "./RumAnalyticsTab";
 import { RumApps } from "./RumApps";
 import { RumOverviewTab } from "./RumOverviewTab";
+import { RumCrashesTab } from "./RumCrashesTab";
 import { RumFunnelTab } from "./RumFunnelTab";
 import { RumPagesTab } from "./RumPagesTab";
 import { RumReleasesTab } from "./RumReleasesTab";
@@ -134,12 +136,47 @@ describe("RUM", () => {
     const rows = within(table).getAllByTestId("rum-release-row");
     expect(rows).toHaveLength(3);
     expect(within(rows[0]!).getByText("v1.4.2")).toBeInTheDocument();
-    expect(within(rows[0]!).getByText("99%")).toBeInTheDocument();
-    // A version the trace retention no longer covers says so rather than reading as a perfect release.
+    expect(within(rows[0]!).getByText("99.6%")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("98.8%")).toBeInTheDocument();
+    // A version with no sessions in the rollup says so rather than reading as a perfect release.
     expect(within(rows[2]!).getByText("no sessions")).toBeInTheDocument();
 
     const deployments = screen.getByTestId("rum-deployments");
     expect(within(deployments).getByText("rollback")).toBeInTheDocument();
+  });
+
+  it("lists what crashed, with its stack", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<RumCrashesTab range={range} app={MOCK_RUM_APP} />);
+
+    const crash = await screen.findByTestId("rum-crash");
+    expect(within(crash).getByText("IllegalStateException")).toBeInTheDocument();
+    expect(within(crash).getByText("Uncaught exception")).toBeInTheDocument();
+    expect(within(crash).getByText("at a.b.c(SourceFile:1)")).toBeInTheDocument();
+  });
+
+  it("does not claim a crash-free rate for a version that cannot report crashes", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<RumReleasesTab range={range} app={MOCK_RUM_APP} />);
+
+    const rows = await screen.findAllByTestId("rum-release-row");
+    expect(within(rows[0]!).getByText("99.6%")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("—")).toBeInTheDocument();
+    expect(within(rows[1]!).getByText("84.1%")).toBeInTheDocument();
+  });
+
+  it("shows active users and a retention table", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    renderWithClient(<RumAnalyticsTab app={MOCK_RUM_APP} />);
+
+    expect(await screen.findByText("DAU / MAU")).toBeInTheDocument();
+    const table = await screen.findByTestId("analytics-retention");
+    // The share is written in the cell, so the tint is never the only way to read it.
+    expect(within(table).getAllByText("100%").length).toBe(6);
+    expect(within(table).getByText("Week 0")).toBeInTheDocument();
+    expect(within(await screen.findByTestId("analytics-events")).getByText("checkout_started")).toBeInTheDocument();
+    // An empty source is a direct visit, and it has to say so rather than show a blank row.
+    expect(within(await screen.findByTestId("analytics-sources")).getByText("(direct)")).toBeInTheDocument();
   });
 
   it("asks for a funnel once there are two steps, and shows what each one lost", async () => {

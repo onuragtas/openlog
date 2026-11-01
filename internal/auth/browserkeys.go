@@ -41,6 +41,13 @@ const (
 	KeyKindMobile  = "mobile"
 )
 
+// Analytics modes, repeated from internal/rum for the reason the key kinds are.
+const (
+	AnalyticsOff      = "off"
+	AnalyticsSessions = "sessions"
+	AnalyticsVisitors = "visitors"
+)
+
 // normalize validates and cleans a browser key input. Origins must already be normalized by the caller.
 func (in *BrowserKeyInput) normalize() error {
 	name, err := cleanName(in.Name, "name", true)
@@ -116,6 +123,13 @@ func (in *BrowserKeyInput) normalize() error {
 	if in.SampleRate <= 0 || in.SampleRate > 1 {
 		return invalid("sample_rate must be greater than 0 and at most 1")
 	}
+
+	// Empty stays empty here: what it means differs between create and update (BrowserKeyInput).
+	switch in.AnalyticsMode {
+	case "", AnalyticsOff, AnalyticsSessions, AnalyticsVisitors:
+	default:
+		return invalid("analytics_mode must be %q, %q or %q", AnalyticsOff, AnalyticsSessions, AnalyticsVisitors)
+	}
 	return nil
 }
 
@@ -135,6 +149,7 @@ func browserKeyDetails(k BrowserKey) map[string]any {
 		"name": k.Name, "prefix": k.Prefix, "service_name": k.ServiceName,
 		"environment": k.Environment, "kind": k.Kind, "origins": k.Origins, "app_ids": k.AppIDs,
 		"rate_limit_per_minute": k.RateLimitPerMinute, "sample_rate": k.SampleRate,
+		"analytics_mode": k.AnalyticsMode,
 	}
 }
 
@@ -183,6 +198,12 @@ func (s *Service) CreateBrowserKey(ctx context.Context, p *Principal, in Browser
 	}
 	hash, _ := s.keyHashes(secret)
 	now := s.now()
+	// A new key starts collecting, like Google Analytics and Firebase. The keys this could surprise are the ones
+	// that existed before the feature, and 0104_analytics_mode leaves those off.
+	mode := in.AnalyticsMode
+	if mode == "" {
+		mode = AnalyticsVisitors
+	}
 	k := BrowserKey{
 		OrgID: p.OrgID, Name: in.Name, Prefix: DisplayPrefix(secret), Hash: hash,
 		// Stored in the clear on purpose, and only here: see BrowserKey.Value and 0099. The hash is still
@@ -190,7 +211,7 @@ func (s *Service) CreateBrowserKey(ctx context.Context, p *Principal, in Browser
 		Value:       secret,
 		ServiceName: in.ServiceName, Environment: in.Environment, Kind: in.Kind,
 		Origins: in.Origins, AppIDs: in.AppIDs,
-		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate,
+		RateLimitPerMinute: in.RateLimitPerMinute, SampleRate: in.SampleRate, AnalyticsMode: mode,
 		CreatedBy: p.UserID, CreatedByEmail: p.Email, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := s.store.CreateBrowserKey(ctx, &k); err != nil {

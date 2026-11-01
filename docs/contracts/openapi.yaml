@@ -2981,6 +2981,33 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
 
+  /api/v1/rum/crashes:
+    get:
+      tags: [rum]
+      operationId: getRumCrashes
+      description: >-
+        Crashes by error group, most frequent first (mobile-crash.md §6). Bounded by the 7-day trace retention, since the
+        stack only lives on the span. Resolving a group happens in the APM error inbox.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The crashes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [crashes]
+                properties:
+                  crashes:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumCrash" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
   /api/v1/rum/funnel:
     get:
       tags: [rum]
@@ -3017,6 +3044,243 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/RumFunnelStep" }
                   window_seconds: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+
+  # -------------------------------------------------------------- product analytics
+  /api/v1/analytics/activity:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsActivity
+      description: >-
+        DAU, WAU, MAU, new users and stickiness per day (analytics.md §6). Counts are extrapolated by the
+        sampling weight, so they are numbers rather than integers. An application that sends no visitor id
+        answers `collecting: false` with no days. The range defaults to 30 days and is at most 92.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: One row per day that has any activity in its 30-day window
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days, collecting]
+                properties:
+                  days:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnalyticsDay" }
+                  collecting: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/erase:
+    post:
+      tags: [rum]
+      operationId: createAnalyticsErasure
+      description: >-
+        Queues the deletion of one person's analytics data (analytics.md §7). Admin role, API keys allowed.
+        Give exactly one of `visitor_id` and `user_id`. The identifier on raw spans expires with the 7-day trace retention.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [app]
+              properties:
+                app: { type: string }
+                visitor_id: { type: string, pattern: "^[0-9a-f]{32}$" }
+                user_id: { type: string, maxLength: 128 }
+      responses:
+        "202":
+          description: Queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalyticsErasure" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+  /api/v1/analytics/erase/{id}:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsErasure
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: The request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnalyticsErasure" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { description: Not found }
+  /api/v1/analytics/overview:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsOverview
+      description: Page views, events and sessions per day, up to 90 days (analytics.md §6).
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The totals of the range and one row per day
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [days, totals, collecting]
+                properties:
+                  days:
+                    type: array
+                    items:
+                      type: object
+                      required: [date, page_views, events, sessions]
+                      properties:
+                        date: { type: string, format: date }
+                        page_views: { type: number }
+                        events: { type: number }
+                        sessions: { type: number }
+                  totals:
+                    type: object
+                    required: [page_views, events, sessions]
+                    properties:
+                      page_views: { type: number }
+                      events: { type: number }
+                      sessions: { type: number }
+                  collecting: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/events:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsEvents
+      description: >-
+        The custom events of an application, most frequent first, or with `name` and `param` the values of one
+        parameter of one event. At most 200 rows and 90 days. `(other)` holds the events past the key's bound
+        on distinct names (analytics.md §4).
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: name, in: query, schema: { type: string } }
+        - { name: param, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The events
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnalyticsEventRow" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/acquisition:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsAcquisition
+      description: >-
+        Sessions and people by how the session started. An empty `value` is a direct visit. At most 200 rows
+        and 90 days.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: by, in: query, schema: { type: string, enum: [referrer, source, medium, campaign], default: referrer } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The sources, most sessions first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [by, sources]
+                properties:
+                  by: { type: string }
+                  sources:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnalyticsSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/funnel:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsFunnel
+      description: >-
+        As `/api/v1/rum/funnel` but up to 90 days, a step may also be a route, and `by=user` follows one person
+        across sessions. `sessions` in a step then counts people. `window` defaults to 30m by session and 7d by user.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - name: step
+          in: query
+          required: true
+          schema: { type: array, minItems: 2, maxItems: 6, items: { type: string } }
+        - { name: by, in: query, schema: { type: string, enum: [session, user], default: session } }
+        - { name: window, in: query, schema: { type: string } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The steps, in order
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [steps, by, window_seconds]
+                properties:
+                  steps:
+                    type: array
+                    items: { $ref: "#/components/schemas/RumFunnelStep" }
+                  by: { type: string }
+                  window_seconds: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/retention:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsRetention
+      description: >-
+        Of the people first seen in a period, how many were active in each later period (analytics.md §6).
+        `sampling_changed` is true when the key's sample rate moved inside the range, in which case some of
+        the drop is people leaving the sample rather than the product. The range is at most 395 days.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: grain, in: query, schema: { type: string, enum: [day, week, month], default: week } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The cohorts, oldest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grain, cohorts, collecting, sampling_changed]
+                properties:
+                  grain: { type: string }
+                  cohorts:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnalyticsCohort" }
+                  collecting: { type: boolean }
+                  sampling_changed: { type: boolean }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
@@ -11111,6 +11375,56 @@ components:
             ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page.
             Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved
             one — openlog stores no visitor address and derives nothing itself.
+    AnalyticsErasure:
+      type: object
+      required: [id, app, status, requested_at, note]
+      properties:
+        id: { type: string }
+        app: { type: string }
+        status: { type: string, enum: [pending, submitted] }
+        requested_at: { type: string }
+        completed_at: { type: [string, "null"] }
+        note: { type: string }
+    AnalyticsEventRow:
+      type: object
+      required: [name, count, sessions, users]
+      properties:
+        name: { type: string, description: The event name, or the parameter value when one was asked for }
+        count: { type: number }
+        sessions: { type: number }
+        users: { type: number, description: 0 unless the key is in visitors mode }
+    AnalyticsSource:
+      type: object
+      required: [value, sessions, users]
+      properties:
+        value: { type: string, description: Empty for a direct visit }
+        sessions: { type: number }
+        users: { type: number }
+    AnalyticsDay:
+      type: object
+      required: [date, dau, wau, mau, new_users, stickiness]
+      properties:
+        date: { type: string, format: date }
+        dau: { type: number }
+        wau: { type: number, description: People active in the 7 days ending on this date }
+        mau: { type: number, description: People active in the 30 days ending on this date }
+        new_users: { type: number }
+        stickiness: { type: number, description: DAU over MAU }
+    AnalyticsCohort:
+      type: object
+      required: [cohort, size, periods]
+      properties:
+        cohort: { type: string, format: date, description: The first day of the period these people were first seen in }
+        size: { type: number }
+        periods:
+          type: array
+          items:
+            type: object
+            required: [period, users, rate]
+            properties:
+              period: { type: integer, description: Periods since the cohort; 0 is the cohort itself }
+              users: { type: number }
+              rate: { type: number, description: Share of the cohort active in this period }
     RumFunnelStep:
       type: object
       required: [step, sessions, rate]
@@ -11122,23 +11436,42 @@ components:
             Sessions that reached this step **and every step before it**, in order and within the window —
             not sessions that performed this step at some point.
         rate: { type: number, description: Share of the first step's sessions that got this far; 1 for the first step }
+    RumCrash:
+      type: object
+      required: [group_id, type, message, kind, count, sessions, last_version, last_seen, stack]
+      properties:
+        group_id: { type: string, description: The error group in the APM inbox }
+        type: { type: string }
+        message: { type: string }
+        kind: { type: string, description: "uncaught_exception, signal, anr or out_of_memory" }
+        count: { type: number }
+        sessions: { type: integer }
+        last_version: { type: string }
+        last_seen: { $ref: "#/components/schemas/Timestamp" }
+        stack: { type: string, description: The newest stack as the device sent it }
     RumRelease:
       type: object
       description: >-
-        One version of the application over the requested range. Counted from the spans, so bounded by the
-        trace retention rather than by the 30 days the release list reaches.
+        One version of the application over the requested range, from an hourly rollup that reaches the same 30 days
+        as the release list. Counts past a few thousand are estimates. The crash fields are optional because the store's
+        console also talks to servers older than they are.
       required: [version, sessions, error_sessions, crash_free_rate, first_seen, last_seen]
       properties:
-        version: { type: string, description: The resource `service.version` the SDK sent; empty when it sent none }
+        version: { type: string, description: The resource `service.version` the SDK reported }
         sessions: { type: integer, description: Distinct sessions seen for this version }
-        error_sessions:
-          type: integer
-          description: Those of them that produced at least one error span. A session with twelve errors counts once.
+        error_sessions: { type: integer, description: Those of them that produced at least one error span }
+        crashed_sessions: { type: integer, description: Those of them that crashed }
+        capturing_sessions: { type: integer, description: Sessions of a build able to report a crash }
+        error_free_rate: { type: number, description: "(sessions − error_sessions) / sessions, and 1 with no sessions" }
         crash_free_rate:
           type: number
+          deprecated: true
+          description: The same as error_free_rate. It never measured crashes, and is kept for one release for older consoles.
+        session_crash_free_rate:
+          type: [number, "null"]
           description: >-
-            (sessions − error_sessions) / sessions, and **1 for a version with no sessions**: null would
-            have to mean both "nothing broke" and "nothing is known", which a chart cannot draw.
+            (capturing_sessions − crashed_sessions) / capturing_sessions. Null for a version with no capturing sessions,
+            because 100% would be a false statement about a build that cannot report a crash.
         first_seen: { $ref: "#/components/schemas/Timestamp" }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
     RumEvent:
@@ -11209,6 +11542,10 @@ components:
           items: { type: string }
         rate_limit_per_minute: { type: integer }
         sample_rate: { type: number }
+        analytics_mode:
+          type: string
+          enum: ["off", sessions, visitors]
+          description: How much product analytics this key stores (analytics.md §1.1).
         created_by_email: { type: string }
         created_at: { $ref: "#/components/schemas/Timestamp" }
         updated_at: { $ref: "#/components/schemas/Timestamp" }
@@ -11245,6 +11582,10 @@ components:
           items: { type: string, example: "com.example.shop" }
         rate_limit_per_minute: { type: integer, minimum: 60, maximum: 10000000, default: 6000 }
         sample_rate: { type: number, exclusiveMinimum: 0, maximum: 1, default: 1 }
+        analytics_mode:
+          type: string
+          enum: ["off", sessions, visitors]
+          description: Omitted means `visitors` on create and the current value on update, so an older client saving a rename cannot switch collection on.
     SyntheticCheck:
       type: object
       required: [id, name, type, enabled, url, method, headers, body, expected_status, assertion_type,

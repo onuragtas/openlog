@@ -49,8 +49,11 @@ export class SessionState {
   traceId = traceId();
   /** The page view span's own id, so requests and errors become its children. */
   pageViewSpanId = spanId();
+  /** This session was started here and its first page view has not been sent. Memory only: a reload is not a landing. */
+  private landing = false;
 
-  constructor(private sampleRate: number, now = Date.now()) {
+  /** `roll` places this session in [0, 1) for sampling: the visitor's fixed place when there is one (analytics.md §2). */
+  constructor(private sampleRate: number, now = Date.now(), private readonly roll: () => number = Math.random) {
     this.session = this.load(now);
   }
 
@@ -67,10 +70,18 @@ export class SessionState {
       id: sessionId(),
       startedAt: now,
       lastSeenAt: now,
-      sampled: Math.random() < this.sampleRate,
+      sampled: this.roll() < this.sampleRate,
     };
+    this.landing = true;
     writeStored(fresh);
     return fresh;
+  }
+
+  /** True once per session started here, for the page view that carries its attribution. */
+  takeLanding(): boolean {
+    const v = this.landing;
+    this.landing = false;
+    return v;
   }
 
   get id(): string {

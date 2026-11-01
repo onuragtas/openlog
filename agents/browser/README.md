@@ -86,6 +86,7 @@ anything else would be accepted here and dropped there.
 | `captureConsoleErrors` | `false` | Also report `console.error(...)`. Off: it is noisy and often deliberate. |
 | `captureRequests` | `true` | `fetch` and `XMLHttpRequest` spans. |
 | `debug` | `false` | Log what the SDK does. |
+| `analyticsCollection` | `true` | Recognise a visitor across visits, for DAU, MAU and retention. This stores a persistent id in `localStorage`, which may need consent: see [Product analytics](../../docs/guide/product-analytics.md). Pass `false` and call `setAnalyticsCollection(true)` once they agree. |
 
 ### Tracing your own API on another origin
 

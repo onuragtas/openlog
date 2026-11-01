@@ -1726,6 +1726,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rum/crashes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Crashes by error group, most frequent first (mobile-crash.md §6). Bounded by the 7-day trace retention, since the stack only lives on the span. Resolving a group happens in the APM error inbox. */
+        get: operations["getRumCrashes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/rum/funnel": {
         parameters: {
             query?: never;
@@ -1735,6 +1752,141 @@ export interface paths {
         };
         /** @description Of the sessions that did the first step, how many reached each of the next ones **in order** (rum.md §2.8). Counting each step independently would report a session that reached checkout before it saw the cart as having completed the funnel, so the order is enforced by the query rather than assumed. Bounded by the 7-day trace retention, like every read over the raw spans. */
         get: operations["getRumFunnel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description DAU, WAU, MAU, new users and stickiness per day (analytics.md §6). Counts are extrapolated by the sampling weight, so they are numbers rather than integers. An application that sends no visitor id answers `collecting: false` with no days. The range defaults to 30 days and is at most 92. */
+        get: operations["getAnalyticsActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queues the deletion of one person's analytics data (analytics.md §7). Admin role, API keys allowed. Give exactly one of `visitor_id` and `user_id`. The identifier on raw spans expires with the 7-day trace retention. */
+        post: operations["createAnalyticsErasure"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/erase/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getAnalyticsErasure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Page views, events and sessions per day, up to 90 days (analytics.md §6). */
+        get: operations["getAnalyticsOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The custom events of an application, most frequent first, or with `name` and `param` the values of one parameter of one event. At most 200 rows and 90 days. `(other)` holds the events past the key's bound on distinct names (analytics.md §4). */
+        get: operations["getAnalyticsEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/acquisition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Sessions and people by how the session started. An empty `value` is a direct visit. At most 200 rows and 90 days. */
+        get: operations["getAnalyticsAcquisition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description As `/api/v1/rum/funnel` but up to 90 days, a step may also be a route, and `by=user` follows one person across sessions. `sessions` in a step then counts people. `window` defaults to 30m by session and 7d by user. */
+        get: operations["getAnalyticsFunnel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Of the people first seen in a period, how many were active in each later period (analytics.md §6). `sampling_changed` is true when the key's sample rate moved inside the range, in which case some of the drop is people leaving the sample rather than the product. The range is at most 395 days. */
+        get: operations["getAnalyticsRetention"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7622,6 +7774,56 @@ export interface components {
             /** @description ISO 3166-1 alpha-2, resolved by a trusted proxy and written by the server, never by the page. Filled by the session detail only, for the same reason as user_id. Empty when no proxy resolved one — openlog stores no visitor address and derives nothing itself. */
             country: string;
         };
+        AnalyticsErasure: {
+            id: string;
+            app: string;
+            /** @enum {string} */
+            status: "pending" | "submitted";
+            requested_at: string;
+            completed_at?: string | null;
+            note: string;
+        };
+        AnalyticsEventRow: {
+            /** @description The event name */
+            name: string;
+            count: number;
+            sessions: number;
+            /** @description 0 unless the key is in visitors mode */
+            users: number;
+        };
+        AnalyticsSource: {
+            /** @description Empty for a direct visit */
+            value: string;
+            sessions: number;
+            users: number;
+        };
+        AnalyticsDay: {
+            /** Format: date */
+            date: string;
+            dau: number;
+            /** @description People active in the 7 days ending on this date */
+            wau: number;
+            /** @description People active in the 30 days ending on this date */
+            mau: number;
+            new_users: number;
+            /** @description DAU over MAU */
+            stickiness: number;
+        };
+        AnalyticsCohort: {
+            /**
+             * Format: date
+             * @description The first day of the period these people were first seen in
+             */
+            cohort: string;
+            size: number;
+            periods: {
+                /** @description Periods since the cohort; 0 is the cohort itself */
+                period: number;
+                users: number;
+                /** @description Share of the cohort active in this period */
+                rate: number;
+            }[];
+        };
         RumFunnelStep: {
             /** @description The custom event name this step matches */
             step: string;
@@ -7630,16 +7832,41 @@ export interface components {
             /** @description Share of the first step's sessions that got this far; 1 for the first step */
             rate: number;
         };
-        /** @description One version of the application over the requested range. Counted from the spans, so bounded by the trace retention rather than by the 30 days the release list reaches. */
+        RumCrash: {
+            /** @description The error group in the APM inbox */
+            group_id: string;
+            type: string;
+            message: string;
+            /** @description uncaught_exception, signal, anr or out_of_memory */
+            kind: string;
+            count: number;
+            sessions: number;
+            last_version: string;
+            last_seen: components["schemas"]["Timestamp"];
+            /** @description The newest stack as the device sent it */
+            stack: string;
+        };
+        /** @description One version of the application over the requested range, from an hourly rollup that reaches the same 30 days as the release list. Counts past a few thousand are estimates. The crash fields are optional because the store's console also talks to servers older than they are. */
         RumRelease: {
-            /** @description The resource `service.version` the SDK sent; empty when it sent none */
+            /** @description The resource `service.version` the SDK reported */
             version: string;
             /** @description Distinct sessions seen for this version */
             sessions: number;
-            /** @description Those of them that produced at least one error span. A session with twelve errors counts once. */
+            /** @description Those of them that produced at least one error span */
             error_sessions: number;
-            /** @description (sessions − error_sessions) / sessions, and **1 for a version with no sessions**: null would have to mean both "nothing broke" and "nothing is known", which a chart cannot draw. */
+            /** @description Those of them that crashed */
+            crashed_sessions?: number;
+            /** @description Sessions of a build able to report a crash */
+            capturing_sessions?: number;
+            /** @description (sessions − error_sessions) / sessions, and 1 with no sessions */
+            error_free_rate?: number;
+            /**
+             * @deprecated
+             * @description The same as error_free_rate. It never measured crashes, and is kept for one release for older consoles.
+             */
             crash_free_rate: number;
+            /** @description (capturing_sessions − crashed_sessions) / capturing_sessions. Null for a version with no capturing sessions, because 100% would be a false statement about a build that cannot report a crash. */
+            session_crash_free_rate?: number | null;
             first_seen: components["schemas"]["Timestamp"];
             last_seen: components["schemas"]["Timestamp"];
         };
@@ -7691,6 +7918,11 @@ export interface components {
             app_ids: string[];
             rate_limit_per_minute: number;
             sample_rate: number;
+            /**
+             * @description How much product analytics this key stores (analytics.md §1.1).
+             * @enum {string}
+             */
+            analytics_mode?: "off" | "sessions" | "visitors";
             created_by_email: string;
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
@@ -7717,6 +7949,11 @@ export interface components {
             rate_limit_per_minute: number;
             /** @default 1 */
             sample_rate: number;
+            /**
+             * @description Omitted means `visitors` on create and the current value on update, so an older client saving a rename cannot switch collection on.
+             * @enum {string}
+             */
+            analytics_mode?: "off" | "sessions" | "visitors";
         };
         SyntheticCheck: {
             /** Format: uuid */
@@ -14363,6 +14600,36 @@ export interface operations {
             504: components["responses"]["Timeout"];
         };
     };
+    getRumCrashes: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The crashes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        crashes: components["schemas"]["RumCrash"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
     getRumFunnel: {
         parameters: {
             query: {
@@ -14390,6 +14657,272 @@ export interface operations {
                     "application/json": {
                         steps: components["schemas"]["RumFunnelStep"][];
                         window_seconds: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAnalyticsActivity: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per day that has any activity in its 30-day window */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        days: components["schemas"]["AnalyticsDay"][];
+                        collecting: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    createAnalyticsErasure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    app: string;
+                    visitor_id?: string;
+                    user_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsErasure"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+        };
+    };
+    getAnalyticsErasure: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsErasure"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getAnalyticsOverview: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The totals of the range and one row per day */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        days: {
+                            /** Format: date */
+                            date: string;
+                            page_views: number;
+                            events: number;
+                            sessions: number;
+                        }[];
+                        totals: {
+                            page_views: number;
+                            events: number;
+                            sessions: number;
+                        };
+                        collecting: boolean;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAnalyticsEvents: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                name?: string;
+                param?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: components["schemas"]["AnalyticsEventRow"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAnalyticsAcquisition: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                by?: "referrer" | "source" | "medium" | "campaign";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The sources, most sessions first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        by: string;
+                        sources: components["schemas"]["AnalyticsSource"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAnalyticsFunnel: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                step: string[];
+                by?: "session" | "user";
+                window?: string;
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The steps, in order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        steps: components["schemas"]["RumFunnelStep"][];
+                        by: string;
+                        window_seconds: number;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            504: components["responses"]["Timeout"];
+        };
+    };
+    getAnalyticsRetention: {
+        parameters: {
+            query: {
+                app: string;
+                environment?: string;
+                grain?: "day" | "week" | "month";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cohorts, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        grain: string;
+                        cohorts: components["schemas"]["AnalyticsCohort"][];
+                        collecting: boolean;
+                        sampling_changed: boolean;
                     };
                 };
             };

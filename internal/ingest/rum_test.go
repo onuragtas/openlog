@@ -57,6 +57,8 @@ func (f *fakeRUMKeys) Resolve(_ context.Context, value string, sc rum.Scope) (ru
 	return f.key, nil
 }
 
+func (f *fakeRUMKeys) CapEventNames(_ *coltrace.ExportTraceServiceRequest, _ rum.Key) {}
+
 func (f *fakeRUMKeys) Allow(_ rum.Key, _ int, _ time.Time) (bool, time.Duration) {
 	return f.allow, f.wait
 }
