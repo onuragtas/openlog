@@ -171,7 +171,7 @@ $E2E logs target plain | grep -v '"level":"INFO"'   # ajan uyarıları: export f
 $E2E exec target openlog-infra-agent -once -config /etc/openlog-infra-agent/config.yaml | jq .discovered_services
 $E2E exec target ss -ltnp                 # gerçekte ne dinliyor
 
-KEY='openlog-license-key: e2e-license-key'
+KEY='Authorization: Bearer ola_e2e-api-key'
 curl -s -H "$KEY" localhost:18080/api/v1/hosts | jq
 curl -s -H "$KEY" "localhost:18080/api/v1/hosts/0e2e0000000000000000000000000001/services" | jq '.items[].data | {rule_id, version, integration}'
 curl -s -H "$KEY" "localhost:18080/api/v1/hosts/0e2e0000000000000000000000000001/metrics?name=openlog.agent.export.items&agg=last&group_by=outcome&step=10s" | jq

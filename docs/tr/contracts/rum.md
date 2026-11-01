@@ -523,8 +523,8 @@ Alacakları şekille birlikte bilerek sonraya bırakıldı:
   `recordTiming(name, ms)`, `openlog.rum.custom.name` ve
   zamanlama için `…custom.value` ile `…custom.unit` taşıyan `openlog.rum.event = custom` span'i gönderir. **Kendi rollup'ları yoktur**: bir
   uygulamanın saydığı şeyi sunucu ne anlama geldiğini bilmeden önceden toplayamaz; bu yüzden
-  OQL ile okunurlar (`FROM Span WHERE openlog.rum.custom.name = 'checkout_started'`). SDK yalnızca bir
-  ad (ve bir sayı) alır: sunucu attribute allowlist'i tutar, yani keyfi attribute kabul eden bir API
+  OQL ile okunurlar (`FROM Span WHERE openlog.rum.custom.name = 'checkout_started'`). SDK bir ad, zamanlama için
+  bir sayı ve §2.5'in `openlog.rum.custom.param.*` altına aldığı parametreleri kabul eder. Geri kalanı dışarıda kalır, çünkü sunucu attribute allowlist'i tutar ve keyfi attribute kabul eden bir API
   sağlamadığı bir depolamayı vaat ederdi.
 - **Vital'lerde alert.** ~~Bu dilimde yok.~~ Yapıldı, üstelik `rum` kural türü olmadan: `RumPageView`,
   `RumVital` ve `RumSession` OQL event türleridir ([oql.md](/tr/contracts/oql)) ve `oql` alert kuralı türü

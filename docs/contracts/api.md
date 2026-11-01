@@ -246,7 +246,7 @@ application name, and revocation. The full threat model — what a copied key ca
 [rum.md §3.5](rum.md).
 
 **The value is readable.** Unlike every other credential here, a browser key is returned in full by the
-reads above (`key`), not only once at creation. That is not a convenience exception: the value ships inside
+read below (`key`), not only once at creation. That is not a convenience exception: the value ships inside
 a web page, so everyone who can open the page already has it, and refusing to repeat it only forced an
 operator to rotate a key the internet already knew. License keys, API keys and SSO client secrets are real
 secrets, stay hash-only, and are still shown exactly once. Browser keys created before this was stored
@@ -261,17 +261,17 @@ cannot forge `Origin`, while an application declares its own identifier, so `app
 rather than stopping a program ([rum.md §3.6](rum.md)).
 
 ### `GET /api/v1/browser-keys`
-`{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "service_name", "environment", "origins": [],
+`{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "key": "olb_…", "service_name", "environment", "kind", "origins": [], "app_ids": [],
 "rate_limit_per_minute", "sample_rate", "analytics_mode", "created_by_email", "created_at", "updated_at", "last_used_at",
-"revoked_at"}]}` (revoked keys included). The value itself is never returned by a read.
+"revoked_at"}]}` (revoked keys included). `key` is the value itself, and `""` on a key from before it was stored.
 
 ### `POST /api/v1/browser-keys`
 Body: `{"name" (1–200), "service_name" (1–512), "environment"? (≤ 256), "origins" (1–50),
 "rate_limit_per_minute"? (default 6000, 60–10000000), "sample_rate"? (default 1, 0 < x ≤ 1),
-"analytics_mode"? (`off`, `sessions` or `visitors`; default `visitors`, [analytics.md](analytics.md) §1.1)}`. On
-`PUT`, an omitted `analytics_mode` keeps the current value.
+"analytics_mode"? (off, sessions or visitors; default visitors)}`. On
+`PUT`, an omitted `analytics_mode` keeps the current value ([analytics.md](analytics.md) §1.1).
 
-`201 {"browser_key": {…}, "key": "olb_…"}` — the value is returned here and nowhere else.
+`201 {"browser_key": {…}, "key": "olb_…"}`. Unlike other credentials, the value is not only returned here: the read above returns it too.
 
 `origins` are the origins the key may be used from, as the browser sends them: exact
 (`https://app.example.com`, port included when it is not the scheme default) or a subdomain wildcard
@@ -1723,10 +1723,10 @@ Services: AWS `rds`, `s3`, `lambda`, `sqs`, `dynamodb`, `elb`, `elasticache`; Az
 
 ### `GET /api/v1/cloud/connections` · `POST` · `GET|PUT|DELETE /api/v1/cloud/connections/{id}`
 Body of POST/PUT: `{"name" (1–200), "provider": "aws"|"azure"|"gcp", "ingest_mode"?: "poll"|"push" (default
-`poll`), "enabled"? (default true), "scopes" (1–50; letters, digits, `-`, `_`, `.`), "services" (1–50 ids of
+poll), "enabled"? (default true), "scopes" (1–50; letters, digits, -, _, .), "services" (1–50 ids of
 the provider's catalog), "poll_interval_seconds"? (default 300, 60–86400), "max_metrics_per_poll"? (default
 5000, 100–200000), "max_api_calls_per_poll"? (default 200, 1–5000), "credentials"? (the provider's fields;
-omitted on `PUT` keeps the stored ones, and is required when the provider changes)}`.
+omitted on PUT keeps the stored ones, and is required when the provider changes)}`.
 
 `status` is the schedule row per scope: the last poll (straight from PostgreSQL) and when the next one is due.
 `ingest_mode` is `poll` today; `push` is reserved for provider-side delivery and is stored but not collected,
@@ -2064,7 +2064,7 @@ Every concluded run is also written as gauge data points, so **metric alert rule
 All carry the attributes `job.id`, `job.name` and `job.status`.
 
 ### `GET /api/v1/jobs/monitors?summary=` · `POST /api/v1/jobs/monitors` · `GET|PUT|DELETE /api/v1/jobs/monitors/{id}` · `POST /api/v1/jobs/monitors/{id}/rotate`
-Body of POST/PUT: `{"name" (1–200), "description"? (≤ 1000), "kind"?: `cron`|`interval` (default `cron`),
+Body of POST/PUT: `{"name" (1–200), "description"? (≤ 1000), "kind"?: cron|interval (default cron),
 "cron" (cron only: five fields or @yearly/@monthly/@weekly/@daily/@hourly), "time_zone"? (cron only: an IANA
 name, default UTC), "interval_seconds" (interval only: 60–7776000), "grace_seconds"? (default 300, 0–86400),
 "enabled"? (default true), "tags"? (≤ 10)}`. The response carries `ping_url` and `state`; `rotate` issues a
@@ -2150,17 +2150,17 @@ when a response arrived and `error.kind` when the run failed (`dns`, `connect`, 
 `record`, `timeout`, `blocked`, `redirect`, `status`, `assertion`, `body`, `request`).
 
 ### `GET /api/v1/synthetics/checks?summary=&from=&to=` · `POST /api/v1/synthetics/checks` · `GET|PUT|DELETE /api/v1/synthetics/checks/{id}`
-Body of POST/PUT: `{"name" (1–200), "type"?: `http`|`tcp`|`dns`|`tls` (default `http`), "enabled"? (default
-true), "url" (http only: http(s), ≤ 2048, no credentials or fragment), "target" (tcp and tls: `host:port`
-with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (dns only: `A` (default),
-`AAAA`, `CNAME`, `MX`, `NS`, `TXT`), "dns_expected"? (dns only: ≤ 10 answers, empty = any answer),
-"tls_warning_days"? (tls only: default 14, 0–365; 0 = only an expired certificate fails), "method"? (default `GET`; `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
-`OPTIONS`), "headers"? (≤ 20; `Host`, `Content-Length`, `Connection`, `Transfer-Encoding` and `Upgrade` are
-rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default `[200]`, ≤ 10
+Body of POST/PUT: `{"name" (1–200), "type"?: http|tcp|dns|tls (default http), "enabled"? (default
+true), "url" (http only: http(s), ≤ 2048, no credentials or fragment), "target" (tcp and tls: host:port
+with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (dns only: A (default),
+AAAA, CNAME, MX, NS, TXT), "dns_expected"? (dns only: ≤ 10 answers, empty = any answer),
+"tls_warning_days"? (tls only: default 14, 0–365; 0 = only an expired certificate fails), "method"? (default GET; GET, HEAD, POST, PUT, PATCH, DELETE,
+OPTIONS), "headers"? (≤ 20; Host, Content-Length, Connection, Transfer-Encoding and Upgrade are
+rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default [200], ≤ 10
 codes of 100–599), "assertion_type"?: "none"|"contains"|"not_contains"|"json_path", "assertion_path"?
-(`json_path` only: a dotted path such as `data.items.0.status`), "assertion_value"?, "timeout_ms"? (default
+(json_path only: a dotted path such as data.items.0.status), "assertion_value"?, "timeout_ms"? (default
 10000, 500–60000, not longer than the interval), "interval_seconds"? (default 300, 5–86400; the scheduler
-claims due rows once a second, so 5 s is the floor), "locations"? (default `["local"]`)}`. `location` `local`
+claims due rows once a second, so 5 s is the floor), "locations"? (default ["local"])}`. `location` `local`
 is the openlog server itself; the response's `locations` field lists the ones this installation offers.
 
 `status` is the schedule row per location: the last outcome (the current state, straight from PostgreSQL)

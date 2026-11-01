@@ -11942,8 +11942,8 @@ components:
     BrowserKey:
       type: object
       description: >-
-        A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the
-        API is not a place to read credentials back from.
+        A public key of the RUM SDK (rum.md §3). Unlike other credentials, reads return the value in `key`, because it ships inside
+        a web page anyway. It is empty on a key from before the value was stored.
       required: [id, name, prefix, key, service_name, environment, kind, origins, app_ids,
                  rate_limit_per_minute, sample_rate,
                  created_by_email, created_at, updated_at, last_used_at, revoked_at]

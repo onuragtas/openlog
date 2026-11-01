@@ -239,7 +239,7 @@ uygulama adı ve iptal. Tam tehdit modeli, yani kopyalanan bir anahtarın neleri
 [rum.md §3.5](/tr/contracts/rum) içindedir.
 
 **Değer okunabilir.** Buradaki diğer tüm kimlik bilgilerinin aksine tarayıcı anahtarı, yalnızca oluşturulurken bir kez değil,
-yukarıdaki okumalarda da (`key`) tam olarak döner. Bu bir kolaylık istisnası değil: değer web sayfasının içinde gelir,
+aşağıdaki okumada da (`key`) tam olarak döner. Bu bir kolaylık istisnası değil: değer web sayfasının içinde gelir,
 yani sayfayı açabilen herkeste zaten vardır ve tekrar göstermeyi reddetmek yalnızca operatörü internetin zaten bildiği
 bir anahtarı döndürmeye zorluyordu. Lisans anahtarları, API anahtarları ve SSO client secret'ları gerçek
 sırlardır, yalnızca hash olarak kalır ve yine tam bir kez gösterilir. Bu saklama başlamadan önce oluşturulan tarayıcı anahtarları
@@ -253,17 +253,17 @@ identifier'ları) taşır, `origins` taşımaz. Türe ait olmayan allowlist'i g�
 gelişigüzel yeniden kullanımı daraltır ([rum.md §3.6](/tr/contracts/rum)).
 
 ### `GET /api/v1/browser-keys` {#get-api-v1-browser-keys}
-`{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "service_name", "environment", "origins": [],
+`{"browser_keys": [{"id", "name", "prefix": "olb_1a2b3c4d", "key": "olb_…", "service_name", "environment", "kind", "origins": [], "app_ids": [],
 "rate_limit_per_minute", "sample_rate", "analytics_mode", "created_by_email", "created_at", "updated_at", "last_used_at",
-"revoked_at"}]}` (iptal edilmiş anahtarlar dahil). Değerin kendisi okumada asla dönmez.
+"revoked_at"}]}` (iptal edilmiş anahtarlar dahil). `key` değerin kendisidir; değer saklanmaya başlamadan önce oluşturulmuş anahtarlarda `""` olur.
 
 ### `POST /api/v1/browser-keys` {#post-api-v1-browser-keys}
 Gövde: `{"name" (1–200), "service_name" (1–512), "environment"? (≤ 256), "origins" (1–50),
 "rate_limit_per_minute"? (default 6000, 60–10000000), "sample_rate"? (default 1, 0 < x ≤ 1),
-"analytics_mode"? (`off`, `sessions` or `visitors`; default `visitors`, [analytics.md](analytics.md) §1.1)}`. `PUT`'ta
-gönderilmeyen `analytics_mode` mevcut değeri korur.
+"analytics_mode"? (off, sessions or visitors; default visitors)}`. `PUT`'ta
+gönderilmeyen `analytics_mode` mevcut değeri korur. ([analytics.md](/tr/contracts/analytics) §1.1).
 
-`201 {"browser_key": {…}, "key": "olb_…"}`: değer burada döner, başka hiçbir yerde dönmez.
+`201 {"browser_key": {…}, "key": "olb_…"}`. Diğer kimlik bilgilerinin aksine değer yalnızca burada dönmez, yukarıdaki okuma da döndürür.
 
 `origins`, anahtarın kullanılabileceği origin'lerdir, tarayıcının gönderdiği biçimde: tam
 (`https://app.example.com`, şemanın varsayılanı değilse port dahil) veya alt alan adı joker karakteri
@@ -1686,10 +1686,10 @@ Servisler: AWS `rds`, `s3`, `lambda`, `sqs`, `dynamodb`, `elb`, `elasticache`; A
 
 ### `GET /api/v1/cloud/connections` · `POST` · `GET|PUT|DELETE /api/v1/cloud/connections/{id}` {#get-api-v1-cloud-connections-·-post-·-get-put-delete-api-v1-cloud-connections-id}
 POST/PUT gövdesi: `{"name" (1–200), "provider": "aws"|"azure"|"gcp", "ingest_mode"?: "poll"|"push" (default
-`poll`), "enabled"? (default true), "scopes" (1–50; letters, digits, `-`, `_`, `.`), "services" (1–50 ids of
+poll), "enabled"? (default true), "scopes" (1–50; letters, digits, -, _, .), "services" (1–50 ids of
 the provider's catalog), "poll_interval_seconds"? (default 300, 60–86400), "max_metrics_per_poll"? (default
 5000, 100–200000), "max_api_calls_per_poll"? (default 200, 1–5000), "credentials"? (the provider's fields;
-omitted on `PUT` keeps the stored ones, and is required when the provider changes)}`.
+omitted on PUT keeps the stored ones, and is required when the provider changes)}`.
 
 `status`, scope başına zamanlama satırıdır: son yoklama (doğrudan PostgreSQL'den) ve sonrakinin ne zaman olduğu.
 `ingest_mode` bugün `poll`'dur; `push`, sağlayıcı tarafı teslimat için ayrılmıştır, saklanır ama toplanmaz,
@@ -2020,7 +2020,7 @@ Sonuçlanan her çalışma gauge veri noktaları olarak da yazılır, böylece *
 Hepsi `job.id`, `job.name` ve `job.status` attribute'larını taşır.
 
 ### `GET /api/v1/jobs/monitors?summary=` · `POST /api/v1/jobs/monitors` · `GET|PUT|DELETE /api/v1/jobs/monitors/{id}` · `POST /api/v1/jobs/monitors/{id}/rotate` {#get-api-v1-jobs-monitors-summary-·-post-api-v1-jobs-monitors-·-get-put-delete-api-v1-jobs-monitors-id-·-post-api-v1-jobs-monitors-id-rotate}
-POST/PUT gövdesi: `{"name" (1–200), "description"? (≤ 1000), "kind"?: `cron`|`interval` (default `cron`),
+POST/PUT gövdesi: `{"name" (1–200), "description"? (≤ 1000), "kind"?: cron|interval (default cron),
 "cron" (cron only: five fields or @yearly/@monthly/@weekly/@daily/@hourly), "time_zone"? (cron only: an IANA
 name, default UTC), "interval_seconds" (interval only: 60–7776000), "grace_seconds"? (default 300, 0–86400),
 "enabled"? (default true), "tags"? (≤ 10)}`. Yanıt `ping_url` ve `state` taşır; `rotate` yeni token üretir
@@ -2104,17 +2104,17 @@ ve çalışma başarısızsa `error.kind` (`dns`, `connect`, `tls`, `certificate
 `record`, `timeout`, `blocked`, `redirect`, `status`, `assertion`, `body`, `request`).
 
 ### `GET /api/v1/synthetics/checks?summary=&from=&to=` · `POST /api/v1/synthetics/checks` · `GET|PUT|DELETE /api/v1/synthetics/checks/{id}` {#get-api-v1-synthetics-checks-summary-from-to-·-post-api-v1-synthetics-checks-·-get-put-delete-api-v1-synthetics-checks-id}
-POST/PUT gövdesi: `{"name" (1–200), "type"?: `http`|`tcp`|`dns`|`tls` (default `http`), "enabled"? (default
-true), "url" (http only: http(s), ≤ 2048, no credentials or fragment), "target" (tcp and tls: `host:port`
-with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (dns only: `A` (default),
-`AAAA`, `CNAME`, `MX`, `NS`, `TXT`), "dns_expected"? (dns only: ≤ 10 answers, empty = any answer),
-"tls_warning_days"? (tls only: default 14, 0–365; 0 = only an expired certificate fails), "method"? (default `GET`; `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`,
-`OPTIONS`), "headers"? (≤ 20; `Host`, `Content-Length`, `Connection`, `Transfer-Encoding` and `Upgrade` are
-rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default `[200]`, ≤ 10
+POST/PUT gövdesi: `{"name" (1–200), "type"?: http|tcp|dns|tls (default http), "enabled"? (default
+true), "url" (http only: http(s), ≤ 2048, no credentials or fragment), "target" (tcp and tls: host:port
+with an explicit port; dns: the name to resolve; ≤ 512), "dns_record_type"? (dns only: A (default),
+AAAA, CNAME, MX, NS, TXT), "dns_expected"? (dns only: ≤ 10 answers, empty = any answer),
+"tls_warning_days"? (tls only: default 14, 0–365; 0 = only an expired certificate fails), "method"? (default GET; GET, HEAD, POST, PUT, PATCH, DELETE,
+OPTIONS), "headers"? (≤ 20; Host, Content-Length, Connection, Transfer-Encoding and Upgrade are
+rejected), "body"? (≤ 65536, only with a method that sends one), "expected_status"? (default [200], ≤ 10
 codes of 100–599), "assertion_type"?: "none"|"contains"|"not_contains"|"json_path", "assertion_path"?
-(`json_path` only: a dotted path such as `data.items.0.status`), "assertion_value"?, "timeout_ms"? (default
+(json_path only: a dotted path such as data.items.0.status), "assertion_value"?, "timeout_ms"? (default
 10000, 500–60000, not longer than the interval), "interval_seconds"? (default 300, 5–86400; the scheduler
-claims due rows once a second, so 5 s is the floor), "locations"? (default `["local"]`)}`. `location` `local`,
+claims due rows once a second, so 5 s is the floor), "locations"? (default ["local"])}`. `location` `local`,
 openlog sunucusunun kendisidir; yanıtın `locations` alanı bu kurulumun sunduklarını listeler.
 
 `status`, konum başına zamanlama satırıdır: son sonuç (güncel durum, doğrudan PostgreSQL'den)

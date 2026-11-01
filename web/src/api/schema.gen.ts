@@ -8104,7 +8104,7 @@ export interface components {
             created_at: components["schemas"]["Timestamp"];
             updated_at: components["schemas"]["Timestamp"];
         };
-        /** @description A public key of the RUM SDK (rum.md §3). The value is not returned by any read: it is public, but the API is not a place to read credentials back from. */
+        /** @description A public key of the RUM SDK (rum.md §3). Unlike other credentials, reads return the value in `key`, because it ships inside a web page anyway. It is empty on a key from before the value was stored. */
         BrowserKey: {
             /** Format: uuid */
             id: string;

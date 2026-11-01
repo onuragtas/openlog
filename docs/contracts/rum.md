@@ -546,9 +546,9 @@ Deliberately left for later, with the shape they would take:
   `recordTiming(name, ms)` send an `openlog.rum.event = custom` span carrying `openlog.rum.custom.name` and,
   for a timing, `…custom.value` and `…custom.unit`. They have **no rollup of their own** — what an
   application counts is not something the server can pre-aggregate without knowing what it means — so they
-  are read through OQL (`FROM Span WHERE openlog.rum.custom.name = 'checkout_started'`). The SDK takes only a
-  name (and a number): the server keeps an attribute allowlist, so an API that accepted arbitrary attributes
-  would promise storage it does not provide.
+  are read through OQL (`FROM Span WHERE openlog.rum.custom.name = 'checkout_started'`). The SDK takes a name, a
+  number for a timing, and parameters, which §2.5 confines to `openlog.rum.custom.param.*`. Anything else stays out, because the server keeps an
+  attribute allowlist and an API that accepted arbitrary attributes would promise storage it does not provide.
 - **Alerting on vitals.** ~~Not in this slice.~~ Done, and without a `rum` rule type: `RumPageView`,
   `RumVital` and `RumSession` are OQL event types ([oql.md](oql.md)), and the `oql` alert rule type compiles
   any OQL query — so `SELECT sum(value.sum) / sum(count) FROM RumVital WHERE vital = 'lcp'` is an alert
