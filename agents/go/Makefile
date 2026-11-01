@@ -1,5 +1,5 @@
 # openlog Go APM agent (Apache-2.0). Every directory with a go.mod is a separate module.
-MODULES := . instrumentation/grpc instrumentation/chi instrumentation/gin instrumentation/echo examples
+MODULES := . instrumentation/grpc instrumentation/chi instrumentation/gin instrumentation/echo instrumentation/pgx examples
 GOFMT_DIRS := $(shell find . -name '*.go' -not -path './vendor/*' -exec dirname {} \; | sort -u)
 
 .PHONY: all test vet fmt fmt-check bench tidy set-version

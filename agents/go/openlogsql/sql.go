@@ -309,6 +309,24 @@ func truncate(s string) string {
 	return s[:cut]
 }
 
+// QueryTextModeFromEnv is the mode OPENLOG_DB_QUERY_TEXT selects, QuerySanitized when unset. For instrumentation of a client
+// that does not go through database/sql, such as openlogpgx.
+func QueryTextModeFromEnv() QueryTextMode { return queryTextFromEnv() }
+
+// QueryText is what db.query.text holds for a statement in this mode, and "" for QueryOff.
+func QueryText(query, system string, mode QueryTextMode) string {
+	switch mode {
+	case QuerySanitized:
+		return truncate(Sanitize(query, system))
+	case QueryRaw:
+		return truncate(query)
+	}
+	return ""
+}
+
+// OperationName is db.operation.name for a statement: its first keyword, upper-cased, or "" when there is none.
+func OperationName(query string) string { return operationName(query) }
+
 // operationName returns the upper-cased first keyword (SELECT, INSERT, …), skipping comments.
 func operationName(q string) string {
 	q = strings.TrimSpace(stripLeadingComments(q))

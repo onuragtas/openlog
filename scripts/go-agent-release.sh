@@ -17,7 +17,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AGENT=agents/go
 MODPREFIX=github.com/onuragtas/openlog/agents/go
 # Library modules that are tagged; examples is not a library and is never tagged.
-TAGGED_MODULES=("$AGENT" "$AGENT/instrumentation/grpc" "$AGENT/instrumentation/chi" "$AGENT/instrumentation/gin" "$AGENT/instrumentation/echo")
+TAGGED_MODULES=("$AGENT" "$AGENT/instrumentation/grpc" "$AGENT/instrumentation/chi" "$AGENT/instrumentation/gin" "$AGENT/instrumentation/echo" "$AGENT/instrumentation/pgx")
 
 die() {
   if [ -n "${GITHUB_ACTIONS:-}" ]; then echo "::error::$*"; else echo "error: $*" >&2; fi

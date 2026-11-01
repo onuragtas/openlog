@@ -195,6 +195,7 @@ Container root olarak çalışıyorsa `/sys/class/dmi/id/product_uuid` genelde m
 | `openlogchi` | `instrumentation/chi` | `r.Use(openlogchi.Middleware())`, route = chi pattern'i |
 | `openloggin` | `instrumentation/gin` | `r.Use(openloggin.Middleware())` (otelgin), route = `c.FullPath()` |
 | `openlogecho` | `instrumentation/echo` | `e.Use(openlogecho.Middleware())` (otelecho), route = `c.Path()` |
+| `openlogpgx` | `instrumentation/pgx` | `cfg.ConnConfig.Tracer = openlogpgx.NewTracer()`: `pgxpool` ve `pgx.Conn`, `openlogsql` ile aynı span'ler |
 
 Router ve gRPC yardımcıları ayrı modüllerdir, böylece gin, echo, chi veya grpc yalnızca bunları kullananların `go.sum` dosyasına girer.
 
@@ -211,6 +212,19 @@ http.ListenAndServe(":8080", openloghttp.Middleware(mux))
 ve dollar-quoted literal'leri `?` ile değiştirir, `IN (…)` ve çok satırlı `VALUES` ifadelerini `(?)` olarak daraltır, yorumları siler
 ve placeholder'ları korur. MySQL'de `"…"` string sayılır; diğer veritabanlarında `"…"` bir identifier'dır. Sorgu metni 4096 baytla
 sınırlıdır.
+
+**pgx ve pgxpool.** `openlogsql` yalnızca `database/sql`'i görür, bu yüzden `pgxpool` kullanan bir sunucu şunu kullanmalı:
+
+```go
+cfg, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+if err != nil {
+	return err
+}
+cfg.ConnConfig.Tracer = openlogpgx.NewTracer()
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+```
+
+Yukarıdaki kurallar burada da geçerli, `OPENLOG_DB_QUERY_TEXT`, `WithQueryText` ve `WithRootSpans` da. Her çağrıya isteğin context'ini ver, yoksa statement'ın bağlanacağı bir span olmaz. Batch, statement'larını içeren tek bir span'dir; `CopyFrom` da tek span'dir. `openlogsql`'den farklı olarak `BEGIN`, `COMMIT` ve `ROLLBACK` de span alır, çünkü pgx için bunlar birer statement'tır. Sorgu span'i satırlar kapatılınca biter, yani okumayı da kapsar. Zaten bir tracer ayarlıysan `github.com/jackc/pgx/v5/multitracer` ile birleştir.
 
 ### Runtime metrikleri {#runtime-metrics}
 
@@ -256,12 +270,12 @@ maliyeti düşürmek için `OPENLOG_SAMPLING_RATIO` kullan.
 
 Ajan openlog ürünüyle birlikte sürümlenir (D-025). Backend, arayüz ve tüm ajanlar tek bir `X.Y.Z` paylaşır. Her `vX.Y.Z` ürün sürümü
 aynı commit üzerinde Go modül tag'lerini de yayımlar: `agents/go/vX.Y.Z` ve
-`agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z`. Ön sürümler (`vX.Y.Z-beta.N`) de aynı şekilde tag'lenir. `go get …@latest`
+`agents/go/instrumentation/{grpc,chi,gin,echo,pgx}/vX.Y.Z`. Ön sürümler (`vX.Y.Z-beta.N`) de aynı şekilde tag'lenir. `go get …@latest`
 bunları atlar, o yüzden açıkça iste. Backend, son üç minor sürümünün ajanlarını kabul eder, bu yüzden ajanı o aralıkta yükselt:
 
 ```sh
 go get github.com/onuragtas/openlog/agents/go@vX.Y.Z
-go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # kullanıyorsan (chi, gin, echo için de aynı şekilde)
+go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # kullanıyorsan (chi, gin, echo, pgx için de aynı şekilde)
 ```
 
 Core ve enstrümantasyon modüllerini aynı sürümde tut. `telemetry.distro.version` kullanımdaki sürümü raporlar. OpenTelemetry

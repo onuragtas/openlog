@@ -196,6 +196,7 @@ without a mount, because sysfs is not namespaced.
 | `openlogchi` | `instrumentation/chi` | `r.Use(openlogchi.Middleware())`, route = chi pattern |
 | `openloggin` | `instrumentation/gin` | `r.Use(openloggin.Middleware())` (otelgin), route = `c.FullPath()` |
 | `openlogecho` | `instrumentation/echo` | `e.Use(openlogecho.Middleware())` (otelecho), route = `c.Path()` |
+| `openlogpgx` | `instrumentation/pgx` | `cfg.ConnConfig.Tracer = openlogpgx.NewTracer()`: `pgxpool` and `pgx.Conn`, with the same spans as `openlogsql` |
 
 Router and gRPC helpers are separate modules, so only their users pull gin, echo, chi or grpc into `go.sum`.
 
@@ -212,6 +213,22 @@ to change that. A query span ends when `Query` returns, not after the rows are r
 numeric, hex and dollar-quoted literals with `?`, collapses `IN (…)` and multi-row `VALUES` to `(?)`, removes comments
 and keeps placeholders. MySQL `"…"` is treated as a string; for other databases `"…"` is an identifier. Query text is
 capped at 4096 bytes.
+
+**pgx and pgxpool.** `openlogsql` only sees `database/sql`, so a server on `pgxpool` needs this instead:
+
+```go
+cfg, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+if err != nil {
+	return err
+}
+cfg.ConnConfig.Tracer = openlogpgx.NewTracer()
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+```
+
+The rules above apply, as do `OPENLOG_DB_QUERY_TEXT`, `WithQueryText` and `WithRootSpans`, and pass the request's context to
+each call, or a statement has no span to belong to. A batch is one span holding its statements, and `CopyFrom` is one span. Unlike
+`openlogsql`, `BEGIN`, `COMMIT` and `ROLLBACK` get spans too, because they are statements to pgx. A query's span ends when its rows are closed, so it
+includes reading them. If you already set a tracer, combine them with `github.com/jackc/pgx/v5/multitracer`.
 
 ### Runtime metrics
 
@@ -257,13 +274,13 @@ the server metrics histogram. Both are negligible next to real network and datab
 
 The agent is versioned with the openlog product (D-025). Backend, UI and all agents share one `X.Y.Z`. Every product
 release `vX.Y.Z` also publishes Go module tags on the same commit: `agents/go/vX.Y.Z` and
-`agents/go/instrumentation/{grpc,chi,gin,echo}/vX.Y.Z`. Pre-releases (`vX.Y.Z-beta.N`) are tagged the same way.
+`agents/go/instrumentation/{grpc,chi,gin,echo,pgx}/vX.Y.Z`. Pre-releases (`vX.Y.Z-beta.N`) are tagged the same way.
 `go get …@latest` skips them, so request them explicitly. The backend accepts agents from its last three minor
 versions, so upgrade the agent within that window:
 
 ```sh
 go get github.com/onuragtas/openlog/agents/go@vX.Y.Z
-go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # if used (likewise chi, gin, echo)
+go get github.com/onuragtas/openlog/agents/go/instrumentation/grpc@vX.Y.Z   # if used (likewise chi, gin, echo, pgx)
 ```
 
 Keep the core and instrumentation modules on the same version. `telemetry.distro.version` reports the version in use.
