@@ -260,6 +260,7 @@ under an attacker's control:
 | Rule | Why |
 |---|---|
 | The **resource is rebuilt**: `service.name` and `deployment.environment.name` come from the key; only `browser.*`, `user_agent.original`, `os.*` survive from the payload | A copied key cannot write under a backend service's name, and cannot inject `host.id` — which drives host↔service linkage and, in SaaS mode, the plan's host limit |
+| `browser.name` and `os.name` are **derived from `user_agent.original`** on the span, from a closed list, when the payload did not send them; a mobile resource's `os.name` is copied to the span | The rollups read span attributes and key on these, so a page cannot mint values |
 | A span without a known `openlog.rum.event` is **dropped** | The endpoint cannot be used as a general-purpose trace writer |
 | A span without a well-formed `session.id` is **dropped** | An unattributable row is not worth storing |
 | The **route is re-normalized** (§4) | A page cannot mint rollup keys |

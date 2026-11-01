@@ -78,6 +78,8 @@ type Scope struct {
 	// not consulted by Resolve — and travels here only because it is the same thing: a fact about the
 	// request that the server establishes rather than the payload claims.
 	Country string
+	// browser and os are set per resource by Sanitize (useragent.go).
+	browser, os string
 }
 
 // Store is the persistent browser key store (PostgreSQL).

@@ -67,7 +67,9 @@ class Openlog {
 
     // The operator's sample rate wins, so volume can be turned down without shipping a release. Until it
     // answers the application reports with its own, and failure is silent by design.
-    unawaited((fetchConfig ?? _defaultFetchConfig)(cfg.configUrl, {'openlog-browser-key': options.key})
+    // A mobile key refuses a request that names no application, and this one is no exception.
+    unawaited((fetchConfig ?? _defaultFetchConfig)(
+            cfg.configUrl, {'openlog-browser-key': options.key, 'openlog-app-id': options.appId})
         .then((conf) {
       if (conf == null) return;
       cfg.serviceName = (conf['service_name'] as String?) ?? '';

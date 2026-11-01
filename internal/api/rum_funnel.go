@@ -55,8 +55,9 @@ func rumFunnelSelect(sc *query.Scope, f rumFilter, steps []string, window time.D
 		conds[i] = fmt.Sprintf("attributes[{a_custom:String}] = {s%d:String}", i)
 		inner.Param(fmt.Sprintf("s%d", i), steps[i])
 	}
-	inner.Columns(fmt.Sprintf("windowFunnel({w_sec:UInt64})(timestamp, %s) AS f_level", strings.Join(conds, ", "))).
-		Param("w_sec", uint64(window/time.Second)).
+	// windowFunnel refuses DateTime64, and rounding to seconds would lose the order of two steps in the same second.
+	inner.Columns(fmt.Sprintf("windowFunnel({w_ms:UInt64})(toUInt64(toUnixTimestamp64Milli(timestamp)), %s) AS f_level", strings.Join(conds, ", "))).
+		Param("w_ms", uint64(window/time.Millisecond)).
 		Param("a_custom", rum.AttrCustomName).Param("a_session", rum.AttrSessionID).Param("a_event", rum.AttrEvent).
 		Where("service_name = {r_app:String}").Param("r_app", f.app).
 		// Only RUM spans, and only sessions: a span with no session id cannot belong to a funnel.
