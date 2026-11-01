@@ -23,7 +23,11 @@ internal fun encodeAttributes(attrs: List<Pair<String, Any?>>): List<Map<String,
         val s = value as? String ?: value.toString()
         if (s.isEmpty()) continue // an empty attribute is not a value, and the server drops it anyway
         if (out.size >= Limits.MAX_ATTRIBUTES_PER_SPAN) break
-        val limit = if (key == "url.full") Limits.MAX_URL_BYTES else Limits.MAX_ATTR_VALUE_BYTES
+        val limit = when (key) {
+            "url.full" -> Limits.MAX_URL_BYTES
+            "exception.stacktrace" -> Limits.MAX_STACK_BYTES
+            else -> Limits.MAX_ATTR_VALUE_BYTES
+        }
         out.add(mapOf("key" to key, "value" to mapOf("stringValue" to truncate(s, limit))))
     }
     return out

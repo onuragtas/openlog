@@ -109,6 +109,29 @@ func removeExceptionHandler() {
     previousExceptionHandler = nil
 }
 
+/// Flattens MetricKit's call stack tree to the thread that crashed, written the way the server reads a native frame
+/// (mobile-crash.md §3): an image id and an offset, because that is what symbols are found by. The root is the innermost frame,
+/// and each frame's subFrames hold what called it. What cannot be read comes back as it was.
+func flattenCallStackTree(_ data: Data) -> String {
+    let raw = String(data: data, encoding: .utf8) ?? ""
+    guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+          let stacks = root["callStacks"] as? [[String: Any]],
+          let chosen = stacks.first(where: { $0["threadAttributed"] as? Bool == true }) ?? stacks.first,
+          var frame = (chosen["callStackRootFrames"] as? [[String: Any]])?.first
+    else { return raw }
+    var lines: [String] = []
+    while true {
+        let offset = (frame["offsetIntoBinaryTextSegment"] as? NSNumber)?.uint64Value ?? 0
+        let name = (frame["binaryName"] as? String ?? "unknown").replacingOccurrences(of: " ", with: "_")
+        let id = frame["binaryUUID"] as? String ?? ""
+        let index = String(format: "%02d", lines.count)
+        lines.append("#\(index) \(name) \(id.isEmpty ? "" : id + " ")+0x\(String(offset, radix: 16))")
+        guard let next = (frame["subFrames"] as? [[String: Any]])?.first else { break }
+        frame = next
+    }
+    return lines.joined(separator: "\n")
+}
+
 #if canImport(MetricKit) && (os(iOS) || os(macOS))
 /// Receives what the operating system recorded about earlier launches.
 @available(iOS 14.0, macOS 12.0, *)
@@ -129,7 +152,7 @@ final class CrashDiagnostics: NSObject, MXMetricManagerSubscriber {
                 sdk?.record(
                     signal: crash.signal?.int32Value,
                     reason: crash.terminationReason ?? "",
-                    stack: String(data: crash.callStackTree.jsonRepresentation(), encoding: .utf8) ?? "",
+                    stack: flattenCallStackTree(crash.callStackTree.jsonRepresentation()),
                     version: crash.metaData.applicationBuildVersion,
                     at: payload.timeStampEnd
                 )

@@ -29,7 +29,13 @@ List<Map<String, Object>> encodeAttributes(Map<String, Object?> attrs) {
     if (out.length >= maxAttributesPerSpan) break;
     out.add({
       'key': e.key,
-      'value': {'stringValue': truncate(s, e.key == 'url.full' ? maxUrlBytes : maxAttrValueBytes)},
+      'value': {'stringValue': truncate(
+            s,
+            switch (e.key) {
+              'url.full' => maxUrlBytes,
+              'exception.stacktrace' => maxStackBytes,
+              _ => maxAttrValueBytes,
+            })},
     });
   }
   return out;

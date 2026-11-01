@@ -31,7 +31,12 @@ func encodeAttributes(_ attrs: [(String, Any?)]) -> [[String: Any]] {
         }
         if s.isEmpty { continue }  // an empty attribute is not a value, and the server drops it anyway
         if out.count >= Limits.maxAttributesPerSpan { break }
-        let limit = key == "url.full" ? Limits.maxURLBytes : Limits.maxAttrValueBytes
+        let limit: Int
+        switch key {
+        case "url.full": limit = Limits.maxURLBytes
+        case "exception.stacktrace": limit = Limits.maxStackBytes
+        default: limit = Limits.maxAttrValueBytes
+        }
         out.append(["key": key, "value": ["stringValue": truncate(s, limit)]])
     }
     return out

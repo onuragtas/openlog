@@ -97,10 +97,13 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 ## What it does not do
 
-**No NDK crashes or ANRs.** Uncaught JVM exceptions are reported when `captureCrashes` is on: see [Crash reporting](../../docs/guide/crash-reporting.md). Those two are not JVM exceptions, and reading them needs an Android API this plain JVM library does not have.
+**NDK crashes and ANRs need `androidContext`.** With `captureCrashes` on, uncaught JVM exceptions are reported on any JVM. Pass your
+`Context` as well and NDK crashes, ANRs and foreground low-memory kills are reported from what Android recorded, on Android 11 and later:
+see [Crash reporting](../../docs/guide/crash-reporting.md). This reads the system's record by reflection, and has been tested against
+stand-ins for those classes and not yet in a real Android application.
 
-**No symbolication.** Browser stacks are un-minified with uploaded source maps; ProGuard mappings have no
-equivalent yet.
+**Stacks need your symbols.** Upload your R8 mapping and native libraries in the release build: see
+[Read your stacks](../../docs/guide/crash-reporting.md#read-your-stacks).
 
 **No attestation.** Play Integrity is the upgrade path for the application allowlist, and is deliberately
 not claimed.

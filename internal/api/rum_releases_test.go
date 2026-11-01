@@ -51,6 +51,30 @@ func TestRUMCrashesQueryBuilds(t *testing.T) {
 	}
 }
 
+func TestCrashesGroupOnTheFrameOnceSymbolsNamedOne(t *testing.T) {
+	groups, order := map[string]*rumCrashJSON{}, []string{}
+	add := func(group, typ, frame string, resolved int, sessions ...string) {
+		c := rumCrashJSON{GroupID: group, Type: typ, Frame: frame, SymbolicatedFrames: resolved, Count: 1, sessions: map[string]struct{}{}}
+		for _, s := range sessions {
+			c.sessions[s] = struct{}{}
+		}
+		c.Sessions = uint64(len(c.sessions))
+		mergeCrash(groups, &order, c)
+	}
+	add("a", "SIGSEGV", "Game::Load", 2, "s1")
+	add("b", "SIGSEGV", "Game::Load", 2, "s1", "s2") // renamed between builds, so another error group, and the same crash
+	add("a", "SIGSEGV", "Game::Save", 2, "s3")       // one error group, and another crash
+	add("c", "SIGABRT", "abort", 0, "s4")            // the device's name for the system's frame: says nothing of whose abort
+	add("d", "SIGABRT", "abort", 0, "s5")
+	if len(order) != 4 {
+		t.Fatalf("%d crashes: %v", len(order), order)
+	}
+	load := groups[crashKey(rumCrashJSON{Type: "SIGSEGV", Frame: "Game::Load", SymbolicatedFrames: 1})]
+	if load.Count != 2 || load.Sessions != 2 {
+		t.Errorf("one session on two stacks is one session: %+v", load)
+	}
+}
+
 func TestSessionsFreeOf(t *testing.T) {
 	for _, tc := range []struct {
 		bad, total uint64

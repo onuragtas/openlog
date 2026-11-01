@@ -305,7 +305,8 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		srv.SetAPMErrorStates(apm.PGErrorStates{Pool: pgPool}) // error inbox workflow (apm.md §3.4)
 		srv.SetSLOs(slo.NewPGStore(pgPool))                    // service level objectives (slo.md)
 		sourceMapService = newSourceMaps(cfg, pgPool, log)
-		srv.SetSourceMaps(sourceMapService) // browser stack symbolication (rum.md §8)
+		srv.SetSourceMaps(sourceMapService)     // browser stack symbolication (rum.md §8)
+		srv.SetSymbols(newSymbols(cfg, pgPool)) // mobile crash symbolication (mobile-crash.md §3)
 		if cfg.RUM.Enabled {
 			srv.SetAnalyticsErasures(analytics.PGStore{Pool: pgPool}) // analytics.md §7
 		}

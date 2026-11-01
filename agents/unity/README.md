@@ -88,7 +88,7 @@ Turning it off deletes the id from the device and is remembered across launches.
 
 | | Android | iOS |
 |---|---|---|
-| Native crash | ✅ From Android 11, with no stack | ✅ From iOS 14, through MetricKit, with the call stack as addresses |
+| Native crash | ✅ From Android 11, with a stack from Android 12 | ✅ From iOS 14, through MetricKit, with a stack |
 | ANR | ✅ From Android 11, with the thread dump | No |
 | Out of memory | ✅ From Android 11, in the foreground | No |
 | C# exception | Reported as an error | Reported as an error |
@@ -107,11 +107,13 @@ or your players' data.
 SDK reads it later. So no signal handler is installed, and Unity's or another SDK's keeps working. MetricKit decides when it delivers,
 and that can be later than the next launch on older iOS versions.
 
-**Stacks are not symbolicated yet.** See [Crash reporting](../../docs/guide/crash-reporting.md).
+**To read native stacks, upload your symbols** as part of the release build: see [Read your stacks](../../docs/guide/crash-reporting.md#read-your-stacks).
 
-**How far this has been tested.** On Android, real native crashes were reported end to end on an Android 16 emulator. ANRs and
-out-of-memory kills use the same path, but were not triggered. On iOS, the plugin builds and runs on the simulator, which does not
-deliver MetricKit reports, so **a real iOS crash report has not been seen yet**. Try one on a device before relying on it.
+**How far this has been tested.** On an Android 16 emulator with IL2CPP, a real native crash, an abort and an ANR were reported end to
+end, and the native stacks were read back with their function names after uploading `symbols.zip`. Out-of-memory kills use the same
+path, but were not triggered. On iOS, the plugin builds and runs on the simulator, which does not deliver MetricKit reports, so
+**a real iOS crash report has not been seen yet**, and turning one into a stack has only been tested on a hand-written report. Try one
+on a device before relying on it.
 
 ## Not covered
 

@@ -321,6 +321,23 @@ maps), or that decodes to no mappings is refused (`400`) while the person upload
 ### `DELETE /api/v1/source-maps/{id}`
 `204`, or `404` when the organization has no such map. Removes the row and the stored document.
 
+## Crash symbols
+
+What turns the stack of a mobile crash back into source ([mobile-crash.md](mobile-crash.md) §3). Unlike source maps these take an API
+key, because the caller is a build machine. They share source maps' storage and `OPENLOG_SOURCE_MAPS_ENABLED`.
+
+### `GET /api/v1/symbols`
+Member and higher. `{"symbols": [{"id", "app", "kind", "key", "size_bytes", "sha256", "created_at", "updated_at"}]}`, newest first.
+
+### `POST /api/v1/symbols?app=&kind=&key=`
+Admin or owner. The body is the file: an R8 mapping with `kind=r8` and the version as `key`, or a table made by `openlog-symbols` with
+`kind=native` and the image id as `key`, gzip allowed, at most 128 MiB. It is parsed before it is stored, and one that can't be read,
+or has no functions, is `400`. Uploading again for the same key replaces the file and keeps the id. `201 {"symbol": {…}}`. Audit
+`symbols.upload`.
+
+### `DELETE /api/v1/symbols/{id}`
+Admin or owner. `204`, or `404` when the organization has no such file. Audit `symbols.delete`.
+
 ## API keys
 
 ### `GET /api/v1/api-keys`

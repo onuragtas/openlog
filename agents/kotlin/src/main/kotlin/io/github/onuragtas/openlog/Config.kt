@@ -43,11 +43,17 @@ data class Options(
     /**
      * Report unhandled JVM exceptions on the next launch (mobile-crash.md §2). Off by default, because it installs a
      * global handler in your process; one already installed is always called afterwards. It needs [crashDirectory]. An
-     * NDK crash or an ANR is not an exception here and is not reported.
+     * NDK crash or an ANR is not an exception and takes [androidContext] as well.
      */
     val captureCrashes: Boolean = false,
     /** A directory private to the application, e.g. `context.filesDir.path`. */
     val crashDirectory: String? = null,
+    /**
+     * Your `android.content.Context` (typed `Any` because this SDK has no Android dependency). With [captureCrashes] it also
+     * reports NDK crashes, ANRs and foreground low-memory kills, from what Android recorded about the last launch: API 30 and
+     * up, with a native stack from API 31. Off everywhere else.
+     */
+    val androidContext: Any? = null,
 )
 
 internal class ResolvedConfig(val options: Options, val rumUrl: String, val configUrl: String) {

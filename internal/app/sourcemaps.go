@@ -11,6 +11,7 @@ import (
 	"github.com/onuragtas/openlog/internal/objstore"
 	"github.com/onuragtas/openlog/internal/sourcemaps"
 	"github.com/onuragtas/openlog/internal/store/postgres"
+	"github.com/onuragtas/openlog/internal/symbols"
 )
 
 // newSourceMaps builds the source map service (docs/contracts/rum.md §8), or nil when the installation has
@@ -24,6 +25,22 @@ func newSourceMaps(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) *sou
 	if pool == nil || !cfg.RUM.Enabled || !m.Enabled {
 		return nil
 	}
+	objects := sourceMapObjects(m)
+	log.Info("source maps enabled", "storage", objects.Kind(), "s3_credentials", m.S3Credentials, "max_bytes", sourcemaps.MaxMapBytes)
+	return &sourcemaps.Service{Meta: postgres.NewStore(pool), Objects: objects}
+}
+
+// newSymbols builds what undoes a mobile crash's stack (mobile-crash.md §3). It keeps its files where source maps keep theirs,
+// because they are the same kind of object, and an operator who pointed one at a bucket should not meet a second scheme.
+func newSymbols(cfg config.Config, pool *pgxpool.Pool) *symbols.Service {
+	m := cfg.RUM.SourceMaps
+	if pool == nil || !cfg.RUM.Enabled || !m.Enabled {
+		return nil
+	}
+	return &symbols.Service{Meta: postgres.NewStore(pool), Objects: sourceMapObjects(m)}
+}
+
+func sourceMapObjects(m config.SourceMaps) objstore.Store {
 	var objects objstore.Store = objstore.Local{Dir: m.LocalPath}
 	if m.MapStorage() == "s3" {
 		s3 := &objstore.S3{BaseURL: m.S3URL, Region: m.S3Region, AccessKeyID: m.S3AccessKeyID, SecretAccessKey: m.S3SecretAccessKey}
@@ -34,8 +51,7 @@ func newSourceMaps(cfg config.Config, pool *pgxpool.Pool, log *slog.Logger) *sou
 		}
 		objects = s3
 	}
-	log.Info("source maps enabled", "storage", objects.Kind(), "s3_credentials", m.S3Credentials, "max_bytes", sourcemaps.MaxMapBytes)
-	return &sourcemaps.Service{Meta: postgres.NewStore(pool), Objects: objects}
+	return objects
 }
 
 // sourceMapPruneInterval is how often the leader looks for maps of builds nobody deploys any more. Nothing here

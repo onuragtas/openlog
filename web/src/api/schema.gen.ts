@@ -1733,7 +1733,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Crashes by error group, most frequent first (mobile-crash.md §6). Bounded by the 7-day trace retention, since the stack only lives on the span. Resolving a group happens in the APM error inbox. */
+        /** @description Crashes, most frequent first (mobile-crash.md §6). Stacks are symbolicated as they are read, and once symbols have named a frame, crashes group on their type and that frame rather than on the error group (§4). Bounded by the 7-day trace retention, since the stack only lives on the span. Resolving a group happens in the APM error inbox. */
         get: operations["getRumCrashes"];
         put?: never;
         post?: never;
@@ -2043,6 +2043,41 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/symbols": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The organization's crash symbol files (member and higher; API keys allowed), newest first. */
+        get: operations["listCrashSymbols"];
+        put?: never;
+        /** @description Uploads a symbol file (admin or owner; API keys allowed, because the caller is a build machine), replacing the one held for the same key. Usually sent by the `openlog-symbols` CLI, which reduces a dSYM or ELF to a table first. It is parsed before it is stored, so a file that cannot be read is refused while the uploader can still fix it (mobile-crash.md §3). */
+        post: operations["uploadCrashSymbols"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/symbols/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Deletes a symbol file (admin or owner; API keys allowed). Stacks that needed it read as the device sent them again. */
+        delete: operations["deleteCrashSymbols"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7832,6 +7867,19 @@ export interface components {
             /** @description Share of the first step's sessions that got this far; 1 for the first step */
             rate: number;
         };
+        CrashSymbolFile: {
+            id: string;
+            app: string;
+            /** @enum {string} */
+            kind: "r8" | "native";
+            /** @description The version for r8 */
+            key: string;
+            /** Format: int64 */
+            size_bytes: number;
+            sha256: string;
+            created_at: components["schemas"]["Timestamp"];
+            updated_at: components["schemas"]["Timestamp"];
+        };
         RumCrash: {
             /** @description The error group in the APM inbox */
             group_id: string;
@@ -7843,8 +7891,14 @@ export interface components {
             sessions: number;
             last_version: string;
             last_seen: components["schemas"]["Timestamp"];
-            /** @description The newest stack as the device sent it */
+            /** @description The newest stack, with every frame the uploaded symbols could resolve rewritten */
             stack: string;
+            /** @description The function this crash is grouped on, empty when no frame could be read. Optional: older servers do not send it. */
+            frame?: string;
+            /** @description Frames of this stack that symbols resolved */
+            symbolicated_frames?: number;
+            /** @description What to upload for the rest, an image and its id or the R8 mapping of a version */
+            missing_symbols?: string[];
         };
         /** @description One version of the application over the requested range, from an hourly rollup that reaches the same 30 days as the release list. Counts past a few thousand are estimates. The crash fields are optional because the store's console also talks to servers older than they are. */
         RumRelease: {
@@ -15221,6 +15275,87 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthenticated"];
             504: components["responses"]["Timeout"];
+        };
+    };
+    listCrashSymbols: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Symbol files */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbols: components["schemas"]["CrashSymbolFile"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    uploadCrashSymbols: {
+        parameters: {
+            query: {
+                app: string;
+                kind: "r8" | "native";
+                /** @description The version for r8, the image id (Mach-O UUID or ELF build id) for native */
+                key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Stored */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        symbol: components["schemas"]["CrashSymbolFile"];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteCrashSymbols: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listSourceMaps: {

@@ -139,7 +139,7 @@ namespace OpenLogUnity.Core
                 o.Add(new Dictionary<string, object>
                 {
                     ["key"] = a.Key,
-                    ["value"] = new Dictionary<string, object> { ["stringValue"] = Limits.Truncate(a.Value, Limits.MaxAttrValueBytes) },
+                    ["value"] = new Dictionary<string, object> { ["stringValue"] = Limits.Truncate(a.Value, a.Key == "exception.stacktrace" ? Limits.MaxStackBytes : Limits.MaxAttrValueBytes) },
                 });
             }
             return o;

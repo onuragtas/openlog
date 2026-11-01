@@ -2986,7 +2986,8 @@ paths:
       tags: [rum]
       operationId: getRumCrashes
       description: >-
-        Crashes by error group, most frequent first (mobile-crash.md §6). Bounded by the 7-day trace retention, since the
+        Crashes, most frequent first (mobile-crash.md §6). Stacks are symbolicated as they are read, and once symbols have named a
+        frame, crashes group on their type and that frame rather than on the error group (§4). Bounded by the 7-day trace retention, since the
         stack only lives on the span. Resolving a group happens in the APM error inbox.
       parameters:
         - { name: app, in: query, required: true, schema: { type: string } }
@@ -3531,6 +3532,70 @@ paths:
         "504": { $ref: "#/components/responses/Timeout" }
 
   # -------------------------------------------------------------- browser keys
+  /api/v1/symbols:
+    get:
+      tags: [rum]
+      operationId: listCrashSymbols
+      description: The organization's crash symbol files (member and higher; API keys allowed), newest first.
+      responses:
+        "200":
+          description: Symbol files
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [symbols]
+                properties:
+                  symbols:
+                    type: array
+                    items: { $ref: "#/components/schemas/CrashSymbolFile" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [rum]
+      operationId: uploadCrashSymbols
+      description: >-
+        Uploads a symbol file (admin or owner; API keys allowed, because the caller is a build machine), replacing the one held for
+        the same key. Usually sent by the `openlog-symbols` CLI, which reduces a dSYM or ELF to a table first. It is parsed before
+        it is stored, so a file that cannot be read is refused while the uploader can still fix it (mobile-crash.md §3).
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: kind, in: query, required: true, schema: { type: string, enum: [r8, native] } }
+        - name: key
+          in: query
+          required: true
+          description: The version for r8, the image id (Mach-O UUID or ELF build id) for native
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [symbol]
+                properties:
+                  symbol: { $ref: "#/components/schemas/CrashSymbolFile" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/symbols/{id}:
+    delete:
+      tags: [rum]
+      operationId: deleteCrashSymbols
+      description: Deletes a symbol file (admin or owner; API keys allowed). Stacks that needed it read as the device sent them again.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/source-maps:
     get:
       tags: [rum]
@@ -11436,6 +11501,18 @@ components:
             Sessions that reached this step **and every step before it**, in order and within the window —
             not sessions that performed this step at some point.
         rate: { type: number, description: Share of the first step's sessions that got this far; 1 for the first step }
+    CrashSymbolFile:
+      type: object
+      required: [id, app, kind, key, size_bytes, sha256, created_at, updated_at]
+      properties:
+        id: { type: string }
+        app: { type: string }
+        kind: { type: string, enum: [r8, native] }
+        key: { type: string, description: The version for r8, the image id for native }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+        created_at: { $ref: "#/components/schemas/Timestamp" }
+        updated_at: { $ref: "#/components/schemas/Timestamp" }
     RumCrash:
       type: object
       required: [group_id, type, message, kind, count, sessions, last_version, last_seen, stack]
@@ -11448,7 +11525,13 @@ components:
         sessions: { type: integer }
         last_version: { type: string }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
-        stack: { type: string, description: The newest stack as the device sent it }
+        stack: { type: string, description: "The newest stack, with every frame the uploaded symbols could resolve rewritten" }
+        frame: { type: string, description: "The function this crash is grouped on, empty when no frame could be read. Optional: older servers do not send it." }
+        symbolicated_frames: { type: integer, description: Frames of this stack that symbols resolved }
+        missing_symbols:
+          type: array
+          items: { type: string }
+          description: What to upload for the rest, an image and its id or the R8 mapping of a version
     RumRelease:
       type: object
       description: >-

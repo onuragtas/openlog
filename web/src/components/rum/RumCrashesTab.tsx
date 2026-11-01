@@ -2,7 +2,7 @@
 // in the APM inbox rather than in a second copy of it here. This list is what the inbox cannot say: which errors were
 // fatal, on how many sessions, and with what stack.
 //
-// Stacks are as the device sent them. A release build's frames read in their obfuscated form until symbol upload exists.
+// The server has already applied whatever symbols were uploaded, and says what it lacked for the rest.
 import { useQuery } from "@tanstack/react-query";
 import { Bug } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +27,7 @@ export function RumCrashesTab({ range, app, environment }: { range: RangeSpec; a
       {crashes.data.crashes.map((c) => {
         const last = apiTimeMs(c.last_seen);
         return (
-          <li key={c.group_id} className="flex flex-col gap-1 rounded-xl border bg-card p-3" data-testid="rum-crash">
+          <li key={`${c.group_id}:${c.frame ?? ""}`} className="flex flex-col gap-1 rounded-xl border bg-card p-3" data-testid="rum-crash">
             <div className="flex flex-wrap items-baseline gap-2">
               <span className="font-mono text-sm font-medium break-all">{c.type}</span>
               <span className="text-xs text-muted-foreground">{t(`rum.crashes.kinds.${c.kind}`, { defaultValue: c.kind })}</span>
@@ -41,6 +41,12 @@ export function RumCrashesTab({ range, app, environment }: { range: RangeSpec; a
                 when: last === null ? "–" : formatDateTime(last, i18n.language),
               })}
             </p>
+            {c.frame && <p className="font-mono text-xs break-all">{c.frame}</p>}
+            {(c.missing_symbols?.length ?? 0) > 0 && (
+              <p className="text-xs text-muted-foreground break-all" data-testid="rum-crash-missing-symbols">
+                {t("rum.crashes.missingSymbols", { what: c.missing_symbols?.join(", ") ?? "" })}
+              </p>
+            )}
             {c.stack !== "" && (
               <details className="text-xs">
                 <summary className="cursor-pointer text-muted-foreground">{t("rum.crashes.stack")}</summary>

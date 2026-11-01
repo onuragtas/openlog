@@ -36,7 +36,7 @@ namespace OpenLogUnity
                 {
                     var r = JsonUtility.FromJson<MetricKitCrash>(File.ReadAllText(f));
                     client.RecordEarlierCrash("signal", SignalName(r.signal), string.IsNullOrEmpty(r.reason) ? SignalName(r.signal) : r.reason,
-                        r.stack, r.version, r.at_ms);
+                        NativeStack.FromMetricKit(r.stack), r.version, r.at_ms);
                     File.Delete(f);
                     found = true;
                 }
@@ -91,6 +91,8 @@ namespace OpenLogUnity
         private const int ReasonAnr = 6;
         private const int ImportanceForeground = 100;
         private const int MaxExits = 8;
+        private const int MaxTraceChars = 256 * 1024; // the main thread is well inside this, past the part a report leaves out
+        private const int MaxTombstoneBytes = 4 << 20; // past the backtrace is memory dumps, which a report does not use
 
         public static void Collect(Client client, string dir)
         {
@@ -146,7 +148,12 @@ namespace OpenLogUnity
             switch (reason)
             {
                 case ReasonCrashNative:
-                    client.RecordEarlierCrash("signal", "NativeCrash", string.IsNullOrEmpty(description) ? "Native crash" : description, "", version, at);
+                    // Below API 31 there is no tombstone, and what is known is that it happened.
+                    var tombstone = Tombstone.Decode(TraceBytes(info));
+                    if (tombstone != null)
+                        client.RecordEarlierCrash("signal", NativeCrashes.SignalName(tombstone.SignalNumber), tombstone.Message(), tombstone.Stack, version, at);
+                    else
+                        client.RecordEarlierCrash("signal", "NativeCrash", string.IsNullOrEmpty(description) ? "Native crash" : description, "", version, at);
                     break;
                 case ReasonCrash:
                     client.RecordEarlierCrash("uncaught_exception", "JavaCrash", string.IsNullOrEmpty(description) ? "Java exception" : description, "", version, at);
@@ -159,6 +166,41 @@ namespace OpenLogUnity
                     if (info.Call<int>("getImportance") == ImportanceForeground)
                         client.RecordEarlierCrash("out_of_memory", "OutOfMemory", string.IsNullOrEmpty(description) ? "Killed for low memory" : description, "", version, at);
                     break;
+            }
+        }
+
+        /// <summary>
+        /// A tombstone is binary, and a Java byte[] passed through JNI to be filled does not come back: Unity passes a copy. So Java
+        /// fills a buffer of its own, and its array is then asked for.
+        /// </summary>
+        private static byte[] TraceBytes(AndroidJavaObject info)
+        {
+            try
+            {
+                using (var stream = info.Call<AndroidJavaObject>("getTraceInputStream"))
+                {
+                    if (stream == null) return new byte[0];
+                    using (var channels = new AndroidJavaClass("java.nio.channels.Channels"))
+                    using (var channel = channels.CallStatic<AndroidJavaObject>("newChannel", stream))
+                    using (var buffers = new AndroidJavaClass("java.nio.ByteBuffer"))
+                    using (var buffer = buffers.CallStatic<AndroidJavaObject>("allocate", MaxTombstoneBytes))
+                    {
+                        var total = 0;
+                        while (total < MaxTombstoneBytes)
+                        {
+                            var n = channel.Call<int>("read", buffer);
+                            if (n < 0) break;
+                            total += n;
+                        }
+                        var bytes = new byte[total];
+                        Buffer.BlockCopy(buffer.Call<sbyte[]>("array"), 0, bytes, 0, total);
+                        return bytes;
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                return new byte[0];
             }
         }
 
@@ -175,8 +217,8 @@ namespace OpenLogUnity
                     {
                         var s = new StringBuilder();
                         string line;
-                        while (s.Length < Limits.MaxStackBytes && (line = reader.Call<string>("readLine")) != null) s.Append(line).Append('\n');
-                        return s.ToString();
+                        while (s.Length < MaxTraceChars && (line = reader.Call<string>("readLine")) != null) s.Append(line).Append('\n');
+                        return NativeStack.FromAnrTrace(s.ToString());
                     }
                 }
             }

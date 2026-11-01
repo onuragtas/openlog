@@ -3525,6 +3525,7 @@ export const tr: Messages = {
       empty: "Bu aralıkta çökme yok. Çökme yakalama SDK'larda varsayılan olarak kapalıdır.",
       summary: "{{sessions}} oturum · son sürüm {{version}} · {{when}}",
       stack: "Yığın",
+      missingSymbols: "Sembolü yüklenmemiş: {{what}}",
       kinds: { uncaught_exception: "Yakalanmamış istisna", signal: "Sinyal", anr: "Yanıt vermiyor", out_of_memory: "Bellek yetersiz" },
     },
     analytics: {

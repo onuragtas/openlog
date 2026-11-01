@@ -32,6 +32,7 @@ import (
 	"github.com/onuragtas/openlog/internal/savedview"
 	"github.com/onuragtas/openlog/internal/slo"
 	"github.com/onuragtas/openlog/internal/sourcemaps"
+	"github.com/onuragtas/openlog/internal/symbols"
 	"github.com/onuragtas/openlog/internal/synthetics"
 	"github.com/onuragtas/openlog/internal/updatereq"
 	"github.com/onuragtas/openlog/internal/version"
@@ -40,17 +41,18 @@ import (
 
 // Server is the API HTTP server.
 type Server struct {
-	cfg      config.API
-	db       *query.DB
-	erasures analytics.Store // nil without PostgreSQL
-	authn    auth.Authenticator
-	accounts *auth.Service // nil in OPENLOG_AUTH_MODE=static
-	log      *slog.Logger
-	now      func() time.Time
-	requests *prometheus.CounterVec
-	latency  *prometheus.HistogramVec
-	ui       http.Handler
-	srv      *http.Server
+	cfg         config.API
+	db          *query.DB
+	erasures    analytics.Store  // nil without PostgreSQL
+	symbolFiles *symbols.Service // nil when source maps are off, whose storage it shares
+	authn       auth.Authenticator
+	accounts    *auth.Service // nil in OPENLOG_AUTH_MODE=static
+	log         *slog.Logger
+	now         func() time.Time
+	requests    *prometheus.CounterVec
+	latency     *prometheus.HistogramVec
+	ui          http.Handler
+	srv         *http.Server
 	// wrapped are the route patterns registered through wrap, i.e. every tenant-scoped telemetry read.
 	// Recorded so a test can assert that each one is actually exercised: a route nothing calls is a route
 	// whose query has never been built, let alone run (api_test.go).
@@ -197,6 +199,7 @@ func (s *Server) Handler() http.Handler {
 	s.vulnRoutes(mux)           // vulnerabilities.go: vulnerable packages per host (D-142)
 	s.rumRoutes(mux)            // rum.go: real user monitoring reads (rum.md, D-136)
 	s.analyticsEraseRoutes(mux) // analytics_erase.go: deleting one person's analytics data (analytics.md §7)
+	s.symbolRoutes(mux)         // symbols.go: what undoes the stack of a mobile crash (mobile-crash.md §3)
 	s.dbRoutes(mux)             // dbmon.go: database query performance (db-monitoring.md, D-138)
 	s.profileRoutes(mux)        // profiles.go: continuous profiling flame graphs (schema 0095_profiles)
 	s.browserKeyRoutes(mux)     // browserkeys.go: the RUM SDK's public keys (D-136)

@@ -90,7 +90,8 @@ internal class Transport(
     }
 
     /** One request body. A crash report is encoded when it happens, so it carries the build that crashed. */
-    fun encode(spans: List<Map<String, Any?>>): String = jsonEncode(buildPayload(spans, resource()))
+    fun encode(spans: List<Map<String, Any?>>, version: String = cfg.options.serviceVersion): String =
+        jsonEncode(buildPayload(spans, resource(version)))
 
     fun sendBody(body: String): Int = send(
         cfg.rumUrl,
@@ -118,8 +119,8 @@ internal class Transport(
         schedule()
     }
 
-    private fun resource(): List<Pair<String, Any?>> = listOf(
-        "service.version" to cfg.options.serviceVersion,
+    private fun resource(version: String = cfg.options.serviceVersion): List<Pair<String, Any?>> = listOf(
+        "service.version" to version,
         "device.model.identifier" to cfg.options.deviceModel,
         "device.manufacturer" to cfg.options.deviceManufacturer,
         "os.name" to cfg.options.osName,

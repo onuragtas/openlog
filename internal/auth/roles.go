@@ -50,6 +50,8 @@ const (
 	// credential operation.
 	ActListBrowserKeys   Action = "browser_keys.list"
 	ActManageBrowserKeys Action = "browser_keys.manage"
+	// Uploading crash symbols (mobile-crash.md §3).
+	ActManageSymbols Action = "symbols.manage"
 	// Deleting one person's analytics data (analytics.md §7).
 	ActEraseAnalytics Action = "analytics.erase"
 	// A source map is not a credential, but uploading one decides how every browser stack of an
@@ -163,6 +165,8 @@ var matrix = map[Action]Permission{
 	ActExportUsage:               {Min: RoleAdmin},
 	// Not user-only: this is usually an application's backend answering a data subject request.
 	ActEraseAnalytics: {Min: RoleAdmin},
+	// Not user-only either: the caller is a build machine.
+	ActManageSymbols: {Min: RoleAdmin},
 
 	// Identity, credentials and the installation itself: signed-in users only.
 	ActManageMembers:       {Min: RoleAdmin, UserOnly: true},

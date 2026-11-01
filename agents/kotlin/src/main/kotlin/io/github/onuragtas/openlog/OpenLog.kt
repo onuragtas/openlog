@@ -71,7 +71,7 @@ class OpenLog private constructor(
         /**
          * Starts the SDK. Calling it twice returns the first instance rather than starting a second.
          *
-         * [send] and [fetchConfig] exist so tests never open a socket; applications leave them unset.
+         * [send], [fetchConfig] and [androidSdk] exist so tests need no socket and no device; applications leave them unset.
          */
         @JvmStatic
         @JvmOverloads
@@ -79,6 +79,7 @@ class OpenLog private constructor(
             options: Options,
             send: HttpSend = ::defaultSend,
             fetchConfig: ConfigFetch = ::defaultFetchConfig,
+            androidSdk: () -> Int = ::androidSdkInt,
         ): OpenLog {
             active?.let { return it }
             synchronized(lock) {
@@ -91,7 +92,7 @@ class OpenLog private constructor(
                 val sdk = OpenLog(session, Transport(cfg, send), visitor)
                 active = sdk
                 if (options.captureCrashes && options.crashDirectory != null) {
-                    sdk.startCrashCapture(CrashStore(options.crashDirectory))
+                    sdk.startCrashCapture(CrashStore(options.crashDirectory), options, androidSdk)
                 }
 
                 // The operator's sample rate wins, so volume can be turned down without shipping a
@@ -123,12 +124,22 @@ class OpenLog private constructor(
     }
 
     /** Delivers what the last launch left, and installs the handler in front of whichever was already there. */
-    private fun startCrashCapture(store: CrashStore) {
+    private fun startCrashCapture(store: CrashStore, options: Options, androidSdk: () -> Int) {
         crashes = store
+        val directory = options.crashDirectory ?: return
+        val context = options.androidContext
+        val previousSession = LastSession.read(directory)
+        LastSession(session.id, options.serviceVersion).write(directory)
         // Listed before the handler exists, so this launch's own crash cannot be sent by a thread it is killing.
         val waiting = store.pending()
-        if (waiting.isNotEmpty()) {
-            Thread({ deliverCrashes(store) { transport.sendBody(it) } }, "openlog-crashes").apply { isDaemon = true }.start()
+        if (waiting.isNotEmpty() || context != null) {
+            Thread({
+                // On this thread because it asks the system, and that is not for the caller's main thread to wait on.
+                if (context != null) {
+                    readAndroidExits(context, directory, androidSdk).forEach { recordEarlierCrash(it, previousSession, options.serviceVersion) }
+                }
+                deliverCrashes(store) { transport.sendBody(it) }
+            }, "openlog-crashes").apply { isDaemon = true }.start()
         }
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         val handler = Thread.UncaughtExceptionHandler { thread, error ->
@@ -142,6 +153,31 @@ class OpenLog private constructor(
         previousHandler = previous
         crashHandler = handler
         Thread.setDefaultUncaughtExceptionHandler(handler)
+    }
+
+    /** A crash the system recorded, reported as the build and, where known, the session it happened in (mobile-crash.md §2). */
+    private fun recordEarlierCrash(crash: EarlierCrash, previous: LastSession?, version: String) {
+        val store = crashes ?: return
+        if (!session.shouldSend) return
+        val id = newSessionId()
+        val span = buildSpan(
+            name = "error ${crash.type}",
+            event = RumEvent.ERROR,
+            traceId = newTraceId(),
+            spanId = newSpanId(),
+            startMs = crash.atMs,
+            attributes = listOf(
+                "session.id" to (previous?.id ?: newSessionId()),
+                "openlog.rum.visitor.id" to visitor.id.ifEmpty { null },
+                "openlog.rum.error.source" to "error",
+                "openlog.rum.crash.kind" to crash.kind,
+                "openlog.rum.crash.id" to id,
+                "openlog.rum.crash.session_unknown" to if (previous == null) "true" else null,
+            ),
+            isError = true,
+            exception = Triple(crash.type, crash.message, crash.stack),
+        )
+        store.write(id, transport.encode(listOf(span), previous?.version ?: version))
     }
 
     /** One write and nothing else: the process is going down (mobile-crash.md §2.1). */

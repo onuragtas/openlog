@@ -20,6 +20,7 @@ export type Permission =
   | "browser_keys.manage"
   | "source_maps.list"
   | "source_maps.manage"
+  | "symbols.manage"
   | "audit.read"
   | "fleet.manage"
   | "updates.request"
@@ -47,6 +48,8 @@ const MIN_ROLE: Record<Permission, Role> = {
   "source_maps.list": "member",
   // Uploading a map decides how every browser stack of an application reads, so it stays with an admin.
   "source_maps.manage": "admin",
+  // The same decision for a mobile crash's stack, and the caller is usually a build machine with an API key.
+  "symbols.manage": "admin",
   "audit.read": "admin",
   "fleet.manage": "admin",
   "updates.request": "admin",

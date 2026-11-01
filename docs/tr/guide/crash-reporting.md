@@ -14,15 +14,11 @@ eder: her zaman ardından çağrılır, yani başka bir crash aracıyla yan yana
 | Platform | Raporlanan | Henüz raporlanmayan |
 |---|---|---|
 | iOS, macOS | Yakalanmamış Objective-C exception'ları. iOS 14 ve macOS 12 ve sonrasında MetricKit ile sinyaller, Mach exception'ları ve Swift trap'leri | Bellek yetersizliği |
-| Android | Yakalanmamış JVM exception'ları | **NDK crash'leri ve ANR'ler** |
+| Android | Yakalanmamış JVM exception'ları. `androidContext` ile Android 11 ve sonrasında NDK crash'leri, ANR'ler ve ön planda bellek yetersizliği, Android 12'den itibaren native stack ile | Android 11 altında yalnızca JVM exception'ları |
 | Unity | Android 11 ve sonrasında native crash, ANR ve bellek yetersizliği, iOS 14 ve sonrasında native crash. Bkz. [Unity kılavuzu](/integrations/unity) | C# exception'ları crash değil hata sayılır |
 | Flutter | Aşağıdaki gibi bağladığın yakalanmamış Dart hataları | Flutter motorunun veya bir eklentinin crash'i, ana uygulamada iOS veya Android SDK'sı da çalışmıyorsa |
 
-::: warning Stack'ler henüz okunur hale getirilmiyor
-Release derlemeleri stack'leri cihazın gönderdiği haliyle raporlar: Android'de karıştırılmış isimler, iOS'ta adresler. R8 mapping ve
-dSYM yükleme henüz yok. Aynı nedenle crash'ler stack'e göre değil yalnızca tür ve mesaja göre gruplanır, böylece yeni bir derleme
-her grubu yeniden açmaz. Aynı tür ve mesaja sahip farklı crash'ler, örneğin düz bir `SIGSEGV`, tek grupta toplanır.
-:::
+Release derlemelerinin stack'leri karıştırılmış isimlerle veya adres olarak gelir. Okumak için [sembollerini yükle](#stack-lerini-oku).
 
 ## Kurulum
 
@@ -56,9 +52,13 @@ val openlog = OpenLog.start(
         serviceVersion = BuildConfig.VERSION_NAME,
         captureCrashes = true,
         crashDirectory = context.filesDir.path,
+        androidContext = context, // NDK crash'leri, ANR'ler ve bellek yetersizliği
     )
 )
 ```
+
+`androidContext` verilmezse yalnızca JVM exception'ları yakalanır. Diğerlerini Android kendisi kaydeder, bu yüzden bir sonraki
+açılışta raporlanırlar.
 
 `crashDirectory` olmadan hiçbir şey yakalanmaz. Başlangıçtaki crash'leri de görmek için SDK'yı erken, `Application.onCreate` içinde başlat.
 
@@ -84,6 +84,48 @@ PlatformDispatcher.instance.onError = (error, stack) {
   return true;
 };
 ```
+
+## Stack'lerini oku
+
+Release derlemesi Android'de `a.b.c`, native kodda ise bir kütüphane ve offset raporlar. `openlog-symbols` bunları fonksiyon, dosya ve
+satır adlarına çeviren dosyaları yükler. Release derlemenin son adımı olarak ekle: semboller tek bir derlemeye aittir ve sonradan
+yeniden üretilemez.
+
+**Admin rolünde bir API key gerekir.** **Ayarlar → API keys** altında oluştur ve CI'ın secret'larına koy: yalnızca bir kez gösterilir.
+Bu, uygulamandaki `olb_…` anahtarı değildir; o herkese açıktır ve yalnızca veri gönderebilir.
+
+```sh
+go install github.com/onuragtas/openlog/cmd/openlog-symbols@latest
+export OPENLOG_API_KEY=ola_…
+
+# iOS: derlemenin dSYM'leri
+openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam build/MyApp.xcarchive/dSYMs
+
+# Android ve Unity: native kütüphaneler veya Unity'nin symbols.zip dosyasının açıldığı klasör
+openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam app/build/intermediates/merged_native_libs
+
+# Android: R8 mapping'i, uygulamanın raporladığı sürümle aynı olmalı
+openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam -version 4.2.1 app/build/outputs/mapping/release/mapping.txt
+```
+
+`-app`, mobil anahtarındaki uygulama adıdır. Komutu bütün bir klasöre yöneltebilirsin: binary'leri kendisi bulur, aynı kütüphane hem
+soyulmuş hem sembollü olarak varsa iyi olanı yükler. Her binary önce küçük bir tabloya indirilir, örneğin 75 MB'lık bir
+`libil2cpp.so` yaklaşık 3 MB olarak yüklenir. Neyin gönderileceğini görmek için `-dry-run` ekle.
+
+**Unity'de** **Build Settings → Create symbols.zip** ayarını *Debugging* yap ve yüklemeden önce zip'i APK'nın yanına aç.
+
+**Semboller stack okunurken uygulanır,** yani sonradan yüklemek daha önce gelmiş crash'leri de düzeltir. Native kütüphane build
+id'siyle, mapping sürümüyle eşleşir; aynısı için tekrar yüklemek öncekinin yerine geçer. **Crashes** sekmesi hangi kütüphanelerinin
+hâlâ sembolsüz olduğunu söyler.
+
+**Crash'ler nasıl gruplanır?** Semboller bir frame'i adlandırdığında crash'ler türlerine ve o fonksiyona göre gruplanır, böylece yeni
+derleme onları yeniden açmaz. O zamana kadar tür ve mesaja göre gruplanırlar ve aynı mesajlı farklı crash'ler, örneğin düz bir
+`SIGSEGV`, tek grupta toplanır. Hata kutusu her zaman tür ve mesaja göre gruplar, çünkü veri gelirken sembol okuyamaz.
+
+::: warning Kapsam dışı olanlar
+Flutter'ın `--split-debug-info` sembolleri desteklenmiyor, bu yüzden release derlemenin Dart stack'i karışık kalır. Swift fonksiyon
+adları mangled biçimde görünür. Sembol dosyaları `DELETE /api/v1/symbols/{id}` ile silene kadar saklanır.
+:::
 
 ## Bir crash sunucuya nasıl ulaşır
 

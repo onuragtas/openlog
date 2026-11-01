@@ -12,6 +12,7 @@ import (
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
+	"github.com/onuragtas/openlog/internal/symbols"
 )
 
 // Error inbox (apm.md §3.4, api.md "APM"): error groups with their workflow state (PostgreSQL), filters, bulk
@@ -621,6 +622,13 @@ func (s *Server) apmErrorGroupDetail(w http.ResponseWriter, r *http.Request, sc 
 	// files (rum.md §8). `stacktrace` stays the best available text so every reader improves for free, and
 	// the minified original is kept beside it, because a partly resolved stack is still read against it.
 	stack, symbolicated := s.symbolicate(r, p.OrgID, m.key.Name, m.stack)
+	// A mobile crash's stack is undone the same way, by the symbols uploaded for it (mobile-crash.md §3). The version is unknown
+	// here, so an R8 mapping does not apply: native symbols are matched by image id and need none.
+	if symbolicated == 0 && strings.Contains(m.stack, " +0x") {
+		if res := symbols.Symbolicate(m.stack, s.crashResolver(r, p.OrgID, m.key.Name, "")); res.Resolved > 0 {
+			stack, symbolicated = res.Stack, res.Resolved
+		}
+	}
 	out := map[string]any{
 		"group_id": apm.GroupIDString(id), "service_name": m.key.Name, "service_namespace": m.key.Namespace, "environment": m.key.Environment,
 		"error_type": m.typ, "message": m.msg, "count": count, "total_count": m.total,

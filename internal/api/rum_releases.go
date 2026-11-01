@@ -2,11 +2,14 @@ package api
 
 import (
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/onuragtas/openlog/internal/api/query"
 	"github.com/onuragtas/openlog/internal/apm"
+	"github.com/onuragtas/openlog/internal/auth"
 	"github.com/onuragtas/openlog/internal/rum"
+	"github.com/onuragtas/openlog/internal/symbols"
 )
 
 // Release health (rum.md §2.7): how a version of a browser or mobile application behaved, and when its
@@ -95,11 +98,26 @@ type rumCrashJSON struct {
 	Version  string  `json:"last_version"`
 	LastSeen string  `json:"last_seen"`
 	Stack    string  `json:"stack"`
+	// Frame is the function this crash is grouped on, and empty when no frame could be read.
+	Frame string `json:"frame"`
+	// SymbolicatedFrames counts the frames symbols resolved. MissingSymbols says what to upload for the rest.
+	SymbolicatedFrames int      `json:"symbolicated_frames"`
+	MissingSymbols     []string `json:"missing_symbols"`
+
+	last     time.Time
+	sessions map[string]struct{}
 }
 
-// rumCrashesSelect lists crashes by error group over the raw spans, because the stack only lives there. Crashes
-// are rare and these rows are found by a bloom-filtered attribute, so this reads little, and it reaches the 7-day
-// trace retention. The workflow of a group stays in the APM inbox, which already has it.
+// rumMaxCrashStacks bounds the distinct stacks one read symbolicates. It is the expensive part, and past this the list is sorted
+// by count anyway, so what falls off is what happened least.
+const rumMaxCrashStacks = 500
+
+// rumMaxCrashSessions bounds the session ids read per stack. They come back as ids because one session can crash on two stacks, and
+// counts could not be added up. Past this a figure reads low, on a crash that is already at the top of the list.
+const rumMaxCrashSessions = 2000
+
+// rumCrashesSelect lists crashes by error group, version and stack over the raw spans, because the stack only lives there. Crashes
+// are rare and these rows are found by attribute, so this reads little, and it reaches the 7-day trace retention.
 func rumCrashesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit int) *query.Select {
 	q := sc.From(query.Spans).Columns(
 		"error_group_id AS c_group",
@@ -107,21 +125,60 @@ func rumCrashesSelect(sc *query.Scope, f rumFilter, from, to time.Time, limit in
 		"any(error_message) AS c_message",
 		"any(attributes[{a_kind:String}]) AS c_kind",
 		"sum(sample_weight) AS c_count",
-		"uniqExact(attributes[{a_session:String}]) AS c_sessions",
-		"argMax(resource_attributes['service.version'], timestamp) AS c_version",
+		"groupUniqArray({r_max_sessions:UInt32})(attributes[{a_session:String}]) AS c_sessions",
+		"resource_attributes['service.version'] AS c_version",
 		"max(timestamp) AS c_last",
-		"argMax(events_attributes[1]['exception.stacktrace'], timestamp) AS c_stack",
+		"events_attributes[1]['exception.stacktrace'] AS c_stack",
 	).
-		Param("a_kind", rum.AttrCrashKind).Param("a_session", rum.AttrSessionID).
+		Param("a_kind", rum.AttrCrashKind).Param("a_session", rum.AttrSessionID).Param("r_max_sessions", rumMaxCrashSessions).
 		Where("service_name = {r_app:String}").Param("r_app", f.app).
 		Where("attributes[{a_kind:String}] != ''").
 		Where("timestamp >= fromUnixTimestamp64Nano({t_from:Int64}) AND timestamp < fromUnixTimestamp64Nano({t_to:Int64})").
 		Param("t_from", from.UnixNano()).Param("t_to", to.UnixNano()).
-		GroupBy("c_group").OrderBy("c_count DESC").Limit(limit)
+		GroupBy("c_group", "c_version", "c_stack").OrderBy("c_count DESC").Limit(limit)
 	if f.env != nil {
 		q.Where("deployment_environment = {r_env:String}").Param("r_env", *f.env)
 	}
 	return q
+}
+
+// crashKey is what a crash groups on here. The error group ignores the stack, because symbols are not read on the write path
+// (mobile-crash.md §4), so two different crashes can share one, and it hashes the type, which R8 renames each release, so one
+// crash can have many. Once symbols have named a frame neither holds, and the type and that frame say which crash this is.
+// Until then the group stands, parted only by what the device named, or every abort would become one crash.
+func crashKey(c rumCrashJSON) string {
+	if c.SymbolicatedFrames > 0 {
+		return c.Type + "\x00" + c.Frame
+	}
+	return c.GroupID + "\x00" + c.Frame
+}
+
+// mergeCrash groups stacks as they are read.
+func mergeCrash(groups map[string]*rumCrashJSON, order *[]string, c rumCrashJSON) {
+	key := crashKey(c)
+	g := groups[key]
+	if g == nil {
+		groups[key] = &c
+		*order = append(*order, key)
+		return
+	}
+	g.Count += c.Count
+	for id := range c.sessions {
+		g.sessions[id] = struct{}{}
+	}
+	g.Sessions = uint64(len(g.sessions))
+	seen := map[string]bool{}
+	for _, m := range g.MissingSymbols {
+		seen[m] = true
+	}
+	for _, m := range c.MissingSymbols {
+		if !seen[m] {
+			g.MissingSymbols = append(g.MissingSymbols, m)
+		}
+	}
+	if c.last.After(g.last) {
+		g.last, g.LastSeen, g.Version, g.Stack, g.SymbolicatedFrames = c.last, c.LastSeen, c.Version, c.Stack, c.SymbolicatedFrames
+	}
 }
 
 // rumCrashes serves GET /api/v1/rum/crashes.
@@ -135,24 +192,60 @@ func (s *Server) rumCrashes(w http.ResponseWriter, r *http.Request, sc *query.Sc
 	if err != nil {
 		return err
 	}
-	rows, err := sc.Query(r.Context(), rumCrashesSelect(sc, f, from, to, min(rumMaxReleases, s.cfg.MaxRows)))
+	rows, err := sc.Query(r.Context(), rumCrashesSelect(sc, f, from, to, min(rumMaxCrashStacks, s.cfg.MaxRows)))
 	if err != nil {
 		return err
 	}
 	defer rows.Close()
-	crashes := []rumCrashJSON{}
+	var orgID string
+	if p, ok := auth.PrincipalFrom(r.Context()); ok {
+		orgID = p.OrgID
+	}
+	groups := map[string]*rumCrashJSON{}
+	order := []string{}
+	resolvers := map[string]symbols.Resolver{}
 	for rows.Next() {
 		var c rumCrashJSON
 		var group uint64
-		var last time.Time
-		if err := rows.Scan(&group, &c.Type, &c.Message, &c.Kind, &c.Count, &c.Sessions, &c.Version, &last, &c.Stack); err != nil {
+		var sessions []string
+		if err := rows.Scan(&group, &c.Type, &c.Message, &c.Kind, &c.Count, &sessions, &c.Version, &c.last, &c.Stack); err != nil {
 			return err
 		}
-		c.GroupID, c.LastSeen = apm.GroupIDString(group), formatTime(last)
-		crashes = append(crashes, c)
+		c.sessions = make(map[string]struct{}, len(sessions))
+		for _, id := range sessions {
+			c.sessions[id] = struct{}{}
+		}
+		c.Sessions = uint64(len(c.sessions))
+		c.GroupID, c.LastSeen = apm.GroupIDString(group), formatTime(c.last)
+		resolver, ok := resolvers[c.Version]
+		if !ok {
+			resolver = s.crashResolver(r, orgID, f.app, c.Version)
+			resolvers[c.Version] = resolver
+		}
+		res := symbols.Symbolicate(c.Stack, resolver)
+		c.Type = resolver.ClassName(c.Type)
+		if res.Stack != "" {
+			c.Stack = res.Stack
+		}
+		c.Frame, c.SymbolicatedFrames, c.MissingSymbols = res.Frame, res.Resolved, res.Missing
+		if c.MissingSymbols == nil {
+			c.MissingSymbols = []string{}
+		}
+		if res.MissingMapping {
+			c.MissingSymbols = append(c.MissingSymbols, "R8 mapping for version "+c.Version)
+		}
+		mergeCrash(groups, &order, c)
 	}
 	if err := rows.Err(); err != nil {
 		return err
+	}
+	crashes := make([]*rumCrashJSON, 0, len(order))
+	for _, k := range order {
+		crashes = append(crashes, groups[k])
+	}
+	sort.SliceStable(crashes, func(i, j int) bool { return crashes[i].Count > crashes[j].Count })
+	if len(crashes) > rumMaxReleases {
+		crashes = crashes[:rumMaxReleases]
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"crashes": crashes})
 	return nil

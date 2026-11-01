@@ -1,8 +1,6 @@
 # Contract: Mobile crash reporting (D-151)
 
-**Status: partly built.** Done: the payload (§1), capture on all three SDKs (§2) except what its table marks as a second step,
-the crash-free rate (§5) and the UI (§6). Not yet: symbolication (§3) and grouping on the stack (§4), so crashes group on type
-and message. User guide: [Crash reporting](../guide/crash-reporting.md). Related: [rum.md](rum.md) §2.7, [apm.md](apm.md) §3.
+**Status: built,** except Flutter symbols (§3). Grouping changed from the proposal: see §4. User guide: [Crash reporting](../guide/crash-reporting.md). Related: [rum.md](rum.md) §2.7, [apm.md](apm.md) §3.
 
 **The problem in one sentence:** an unhandled crash is not an `error` span the process lives to send, so it has to
 be written down by the dying process, or by the operating system, and delivered on the next launch.
@@ -44,7 +42,7 @@ would stop working silently.
 | Platform | Mechanism | Covers | v1 |
 |---|---|---|---|
 | Kotlin/JVM | `Thread.setDefaultUncaughtExceptionHandler` writes a file | JVM exceptions | ✅ |
-| Android | `ApplicationExitInfo` (API 30+) read at next launch | native signals, ANR, low-memory kills | Second step |
+| Android | `ApplicationExitInfo` (API 30+) by reflection, read at next launch, with `androidContext` | native signals, ANR, low-memory kills | ✅ |
 | Swift | MetricKit `MXCrashDiagnostic`, delivered by the system | signals, Mach exceptions, Swift traps | ✅ |
 | Swift | `NSSetUncaughtExceptionHandler` | Objective-C exceptions, for name and reason | ✅ |
 | Unity, Android | `ApplicationExitInfo` (API 30+) through JNI, read at next launch | native crashes, ANR, foreground low-memory kills | ✅ |
@@ -61,9 +59,9 @@ crash it cannot match gets `session.id` of a new one-span session and is flagged
 An uncaught Objective-C exception is seen twice, by the handler and by MetricKit: the session counts once, and the error inbox
 twice.
 
-**Android stays plain Kotlin/JVM.** The core SDK has no Android dependency, and that is worth keeping. `ApplicationExitInfo`
-goes in an optional `openlog-android` artifact that passes exit records to the core SDK. Until that ships, **an NDK crash
-or ANR on Android is not reported**, and the documentation must say so.
+**Android stays plain Kotlin/JVM.** The core SDK has no Android dependency, and that is worth keeping. So `androidContext` is typed `Any`
+and `ApplicationExitInfo` is read by reflection, in place of the optional `openlog-android` artifact first proposed: a second artifact
+would be a second thing to forget. A Java crash in that record is skipped, because the handler already reported it.
 
 **Flutter.** A Dart uncaught error usually does not kill the process, so the span can be sent at once rather than
 written to disk. It is sent with `crash.kind = uncaught_exception` as long as the application wired it as fatal; the
@@ -81,58 +79,69 @@ is caught by the Swift or Android SDK when the host application includes it.
 
 ## 3. Symbolication
 
-Without this, release builds report `a.b.c()` and `0x1042f3a8c`. It follows source maps ([api.md](api.md#source-maps)):
-index in PostgreSQL, documents in `internal/objstore`, applied at read time.
+Without this, release builds report `a.b.c()` and `0x1042f3a8c`. It follows source maps ([api.md](api.md#crash-symbols)): index in
+PostgreSQL (`0106_crash_symbols.sql`), files in `internal/objstore`, under the same storage settings, applied at read time.
 
 | Kind | Input | Key | Parsed by |
 |---|---|---|---|
-| `r8` | `mapping.txt` | app, version | Go, new (text format) |
-| `dsym` | a compact table, made by the CLI from a dSYM | image UUID | Go, new |
-| `flutter` | `--split-debug-info` symbols | build id | **Second step** |
+| `r8` | `mapping.txt` | app, version | `internal/symbols` |
+| `native` | a table the CLI makes from a dSYM or an ELF | app, image id | `internal/symbols` |
+| `flutter` | `--split-debug-info` symbols | build id | **Not built** |
 
-**None of this section is built yet.**
+**The native frame format,** which every SDK writes and the server reads:
 
 ```
-POST   /api/v1/symbols?app=&kind=&version=&image=     raw body
-GET    /api/v1/symbols
-DELETE /api/v1/symbols/{id}
+#00 libil2cpp.so 0123abcd… +0x1a2b Game::Update()
 ```
 
-Migration `0106_crash_symbols.sql`. Upload rights match source maps.
+An image id (a Mach-O UUID or an ELF build id, dashes and case ignored) and an offset, with the name when the device knew one. The
+binary's name has no spaces, and a path holds a random install directory, so it is the file name alone. An address would mean
+nothing, because where an image loads changes each launch.
 
-**Why a CLI step for dSYM.** A dSYM can run to hundreds of megabytes, well beyond the 32 MiB source map limit, and most
-of it is type information a stack does not need. `openlog symbols upload` reads it with `debug/macho` and `debug/dwarf`
-from the Go standard library and uploads only address range → function, file and line. It comes with a Gradle task and
-an Xcode build phase snippet, because a step someone must remember to run is a step that gets skipped.
+- **Android, API 31+:** `getTraceInputStream` is a protobuf tombstone (AOSP `tombstone.proto`), decoded by hand for the few fields a report
+  uses, so no SDK carries a protobuf library. `rel_pc` of the crashing thread is the offset, and it is an ELF virtual address.
+  At API 30 there is none, and the report has no stack.
+- **iOS:** MetricKit's call stack tree, flattened to the attributed thread. The root is the innermost frame, and `subFrames` hold callers.
+  `offsetIntoBinaryTextSegment` is relative to `__TEXT`, so the table is too. **This shape is taken from Apple's documentation and has only
+  been tested on hand-written reports:** a tree that can't be read is sent as it came.
+- **ANR:** the system's thread dump, text, from the `"main"` thread on. It opens with memory figures and an event log, which would spend the
+  stack limit. Its native lines are not symbolicated. Its Java frames are retraced like any other.
+
+**Why a CLI step for native symbols.** A dSYM can run to hundreds of megabytes, and most of it is type information a stack does not need.
+`openlog-symbols` reads it with `debug/macho`, `debug/elf` and `debug/dwarf` and uploads only address range → function, file and line, as a gzip
+text table. Names are demangled there, so the server needs no demangler. Swift's mangling is not covered. A build directory holds an image
+twice, stripped and not, under one id, so the copy with the most functions is the one sent.
+
+**Upload rights differ from source maps,** deliberately: admin or owner, API keys allowed, because the caller is a build machine and a step
+someone must sign in for is a step that gets skipped.
+
+**Not done:** symbol files have no retention, unlike source maps' `OPENLOG_SOURCE_MAPS_RETENTION_DAYS`: a build still in the field needs its
+symbols however old it is. They last until deleted, or until the organization is. A Gradle task and an Xcode build phase were proposed and
+not written; the guide shows the commands.
 
 ## 4. Grouping: the hard part
 
-Today's group id hashes the error type, the message and the top in-app frame **at write time** (apm.md §3.1), while
-source maps apply at read time. The frame key is `function@file` with build-specific parts removed, such as the content
-hash of a bundle (`frameKey` in `internal/apm/errors.go`). That holds as long as names survive between builds, which a
-minifier does not promise either, but mobile release builds break it outright:
+The group id hashes the error type, the message and the top in-app frame **at write time** (apm.md §3.1), while symbols apply at read time.
+Mobile release builds break the frame half: R8 renames classes differently per build, and a native frame is an address. So a crash's
+fingerprint frame is empty (`frame = ""` in `internal/apm/errors.go`), and the inbox groups by type and message. That does not produce a new group
+per release, but groups are broad.
 
-- R8 renames classes differently per build, so `a.b.c` changes every release, and **every release would reopen every
-  group**.
-- A native frame is an address, which moves in each build.
+**The proposal here was to read symbols on the write path. It was rejected.** The processor would have needed PostgreSQL and object storage, with
+a risk of blocking ingestion, and symbols arriving late would never have regrouped anything.
 
-**Proposal.** Crash spans get their fingerprint frame in the processor from the same symbol files:
+**What is built instead:** `GET /rum/crashes` reads up to 500 distinct stacks, symbolicates them and groups as it reads:
 
 ```
-frame = top in-app frame after symbolication, if symbols for this build exist
-      | "" otherwise
-error_group_id = as apm.md §3.1, with that frame
+key = type + first function symbols resolved     when symbols resolved a frame
+    | error group + the device's name for a frame  otherwise
 ```
 
-- With symbols uploaded **before release**: stable groups across versions, as expected.
-- Without them: grouped by type and message alone. Coarser, but it does not produce a new group per release. A native
-  crash's type and message are often generic (`SIGSEGV`), so such groups will be broad.
-- **Symbols arriving late do not regroup old occurrences.** Group ids are written once, so the UI warns on a version
-  with crashes and no symbols.
-
-Symbol lookup on the write path is new: the processor has not needed PostgreSQL or object storage for this until now.
-It needs an in-memory cache keyed by build, with absence cached as well, and it **must never block ingestion**: on a
-miss or an error, use the fallback above. This is the riskiest part of the design and should get its own review.
+- An image with symbols uploaded is the application's own, so `abort` in `libc.so` does not outrank `Game::Load`.
+- Without symbols a device-named frame only parts a group and never joins two, or every abort would become one crash.
+- Symbols arriving late regroup old crashes, which a write-path design could not do.
+- **The cost:** the inbox stays coarse, and one inbox group can show as several crashes on this tab. An R8-renamed type also has one inbox group
+  per release. The stack in the inbox's detail view is symbolicated for native frames, whose symbols need no version.
+- Past 2,000 sessions per stack the session count reads low: sessions come back as ids, because a session can crash on two stacks.
 
 ## 5. Crash-free rate
 
@@ -165,15 +174,16 @@ migration are not in it, and counts past a few thousand are estimates.
   and the newest stack. It reads spans, so it reaches 7 days. The workflow stays in the APM inbox.
 - The **Releases** tab shows the crash-free and error-free rates side by side.
 - OQL: `SELECT count(*) FROM Span WHERE openlog.rum.crash.kind != ''` is alertable with no new rule type.
-- Not yet: a warning on a version with crashes and no symbols (§4), which needs §3.
+- Each crash names what to upload (`missing_symbols`). A frame the device named and a `.dylib` are the system's and are left out, but the
+  system frameworks of iOS, which MetricKit does not name, can't be told apart and are listed.
 
 ## 7. Order of work
 
 1. ~~Payload, sanitize, the new table and the API fields (§1, §5).~~ Done.
 2. ~~Capture on Kotlin, Dart and Swift, with file delivery (§2).~~ Done.
-3. R8 and dSYM symbols, with the CLI (§3).
-4. Grouping on the write path (§4). **Until this lands, crashes group by type and message only.**
-5. Optional `openlog-android` for NDK crashes and ANR. Flutter symbols.
+3. ~~R8 and native symbols, with the CLI (§3).~~ Done.
+4. ~~Grouping (§4).~~ Done at read time.
+5. ~~NDK crashes and ANR on Android.~~ Done. Flutter symbols are not.
 
 ## 8. Open questions
 

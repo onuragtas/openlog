@@ -144,4 +144,29 @@ final class CrashTests: XCTestCase {
         sdk.shutdown()
         XCTAssertNil(crashCaptureTarget)
     }
+
+    func testFlattensTheThreadThatCrashed() {
+        let tree = """
+        {"callStackPerThread":true,"callStacks":[
+          {"threadAttributed":false,"callStackRootFrames":[{"binaryUUID":"AAAAAAAA-0000-0000-0000-000000000000","offsetIntoBinaryTextSegment":1,"binaryName":"Other"}]},
+          {"threadAttributed":true,"callStackRootFrames":[{"binaryUUID":"A1B2C3D4-E5F6-0718-A1B2-C3D4E5F60718","offsetIntoBinaryTextSegment":4096,"sampleCount":1,"binaryName":"My App",
+            "subFrames":[{"binaryUUID":"FFFFFFFF-0000-0000-0000-000000000000","offsetIntoBinaryTextSegment":16,"binaryName":"libsystem_c.dylib"}]}]}]}
+        """
+        XCTAssertEqual(
+            flattenCallStackTree(Data(tree.utf8)),
+            "#00 My_App A1B2C3D4-E5F6-0718-A1B2-C3D4E5F60718 +0x1000\n#01 libsystem_c.dylib FFFFFFFF-0000-0000-0000-000000000000 +0x10"
+        )
+    }
+
+    func testAStackTreeThatCannotBeReadComesBackAsItWas() {
+        XCTAssertEqual(flattenCallStackTree(Data("not json".utf8)), "not json")
+        XCTAssertEqual(flattenCallStackTree(Data("{\"callStacks\":[]}".utf8)), "{\"callStacks\":[]}")
+    }
+
+    func testAStackIsNotCutToTheLimitOfAnAttribute() {
+        let long = String(repeating: "x", count: 9000)
+        let encoded = encodeAttributes([("exception.stacktrace", long), ("other", long)])
+        XCTAssertEqual(((encoded[0]["value"] as? [String: Any])?["stringValue"] as? String)?.count, 9000)
+        XCTAssertEqual(((encoded[1]["value"] as? [String: Any])?["stringValue"] as? String)?.count, Limits.maxAttrValueBytes)
+    }
 }

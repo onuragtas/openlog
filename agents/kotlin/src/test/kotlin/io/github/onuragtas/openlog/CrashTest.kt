@@ -179,4 +179,149 @@ class CrashTest {
         assertFalse(plain.contains("openlog.rum.crash.capture"), plain)
         other.shutdown()
     }
+
+    class FakeExit(
+        private val reason: Int,
+        private val at: Long,
+        private val trace: ByteArray? = null,
+        private val importance: Int = 100,
+    ) {
+        fun getReason() = reason
+        fun getTimestamp() = at
+        fun getDescription(): String? = "from the system"
+        fun getImportance() = importance
+        fun getTraceInputStream(): java.io.InputStream? = trace?.inputStream()
+    }
+
+    class FakeManager(private val exits: List<FakeExit>) {
+        fun getHistoricalProcessExitReasons(pkg: String, pid: Int, max: Int): List<FakeExit> = exits
+    }
+
+    class FakeContext(exits: List<FakeExit>) {
+        private val manager = FakeManager(exits)
+        fun getPackageName() = "com.example"
+        fun getSystemService(name: String): Any? = if (name == "activity") manager else null
+    }
+
+    private fun exits(vararg e: FakeExit) = readAndroidExits(FakeContext(e.toList()), dir.path, sdkInt = { 31 })
+
+    private fun varint(v: Long): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        var n = v
+        while (n >= 0x80) {
+            out.write(((n and 0x7f) or 0x80).toInt())
+            n = n ushr 7
+        }
+        out.write(n.toInt())
+        return out.toByteArray()
+    }
+
+    private fun int(field: Int, v: Long) = varint((field shl 3).toLong()) + varint(v)
+    private fun bytes(field: Int, b: ByteArray) = varint(((field shl 3) or 2).toLong()) + varint(b.size.toLong()) + b
+    private fun text(field: Int, s: String) = bytes(field, s.toByteArray())
+
+    private fun tombstone(): ByteArray {
+        val signal = int(1, 11) + text(2, "SIGSEGV") + text(4, "SEGV_MAPERR")
+        val frame = int(1, 0x1a2b) + int(2, 0x7000001a2b) + text(4, "") + text(6, "/data/app/~~x==/lib/arm64/libgame.so") +
+            text(8, "0123456789abcdef0123456789abcdef")
+        val named = int(1, 0x50) + text(4, "abort") + text(6, "/apex/bionic/libc.so") + text(8, "fedcba9876543210")
+        val crashed = int(1, 42) + bytes(4, frame) + bytes(4, named)
+        val other = int(1, 7) + bytes(4, int(1, 1) + text(6, "/x/other.so"))
+        return int(6, 42) + bytes(10, signal) + bytes(16, int(1, 7) + bytes(2, other)) + bytes(16, int(1, 42) + bytes(2, crashed))
+    }
+
+    @Test
+    fun aTombstoneIsReadFromTheCrashedThread() {
+        val t = assertNotNull(decodeTombstone(tombstone()))
+        assertEquals("SIGSEGV (SEGV_MAPERR)", t.message())
+        assertEquals(
+            "#00 libgame.so 0123456789abcdef0123456789abcdef +0x1a2b\n#01 libc.so fedcba9876543210 +0x50 abort\n",
+            t.stack,
+        )
+    }
+
+    @Test
+    fun whatIsNotATombstoneIsRefused() {
+        assertEquals(null, decodeTombstone("*** a text trace".toByteArray()))
+        assertEquals(null, decodeTombstone(byteArrayOf(0x82.toByte(), 1, 0xff.toByte(), 0xff.toByte(), 0x7f)))
+        assertEquals(null, decodeTombstone(ByteArray(0)))
+    }
+
+    @Test
+    fun exitsFromBeforeTheSdkAreNotReported() {
+        assertTrue(exits(FakeExit(5, 1000)).isEmpty())
+        val later = exits(FakeExit(5, 1000), FakeExit(5, 2000, tombstone()))
+        assertEquals(listOf("SIGSEGV"), later.map { it.type })
+        assertEquals(2000L, later[0].atMs)
+        assertTrue(later[0].stack.startsWith("#00 libgame.so"))
+        assertTrue(exits(FakeExit(5, 2000, tombstone())).isEmpty(), "reported twice")
+    }
+
+    @Test
+    fun eachKindOfExitIsReportedForWhatItIs() {
+        exits(FakeExit(5, 1000))
+        val got = exits(
+            FakeExit(5, 2000), // API 30 keeps no tombstone
+            FakeExit(6, 2001, "\"main\" prio=5\n  at a.b.c(SourceFile:3)".toByteArray()),
+            FakeExit(3, 2002),
+            FakeExit(3, 2003, importance = 400), // the system reclaiming a background application
+            FakeExit(4, 2004), // a Java crash: the handler in the process already said so
+            FakeExit(1, 2005), // the application closing itself
+        )
+        assertEquals(listOf("NativeCrash", "ANR", "OutOfMemory"), got.map { it.type })
+        assertEquals("from the system", got[0].message)
+        assertTrue(got[1].stack.contains("at a.b.c"))
+    }
+
+    private fun startWithExit(sdk: Int, onBody: (String) -> Unit) = OpenLog.start(
+        options().copy(androidContext = FakeContext(listOf(FakeExit(5, 2000, tombstone())))),
+        send = { url, _, body ->
+            if (url.contains("/v1/rum")) onBody(body)
+            200
+        },
+        fetchConfig = { _, _ -> null },
+        androidSdk = { sdk },
+    )
+
+    @Test
+    fun anAndroidExitIsDeliveredWithTheBuildAndSessionItHappenedIn() {
+        LastSession("00000000000000000000000000000abc", "1.2.2").write(dir.path)
+        File(dir, "openlog-last-exit").writeText("1000")
+        val latch = CountDownLatch(1)
+        var sent = ""
+        startWithExit(31) {
+            sent = it
+            latch.countDown()
+        }
+        assertTrue(latch.await(5, TimeUnit.SECONDS))
+        for (want in listOf("SIGSEGV", "00000000000000000000000000000abc", "1.2.2", "libgame.so 0123456789abcdef0123456789abcdef +0x1a2b")) {
+            assertTrue(sent.contains(want), "$want not in $sent")
+        }
+    }
+
+    @Test
+    fun withNoAndroidUnderneathAContextDoesNothing() {
+        File(dir, "openlog-last-exit").writeText("1000")
+        val latch = CountDownLatch(1)
+        startWithExit(0) { latch.countDown() }
+        assertFalse(latch.await(300, TimeUnit.MILLISECONDS))
+    }
+
+    @Test
+    fun anAnrStartsAtTheThreadThatDidNotRespond() {
+        assertEquals("\"main\" prio=5\n at a.b.c(SourceFile:3)", anrStack("Subject: x\nRssKb: 1\n\n\"main\" prio=5\n at a.b.c(SourceFile:3)"))
+        assertEquals("no threads", anrStack("no threads"))
+    }
+
+    @Test
+    fun aStackIsNotCutToTheLimitOfAnAttribute() {
+        val span = buildSpan("e", "error", "t", "s", 1, isError = true, exception = Triple("T", "m", "x".repeat(9000)))
+        assertTrue(jsonEncode(span).contains("x".repeat(9000)))
+    }
+
+    @Test
+    fun aFrameIsWrittenTheWayTheServerReadsIt() {
+        assertEquals("#03 My_Game.so abc +0x10 f", nativeFrame(3, "/a/b/My Game.so", "abc", 16, "f"))
+        assertEquals("#00 unknown +0x0", nativeFrame(0, "", "", 0, ""))
+    }
 }

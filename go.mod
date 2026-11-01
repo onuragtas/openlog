@@ -13,6 +13,7 @@ require (
 	github.com/go-faster/city v1.0.1
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
+	github.com/ianlancetaylor/demangle v0.0.0-20261012173340-cbb8aaea4290
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/mattermost/xml-roundtrip-validator v0.1.0
 	github.com/modelcontextprotocol/go-sdk v1.4.0
@@ -20,6 +21,8 @@ require (
 	github.com/russellhaering/goxmldsig v1.4.0
 	github.com/twmb/franz-go v1.21.6
 	github.com/twmb/franz-go/pkg/kadm v1.18.0
+	go.opentelemetry.io/collector/pdata v1.67.0
+	go.opentelemetry.io/collector/pdata/pprofile v0.161.0
 	go.opentelemetry.io/proto/otlp v1.11.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/oauth2 v0.37.0
@@ -45,8 +48,6 @@ require (
 	github.com/segmentio/encoding v0.5.3 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.67.0 // indirect
-	go.opentelemetry.io/collector/pdata/pprofile v0.161.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 )
 

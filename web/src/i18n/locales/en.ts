@@ -3524,6 +3524,7 @@ export const en = {
       empty: "No crashes in this range. Crash capture is off by default in the SDKs.",
       summary: "{{sessions}} sessions · last on {{version}} · {{when}}",
       stack: "Stack",
+      missingSymbols: "No symbols uploaded for: {{what}}",
       kinds: { uncaught_exception: "Uncaught exception", signal: "Signal", anr: "Not responding", out_of_memory: "Out of memory" },
     },
     analytics: {
