@@ -3021,5 +3021,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "listSortAscending": "Sorted ascending",
+  "listSortDescending": "Sorted descending",
+  "listLoadMore": "Load more",
+  "listLoadMoreRetry": "Could not load, try again",
+  "rumPageSortTtfb": "Time to first byte",
+  "rumPageSortRoute": "Route"
 }

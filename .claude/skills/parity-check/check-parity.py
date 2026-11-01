@@ -42,17 +42,47 @@ def web_calls() -> dict[str, set[str]]:
     return calls
 
 
+def dart_paths(text: str) -> list[str]:
+    """Every /api/v1 string in this text, reading each to its real end: `${...}` can hold quotes of its own."""
+    out = []
+    for m in re.finditer(r"'(?=/api/v1/)", text):
+        i, depth, chars = m.end(), 0, []
+        while i < len(text):
+            c = text[i]
+            if text.startswith("${", i):
+                depth += 1
+                chars.append(c)
+            elif depth and c == "}":
+                depth -= 1
+                chars.append(c)
+            elif not depth and c == "'":
+                break
+            else:
+                chars.append(c)
+            i += 1
+        path = "".join(chars)
+        # /rules/$id/${enabled ? 'enable' : 'disable'} is two endpoints.
+        choice = re.search(r"\$\{[^{}]*\?\s*'([^']*)'\s*:\s*'([^']*)'\s*\}", path)
+        if choice:
+            out += [path.replace(choice.group(0), choice.group(1)), path.replace(choice.group(0), choice.group(2))]
+        else:
+            out.append(path)
+    return out
+
+
 def mobile_calls() -> dict[str, set[str]]:
     calls: dict[str, set[str]] = {}
     text = Path("mobile/lib/src/api/client.dart").read_text()
-    # _send('GET', '/api/v1/x') and its shapes across lines. A query is often built just before the call.
-    for m in re.finditer(r"""_send\w*(?:<[^>]*>)?\(\s*'(GET|POST|PUT|PATCH|DELETE)',\s*['"](/api/v1/[^'"]*)['"]""", text):
-        key = f"{m.group(1)} {normal(m.group(2))}"
-        params = calls.setdefault(key, set())
-        # The method this call is in, and no further: the one before it has parameters of its own.
-        start = text.rfind("Future<", 0, m.start())
-        window = text[max(start, 0) : m.end() + 200]
-        params.update(p for p in LIST_PARAMS if re.search(rf"\b{p}\b", window))
+    # Read a method at a time. Its path is often built first, in a variable or through _listPath, and only then sent.
+    chunks = re.split(r"\n  (?=(?:static )?(?:Future|Stream|String|Uri|void|Map|List|bool|int|[A-Z]\w*)[<\w, ?>]* \w+[(<{ ])", text)
+    for chunk in chunks:
+        verbs = re.findall(r"'(GET|POST|PUT|PATCH|DELETE)'", chunk)
+        if not verbs:
+            continue
+        for path in dart_paths(chunk):
+            for verb in set(verbs):
+                params = calls.setdefault(f"{verb} {normal(path)}", set())
+                params.update(p for p in LIST_PARAMS if re.search(rf"\b{p}\b", chunk))
     return calls
 
 

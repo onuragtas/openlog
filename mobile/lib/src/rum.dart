@@ -14,14 +14,12 @@ import 'list_controller.dart';
 import 'session.dart';
 
 /// The routes of one application, by the measure the screen picked.
-class RumPagesController extends ListController<RumPage> {
-  RumPagesController(this._client, this.app);
+class RumPagesController extends PagedListController<RumPage> {
+  RumPagesController(this._client, this.app)
+    : super(sort: 'views', ascendingSorts: const {'route'});
 
   final OpenlogClient _client;
   final String app;
-
-  /// `views`, `slowest` (total time consumed) or `avg`, as the web offers.
-  String sort = 'views';
 
   /// Which kind of visitor the list is about: a device, a browser, or all.
   String deviceType = '';
@@ -31,12 +29,18 @@ class RumPagesController extends ListController<RumPage> {
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<RumPage>> fetch() async => (await _client.rumPages(
-    app,
-    sort: sort,
-    deviceType: deviceType,
-    browser: browser,
-  )).pages;
+  Future<ListPage<RumPage>> fetchPage(int offset) async {
+    final page = await _client.rumPages(
+      app,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+      deviceType: deviceType,
+      browser: browser,
+    );
+    return ListPage(page.pages, hasMore: page.hasMore ?? false);
+  }
 }
 
 /// The five vitals of one route. Its own controller because it is its own

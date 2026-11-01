@@ -1235,12 +1235,15 @@ class OpenlogClient {
   Future<RumPageList> rumPages(
     String app, {
     String sort = 'views',
+    String dir = '',
+    int limit = 50,
+    int offset = 0,
     String deviceType = '',
     String browser = '',
   }) async => RumPageList.fromJson(
     await _send(
       'GET',
-      '/api/v1/rum/pages?${Uri(queryParameters: {'app': app, 'sort': sort, if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser}).query}',
+      '/api/v1/rum/pages?${Uri(queryParameters: {'app': app, 'sort': sort, if (dir.isNotEmpty) 'dir': dir, 'limit': '$limit', if (offset > 0) 'offset': '$offset', if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser}).query}',
     ),
   );
 

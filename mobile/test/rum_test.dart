@@ -78,11 +78,18 @@ void main() {
     expect(Uri.splitQueryString(server.requests.single.query), {
       'app': 'shop-web',
       'sort': 'views',
+      'dir': 'desc',
+      'limit': '50',
     });
 
     c.sort = 'slowest';
     await c.refresh();
     expect(Uri.splitQueryString(server.requests.last.query)['sort'], 'slowest');
+    // Picking the same column turns it around, and a name starts from A.
+    await c.setSort('slowest');
+    expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'asc');
+    await c.setSort('route');
+    expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'asc');
   });
 
   test('a route asks for its own vitals, not the application\'s', () async {

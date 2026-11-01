@@ -16,6 +16,7 @@ class ListScreen<T> extends StatelessWidget {
     this.search,
     this.header,
     this.itemCount,
+    this.footer,
   });
 
   final ListController<T> controller;
@@ -29,6 +30,9 @@ class ListScreen<T> extends StatelessWidget {
   /// list draws one row per compose service when it is grouped. Null means
   /// one row per item, which is every other list.
   final int? itemCount;
+
+  /// Under the last row: what fetches the next page of a long list.
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +96,7 @@ class ListScreen<T> extends StatelessWidget {
                     return _Empty(title: emptyTitle, banner: banner);
                   }
                   final rows = itemCount ?? controller.items.length;
-                  if (i == rows + 1) return const SizedBox.shrink();
+                  if (i == rows + 1) return footer ?? const SizedBox.shrink();
                   return itemBuilder(context, i - 1);
                 },
               ),

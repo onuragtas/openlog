@@ -13,6 +13,7 @@ import '../rum.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart' show formatNumber;
 import 'rum_facets.dart';
@@ -21,7 +22,7 @@ import 'sections_screen.dart';
 import 'severity.dart';
 
 /// `views`, `slowest` and `avg`, in the web's order.
-const rumPageSorts = ['views', 'slowest', 'avg'];
+const rumPageSorts = ['views', 'slowest', 'avg', 'ttfb', 'route'];
 
 class RumPagesTab extends StatefulWidget {
   const RumPagesTab({
@@ -57,6 +58,8 @@ class _RumPagesTabState extends State<RumPagesTab> {
   String _sortLabel(L l, String sort) => switch (sort) {
     'slowest' => l.rumPageSortSlowest,
     'avg' => l.rumPageSortAvg,
+    'ttfb' => l.rumPageSortTtfb,
+    'route' => l.rumPageSortRoute,
     _ => l.rumPageSortViews,
   };
 
@@ -86,23 +89,15 @@ class _RumPagesTabState extends State<RumPagesTab> {
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerLeft,
-              child: DropdownButton<String>(
-                key: const Key('rum-page-sort'),
-                value: _c.sort,
-                underline: const SizedBox.shrink(),
-                items: [
-                  for (final s in rumPageSorts)
-                    DropdownMenuItem(value: s, child: Text(_sortLabel(l, s))),
-                ],
-                onChanged: (v) {
-                  if (v == null) return;
-                  _c.sort = v;
-                  _c.refresh();
-                },
+              child: ListSortBar(
+                controller: _c,
+                columns: rumPageSorts,
+                label: (s) => _sortLabel(l, s),
               ),
             ),
           ],
         ),
+        footer: LoadMoreTile(controller: _c),
         itemBuilder: (context, i) => _PageCard(
           page: _c.items[i],
           onOpen: () => Navigator.of(context).push(

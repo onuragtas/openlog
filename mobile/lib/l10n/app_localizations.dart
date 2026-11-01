@@ -7588,7 +7588,7 @@ abstract class L {
   /// No description provided for @rumReleaseCrashFree.
   ///
   /// In en, this message translates to:
-  /// **'Crash-free'**
+  /// **'Error-free'**
   String get rumReleaseCrashFree;
 
   /// No description provided for @rumReleaseSessions.
@@ -8520,6 +8520,42 @@ abstract class L {
   /// In en, this message translates to:
   /// **'All sessions'**
   String get rumUserClear;
+
+  /// No description provided for @listSortAscending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted ascending'**
+  String get listSortAscending;
+
+  /// No description provided for @listSortDescending.
+  ///
+  /// In en, this message translates to:
+  /// **'Sorted descending'**
+  String get listSortDescending;
+
+  /// No description provided for @listLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get listLoadMore;
+
+  /// No description provided for @listLoadMoreRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load, try again'**
+  String get listLoadMoreRetry;
+
+  /// No description provided for @rumPageSortTtfb.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to first byte'**
+  String get rumPageSortTtfb;
+
+  /// No description provided for @rumPageSortRoute.
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get rumPageSortRoute;
 }
 
 class _LDelegate extends LocalizationsDelegate<L> {

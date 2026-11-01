@@ -2924,5 +2924,11 @@
         "type": "String"
       }
     }
-  }
+  },
+  "listSortAscending": "Sıralama: artan",
+  "listSortDescending": "Sıralama: azalan",
+  "listLoadMore": "Daha fazla yükle",
+  "listLoadMoreRetry": "Yüklenemedi, yeniden dene",
+  "rumPageSortTtfb": "İlk bayta kadar süre",
+  "rumPageSortRoute": "Rota"
 }

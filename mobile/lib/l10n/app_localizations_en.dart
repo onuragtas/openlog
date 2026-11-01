@@ -4781,4 +4781,22 @@ class LEn extends L {
 
   @override
   String get rumUserClear => 'All sessions';
+
+  @override
+  String get listSortAscending => 'Sorted ascending';
+
+  @override
+  String get listSortDescending => 'Sorted descending';
+
+  @override
+  String get listLoadMore => 'Load more';
+
+  @override
+  String get listLoadMoreRetry => 'Could not load, try again';
+
+  @override
+  String get rumPageSortTtfb => 'Time to first byte';
+
+  @override
+  String get rumPageSortRoute => 'Route';
 }

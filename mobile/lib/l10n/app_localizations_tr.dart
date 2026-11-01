@@ -4774,4 +4774,22 @@ class LTr extends L {
 
   @override
   String get rumUserClear => 'Tüm oturumlar';
+
+  @override
+  String get listSortAscending => 'Sıralama: artan';
+
+  @override
+  String get listSortDescending => 'Sıralama: azalan';
+
+  @override
+  String get listLoadMore => 'Daha fazla yükle';
+
+  @override
+  String get listLoadMoreRetry => 'Yüklenemedi, yeniden dene';
+
+  @override
+  String get rumPageSortTtfb => 'İlk bayta kadar süre';
+
+  @override
+  String get rumPageSortRoute => 'Rota';
 }

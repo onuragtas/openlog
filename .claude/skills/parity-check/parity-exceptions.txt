@@ -3,3 +3,118 @@
 POST /api/v1/auth/device  # A phone keeps a device token, and a browser has a session cookie instead.
 POST /api/v1/auth/login  # The browser's cookie session. A phone signs in through /auth/device.
 POST /api/v1/auth/logout  # Ends the browser's cookie session. A phone revokes its device token.
+
+# The user's decision on 2026-11-02 (option A): what a person sets up once at a desk stays on the web. Seeing and day-to-day acting does not.
+DELETE /api/v1/admin/status/incidents/{}  # Installation administration.
+DELETE /api/v1/alerts/channels/{}  # Writing a configuration: rule, channel, SLO or monitor.
+DELETE /api/v1/alerts/routing-rules/{}  # Writing a configuration: rule, channel, SLO or monitor.
+DELETE /api/v1/alerts/rules/{}  # Writing an alert rule.
+DELETE /api/v1/cloud/connections/{}  # Setting up a cloud connection.
+DELETE /api/v1/dashboards/{}  # Building and sharing a dashboard. Viewing one is on both.
+DELETE /api/v1/dashboards/{}/reports/{}  # Building and sharing a dashboard. Viewing one is on both.
+DELETE /api/v1/dashboards/{}/shares/{}  # Building and sharing a dashboard. Viewing one is on both.
+DELETE /api/v1/fleet/hosts/{}/java-agent  # Fleet configuration.
+DELETE /api/v1/fleet/hosts/{}/override  # Fleet configuration.
+DELETE /api/v1/fleet/hosts/{}/php-agent  # Fleet configuration.
+DELETE /api/v1/integrations/settings/{}  # Setting up an integration.
+DELETE /api/v1/jobs/monitors/{}  # Writing a configuration: rule, channel, SLO or monitor.
+DELETE /api/v1/operator/support-sessions/{}  # The operator console, for whoever runs a hosted installation.
+DELETE /api/v1/orgs/current/support-access  # Plan and support settings of the organization.
+DELETE /api/v1/slos/{}  # Writing a configuration: rule, channel, SLO or monitor.
+DELETE /api/v1/sso/connection  # Setting up single sign-on.
+DELETE /api/v1/sso/connections/{}  # Setting up single sign-on.
+DELETE /api/v1/storage/disk/settings  # Exporting and storage settings.
+DELETE /api/v1/synthetics/checks/{}  # Writing a configuration: rule, channel, SLO or monitor.
+DELETE /api/v1/usage/query-limits  # Exporting and storage settings.
+GET /api/v1/admin/deletion-certificates  # Installation administration.
+GET /api/v1/admin/org-deletions  # Installation administration.
+GET /api/v1/admin/orgs/{}/plan  # Installation administration.
+GET /api/v1/admin/status/incidents  # Installation administration.
+GET /api/v1/apm/db-queries/plans  # Plan and support settings of the organization.
+GET /api/v1/auth/sso/session  # Setting up single sign-on.
+GET /api/v1/cloud/providers  # Setting up a cloud connection.
+GET /api/v1/dashboards/{}/export  # Building and sharing a dashboard. Viewing one is on both.
+GET /api/v1/dashboards/{}/reports  # Building and sharing a dashboard. Viewing one is on both.
+GET /api/v1/dashboards/{}/shares  # Building and sharing a dashboard. Viewing one is on both.
+GET /api/v1/dashboards/{}/versions  # Building and sharing a dashboard. Viewing one is on both.
+GET /api/v1/dashboards/{}/versions/{}  # Building and sharing a dashboard. Viewing one is on both.
+GET /api/v1/data-exports  # Exporting and storage settings.
+GET /api/v1/data-exports/{}/download  # Exporting and storage settings.
+GET /api/v1/operator/flags  # The operator console, for whoever runs a hosted installation.
+GET /api/v1/operator/me  # The operator console, for whoever runs a hosted installation.
+GET /api/v1/operator/orgs  # The operator console, for whoever runs a hosted installation.
+GET /api/v1/operator/orgs/{}  # The operator console, for whoever runs a hosted installation.
+GET /api/v1/orgs/current/saas  # Plan and support settings of the organization.
+GET /api/v1/plans  # Plan and support settings of the organization.
+GET /api/v1/public/dashboards/{}  # A shared public page, which needs no app.
+GET /api/v1/public/dashboards/{}/widgets/{}/result  # A shared public page, which needs no app.
+GET /api/v1/sso/connection  # Setting up single sign-on.
+GET /api/v1/sso/connections/{}  # Setting up single sign-on.
+GET /api/v1/sso/connections/{}/role-mappings  # Setting up single sign-on.
+GET /api/v1/usage/export  # Exporting and storage settings.
+POST /api/v1/admin/org-deletions/{}/cancel  # Installation administration.
+POST /api/v1/admin/orgs/{}/deletion  # Installation administration.
+POST /api/v1/admin/status/incidents  # Installation administration.
+POST /api/v1/admin/status/incidents/{}/updates  # Installation administration.
+POST /api/v1/alerts/channels  # Writing a configuration: rule, channel, SLO or monitor.
+POST /api/v1/alerts/routing-rules  # Writing a configuration: rule, channel, SLO or monitor.
+POST /api/v1/auth/sso/discover  # Setting up single sign-on.
+POST /api/v1/auth/sso/logout  # Setting up single sign-on.
+POST /api/v1/auth/sso/start  # Setting up single sign-on.
+POST /api/v1/auth/verify-email  # A link opened in a browser, or a sign-in flow the app does not offer.
+POST /api/v1/cloud/connections  # Setting up a cloud connection.
+POST /api/v1/cloud/connections/test  # Setting up a cloud connection.
+POST /api/v1/dashboards  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/import  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/{}/duplicate  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/{}/reports  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/{}/shares  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/{}/versions/{}/restore  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/dashboards/{}/widgets  # Building and sharing a dashboard. Viewing one is on both.
+POST /api/v1/data-exports  # Exporting and storage settings.
+POST /api/v1/invitations/accept  # A link opened in a browser, or a sign-in flow the app does not offer.
+POST /api/v1/invitations/lookup  # A link opened in a browser, or a sign-in flow the app does not offer.
+POST /api/v1/jobs/monitors  # Writing a configuration: rule, channel, SLO or monitor.
+POST /api/v1/jobs/monitors/{}/rotate  # Writing a configuration: rule, channel, SLO or monitor.
+POST /api/v1/operator/flags/{}/resolve  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/force-logout  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/resend-verification  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/reset-quota-notifications  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/support-sessions  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/suspend  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/trial  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/orgs/{}/unsuspend  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/operator/support-sessions/{}/views  # The operator console, for whoever runs a hosted installation.
+POST /api/v1/scim/tokens  # Setting up single sign-on.
+POST /api/v1/slos  # Writing a configuration: rule, channel, SLO or monitor.
+POST /api/v1/source-maps  # A build machine's or an administrator's setup.
+POST /api/v1/sso/connection/test  # Setting up single sign-on.
+POST /api/v1/sso/connection/test/start  # Setting up single sign-on.
+POST /api/v1/sso/connections  # Setting up single sign-on.
+POST /api/v1/sso/connections/{}/metadata/accept  # Setting up single sign-on.
+POST /api/v1/sso/connections/{}/refresh  # Setting up single sign-on.
+POST /api/v1/sso/connections/{}/test/start  # Setting up single sign-on.
+POST /api/v1/sso/domains/verify-email  # Setting up single sign-on.
+POST /api/v1/synthetics/checks  # Writing a configuration: rule, channel, SLO or monitor.
+PUT /api/v1/admin/orgs/{}/plan  # Installation administration.
+PUT /api/v1/alerts/channels/{}  # Writing a configuration: rule, channel, SLO or monitor.
+PUT /api/v1/alerts/rules/{}  # Writing an alert rule.
+PUT /api/v1/browser-keys/{}  # A build machine's or an administrator's setup.
+PUT /api/v1/cloud/connections/{}  # Setting up a cloud connection.
+PUT /api/v1/dashboards/settings  # Building and sharing a dashboard. Viewing one is on both.
+PUT /api/v1/dashboards/{}  # Building and sharing a dashboard. Viewing one is on both.
+PUT /api/v1/dashboards/{}/reports/{}  # Building and sharing a dashboard. Viewing one is on both.
+PUT /api/v1/fleet/hosts/{}/java-agent  # Fleet configuration.
+PUT /api/v1/fleet/hosts/{}/override  # Fleet configuration.
+PUT /api/v1/fleet/hosts/{}/php-agent  # Fleet configuration.
+PUT /api/v1/jobs/monitors/{}  # Writing a configuration: rule, channel, SLO or monitor.
+PUT /api/v1/orgs/current/support-access  # Plan and support settings of the organization.
+PUT /api/v1/slos/{}  # Writing a configuration: rule, channel, SLO or monitor.
+PUT /api/v1/sso/connection  # Setting up single sign-on.
+PUT /api/v1/sso/connections/{}  # Setting up single sign-on.
+PUT /api/v1/sso/connections/{}/enforcement  # Setting up single sign-on.
+PUT /api/v1/sso/connections/{}/role-mappings  # Setting up single sign-on.
+PUT /api/v1/sso/domains/{}  # Setting up single sign-on.
+PUT /api/v1/storage/disk/settings  # Exporting and storage settings.
+PUT /api/v1/synthetics/checks/{}  # Writing a configuration: rule, channel, SLO or monitor.
+PUT /api/v1/usage/query-limits  # Exporting and storage settings.
