@@ -33,3 +33,6 @@ openlog-release-key-*.env
 # Installed dependencies and compiled test output of the JavaScript packages (web, agents/*).
 node_modules/
 .test-build/
+# The documentation site's build output and cache (docs/.vitepress).
+/docs/.vitepress/dist/
+/docs/.vitepress/cache/
