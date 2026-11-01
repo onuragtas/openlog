@@ -5,6 +5,7 @@ import type { ApmServiceContainer, ComposeProject, Container, ContainerDetail, C
 import type { LogRecord } from "@/api/types";
 import { authenticate } from "./account";
 import { formatTs, HOST_IDS } from "./fixtures";
+import { pageOf } from "./list";
 
 const API = "*/api/v1";
 
@@ -189,7 +190,14 @@ export const containerHandlers = [
     if (state && !["running", "paused", "restarting", "exited", "created", "dead", "removing", "unknown"].includes(state)) return fail("invalid_argument", "state must be one of …");
     const all = list(url, w.from, w.to);
     const limit = Number(url.searchParams.get("limit") ?? 100);
-    return HttpResponse.json({ containers: all.slice(0, limit), total: all.length, step: "120s" });
+    const offset = Number(url.searchParams.get("offset") ?? 0);
+    // Neither sort nor dir keeps the order the server has always answered in.
+    const page = url.searchParams.has("sort") || url.searchParams.has("dir")
+      ? pageOf(url, all, {
+          name: (c) => c.name || c.container_id, state: (c) => c.state, image: (c) => c.image_name, compose: (c) => c.compose_service, host: (c) => c.host_name || c.host_id, last_seen: (c) => c.last_seen,
+        }, { sort: "name", asc: ["name", "state", "image", "compose", "host"], limit })
+      : { rows: all.slice(offset, offset + limit), has_more: offset + limit < all.length };
+    return HttpResponse.json({ containers: page.rows, total: all.length, step: "120s", has_more: page.has_more });
   })),
 
   http.get(`${API}/containers/groups`, authed(({ request }) => {

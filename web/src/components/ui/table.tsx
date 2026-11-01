@@ -111,3 +111,17 @@ export function SortableHead<S extends string>({
     </TableHead>
   );
 }
+
+export interface SortHeadProps<S extends string> {
+  sort: S;
+  dir: SortDir;
+  onSort: (column: S, dir: SortDir) => void;
+}
+
+/** A heading that sorts when its table was given a sort, for a table that also shows rows nobody can reorder, such as the groups of a list. */
+export function MaybeSortableHead<S extends string>({
+  head, column, defaultDir, children, ...props
+}: Omit<ComponentProps<"th">, "onClick" | "dir"> & { head: SortHeadProps<S> | undefined; column: S; defaultDir?: SortDir }) {
+  if (!head) return <TableHead {...props}>{children}</TableHead>;
+  return <SortableHead column={column} defaultDir={defaultDir} {...head} {...props}>{children}</SortableHead>;
+}

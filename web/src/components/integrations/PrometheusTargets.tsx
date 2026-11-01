@@ -4,13 +4,15 @@ import { CircleCheck, CircleX, LineChart } from "lucide-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { PROMETHEUS_MAX_TARGETS, prometheusTargetsQuery } from "@/api/prometheus";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatRelative } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { useLocalList } from "@/lib/list";
 import { encodeMetricQueries, newMetricQuery } from "@/lib/metrics-explorer";
 import { targetExplorerFilters, type PrometheusTarget } from "@/lib/prometheus";
 
@@ -18,6 +20,18 @@ function explorerSearch(target: PrometheusTarget) {
   const q = { ...newMetricQuery("A", "up"), filters: targetExplorerFilters(target), aggregation: "last" as const };
   return { range: "1h", mq: encodeMetricQueries([q]) };
 }
+
+type TargetSort = "state" | "job" | "instance" | "host" | "source" | "last_scrape";
+
+// Ascending state puts the down ones first, and the sort is stable, so the first view is what prometheusTargets ordered: job, then instance.
+const TARGET_READ: Record<TargetSort, (x: PrometheusTarget) => string | number> = {
+  state: (x) => (x.up ? 1 : 0),
+  job: (x) => x.job,
+  instance: (x) => x.instance,
+  host: (x) => x.hostName,
+  source: (x) => x.source,
+  last_scrape: (x) => x.lastSeen,
+};
 
 /**
  * Prometheus/OpenMetrics targets of every host (D-137): up or down with the time of the last scrape. Hidden while no
@@ -28,6 +42,7 @@ export function PrometheusTargetsCard() {
   const q = useQuery(prometheusTargetsQuery());
   const now = useNow();
   const down = useMemo(() => q.data?.targets.filter((x) => !x.up).length ?? 0, [q.data]);
+  const list = useLocalList(q.data?.targets, TARGET_READ, "state", "asc");
   const notFound = q.isError && (q.error as { status?: number }).status === 404;
   // Nothing while loading either: most tenants scrape nothing, and a card that flashes and vanishes is noise.
   if (q.isPending || notFound || (q.isSuccess && q.data.targets.length === 0)) return null;
@@ -40,7 +55,8 @@ export function PrometheusTargetsCard() {
             {t("prometheus.title")}
             {q.isSuccess && (
               <Badge variant={down > 0 ? "destructive" : "muted"} data-testid="prometheus-summary">
-                {down > 0 ? t("prometheus.down", { count: down }) : t("prometheus.allUp", { count: q.data.targets.length })}
+                {/* Of a cut list nothing can say all are up, since the ones that were cut may not be. */}
+                {down > 0 ? t("prometheus.down", { count: down }) : q.data.truncated ? t("prometheus.seenUp", { count: q.data.targets.length }) : t("prometheus.allUp", { count: q.data.targets.length })}
               </Badge>
             )}
           </h2>
@@ -57,19 +73,19 @@ export function PrometheusTargetsCard() {
             <Table mobile="stack">
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("prometheus.columns.state")}</TableHead>
-                  <TableHead>{t("prometheus.columns.job")}</TableHead>
-                  <TableHead>{t("prometheus.columns.instance")}</TableHead>
-                  <TableHead>{t("prometheus.columns.host")}</TableHead>
-                  <TableHead>{t("prometheus.columns.source")}</TableHead>
-                  <TableHead>{t("prometheus.columns.lastScrape")}</TableHead>
+                  <SortableHead column="state" defaultDir="asc" {...list.head}>{t("prometheus.columns.state")}</SortableHead>
+                  <SortableHead column="job" defaultDir="asc" {...list.head}>{t("prometheus.columns.job")}</SortableHead>
+                  <SortableHead column="instance" defaultDir="asc" {...list.head}>{t("prometheus.columns.instance")}</SortableHead>
+                  <SortableHead column="host" defaultDir="asc" {...list.head}>{t("prometheus.columns.host")}</SortableHead>
+                  <SortableHead column="source" defaultDir="asc" {...list.head}>{t("prometheus.columns.source")}</SortableHead>
+                  <SortableHead column="last_scrape" {...list.head}>{t("prometheus.columns.lastScrape")}</SortableHead>
                   <TableHead>
                     <span className="sr-only">{t("prometheus.openMetrics")}</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {q.data.targets.map((x) => (
+                {list.visible.map((x) => (
                   <TableRow key={`${x.hostId}/${x.job}/${x.instance}`} data-testid="prometheus-target" data-up={x.up}>
                     <TableCell>
                       {x.up ? (
@@ -118,6 +134,7 @@ export function PrometheusTargetsCard() {
                 ))}
               </TableBody>
             </Table>
+            <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
             {q.data.truncated && <p className="mt-2 text-xs text-muted-foreground">{t("prometheus.truncated", { count: PROMETHEUS_MAX_TARGETS })}</p>}
           </>
         )}

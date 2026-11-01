@@ -1,12 +1,16 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
+import { useState, type ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { login } from "@/api/account";
 import type { KubernetesClusterDetail, KubernetesEvent, KubernetesNode, KubernetesPod, KubernetesPodContainer, KubernetesWorkload } from "@/api/kubernetes";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { POD_UIDS } from "@/mocks/kubernetes";
+import { server } from "@/mocks/server";
+import { NodesList, PodsList, WorkloadsList } from "@/routes/kubernetes";
 import { ClusterTiles, WorkloadsByKind } from "./ClusterOverview";
 import { EventList } from "./EventList";
 import { NodeTable, PodTable, WorkloadTable } from "./KubernetesTables";
@@ -169,5 +173,99 @@ describe("kubernetes overview and pod parts", () => {
     const dd = await screen.findByTestId("service-k8s-pods");
     expect(within(dd).getByRole("link", { name: "Open pod orders-7d9f8b6c5-x2k4p" })).toHaveAttribute("href", `/kubernetes/pods/${POD_UIDS.orders0}`);
     expect(within(dd).getAllByRole("link")).toHaveLength(2);
+  });
+});
+
+describe("kubernetes lists", () => {
+  /** Records the query of every request to a path, and answers with one full page that has another after it. */
+  function recording(path: string, body: Record<string, unknown>) {
+    const seen: URLSearchParams[] = [];
+    server.use(
+      http.get(path, ({ request }) => {
+        seen.push(new URL(request.url).searchParams);
+        return HttpResponse.json({ total: 120, has_more: true, ...body });
+      }),
+    );
+    return { last: () => seen[seen.length - 1]! };
+  }
+
+  const range = { range: "1h" };
+
+  async function sortsAndPages(tableId: string, heading: string, sort: string, dir: string, rec: { last: () => URLSearchParams }) {
+    const user = userEvent.setup();
+    const table = await screen.findByTestId(tableId);
+    expect(rec.last().get("sort")).toBe("name");
+    expect(rec.last().get("dir")).toBe("asc");
+    expect(rec.last().get("limit")).toBe("50");
+    await user.click(within(table).getByRole("button", { name: heading }));
+    await waitFor(() => expect(rec.last().get("sort")).toBe(sort));
+    expect(rec.last().get("dir")).toBe(dir);
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(rec.last().get("offset")).toBe("50"));
+    expect(rec.last().get("sort")).toBe(sort);
+    // What is read after the page is cut has no order to ask for, and stays in the row.
+    for (const name of ["CPU", "Memory"]) expect(within(table).queryByRole("button", { name })).not.toBeInTheDocument();
+    expect(within(table).getByRole("columnheader", { name: "CPU" })).toBeInTheDocument();
+  }
+
+  it("sends a workload heading and Next to the server", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const rec = recording("*/api/v1/kubernetes/workloads", { workloads: [workload({})], step: "120s" });
+    renderWithRouter(<WorkloadsList range={range} filters={{}} emptyText="none" showCluster />);
+    await sortsAndPages("k8s-workload-table", "Health", "health", "desc", rec);
+  });
+
+  it("sends a pod heading and Next to the server", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const rec = recording("*/api/v1/kubernetes/pods", { pods: [pod({})] });
+    renderWithRouter(<PodsList range={range} filters={{}} emptyText="none" showCluster />);
+    await sortsAndPages("k8s-pod-table", "Restarts", "restarts", "desc", rec);
+  });
+
+  it("sends a node heading and Next to the server", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const rec = recording("*/api/v1/kubernetes/nodes", { nodes: [node({})] });
+    renderWithRouter(<NodesList range={range} filters={{}} emptyText="none" showCluster />);
+    await sortsAndPages("k8s-node-table", "Kubelet", "kubelet", "asc", rec);
+  });
+
+  it("keeps the pager on an empty later page, so it can go back", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    server.use(
+      http.get("*/api/v1/kubernetes/pods", ({ request }) => {
+        const offset = new URL(request.url).searchParams.get("offset");
+        return HttpResponse.json(offset === "0" ? { pods: [pod({})], total: 1, has_more: true } : { pods: [], total: 1, has_more: false });
+      }),
+    );
+    renderWithRouter(<PodsList range={range} filters={{}} emptyText="nothing here" showCluster />);
+    await screen.findByText("orders-abc");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("button", { name: "Previous" })).toBeEnabled();
+    expect(screen.queryByText("nothing here")).not.toBeInTheDocument();
+  });
+
+  it("goes back to the first page when a filter changes", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const rec = recording("*/api/v1/kubernetes/nodes", { nodes: [node({})] });
+    function Filtered() {
+      const [q, setQ] = useState<string | undefined>();
+      return (
+        <>
+          <button type="button" onClick={() => setQ("worker")}>filter</button>
+          <NodesList range={range} filters={{ q }} emptyText="none" showCluster />
+        </>
+      );
+    }
+    renderWithRouter(<Filtered />);
+    await screen.findByTestId("k8s-node-table");
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(rec.last().get("offset")).toBe("50"));
+    await user.click(screen.getByRole("button", { name: "filter" }));
+    await waitFor(() => {
+      expect(rec.last().get("q")).toBe("worker");
+      expect(rec.last().get("offset")).toBe("0");
+    });
   });
 });

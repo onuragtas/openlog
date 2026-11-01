@@ -1760,6 +1760,7 @@ export const tr: Messages = {
   },
   integrations: {
     title: "Entegrasyonlar",
+    truncated: "Keşfedilen servislerin yalnızca ilk {{count}} tanesi okundu; bu liste ve sayıları eksik olabilir.",
     subtitle: "Tüm sunuculardaki keşfedilen servislerin metrik entegrasyonları",
     status: {
       enabled: "Etkin",
@@ -3977,6 +3978,8 @@ export const tr: Messages = {
     down_other: "{{count}} kapalı",
     allUp_one: "{{count}} hedef açık",
     allUp_other: "{{count}} hedefin tümü açık",
+    seenUp_one: "{{count}} hedef açık",
+    seenUp_other: "{{count}} hedef açık",
     empty: "Son 15 dakikada taranan hedef yok.",
     truncated: "Yalnızca ilk {{count}} hedef gösteriliyor.",
     openMetrics: "Metrikler",
@@ -4144,6 +4147,7 @@ export const tr: Messages = {
       allSeverities: "Tüm önem dereceleri",
       empty: "Bu filtrelere uyan olay yok.",
       emptyActive: "Açık olay yok. Her şey sakin.",
+      loadMore: "Daha fazla olay yükle",
       columns: { state: "Durum", severity: "Önem", incident: "Olay", rule: "Kural", opened: "Açılış", duration: "Süre" },
       muted: "Susturuldu",
       flapping: "Kararsız",

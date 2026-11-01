@@ -1,13 +1,17 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
-import type { KubernetesNode, KubernetesPod, KubernetesWorkload } from "@/api/kubernetes";
+import type { KubernetesNode, KubernetesPod, KubernetesWorkload, NodeSort, PodSort, WorkloadSort } from "@/api/kubernetes";
 import { Sparkline } from "@/components/apm/Charts";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MaybeSortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, type SortHeadProps } from "@/components/ui/table";
 import { formatBytes, formatDateTime, formatRelative, formatValue } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
 import { formatCores, nodeProblems, rangeOnly, replicasText, usageRatio } from "@/lib/kubernetes";
 import { parseTimeParam } from "@/lib/time";
 import { NodeStatusBadge, PodStatusBadge, WorkloadHealthBadge } from "./K8sBadges";
+
+// CPU, memory and the rest of the plain headings below are read from metrics after the server has cut the page, and only for its rows,
+// since reading them for up to 10000 rows on each request would cost a metrics query over all of them to show fifty. They are not known
+// when the order is decided, so they can't sort, the same way p95 can't on the APM database lists (api.md "Kubernetes").
 
 const Dash = () => <span className="text-muted-foreground">–</span>;
 
@@ -56,7 +60,7 @@ export function WorkloadLink({ w, className, children }: { w: Pick<KubernetesWor
   );
 }
 
-export function WorkloadTable({ workloads, showCluster = true }: { workloads: KubernetesWorkload[]; showCluster?: boolean }) {
+export function WorkloadTable({ workloads, showCluster = true, head }: { workloads: KubernetesWorkload[]; showCluster?: boolean; head?: SortHeadProps<WorkloadSort> }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const locale = i18n.resolvedLanguage ?? "en";
@@ -64,16 +68,16 @@ export function WorkloadTable({ workloads, showCluster = true }: { workloads: Ku
     <Table mobile="stack" data-testid="k8s-workload-table">
       <TableHeader>
         <TableRow>
-          <TableHead>{t("kubernetes.columns.name")}</TableHead>
-          <TableHead>{t("kubernetes.columns.kind")}</TableHead>
-          <TableHead>{t("kubernetes.columns.health")}</TableHead>
-          <TableHead className="text-right">{t("kubernetes.columns.replicas")}</TableHead>
+          <MaybeSortableHead head={head} column="name" defaultDir="asc">{t("kubernetes.columns.name")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="kind" defaultDir="asc">{t("kubernetes.columns.kind")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="health">{t("kubernetes.columns.health")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="replicas" className="text-right">{t("kubernetes.columns.replicas")}</MaybeSortableHead>
           <TableHead className="text-right">{t("kubernetes.columns.restarts")}</TableHead>
           <TableHead className="text-right">{t("kubernetes.columns.cpu")}</TableHead>
           <TableHead>{t("kubernetes.columns.cpuTrend")}</TableHead>
           <TableHead className="text-right">{t("kubernetes.columns.memory")}</TableHead>
           <TableHead>{t("kubernetes.columns.memoryTrend")}</TableHead>
-          {showCluster && <TableHead>{t("kubernetes.columns.cluster")}</TableHead>}
+          {showCluster && <MaybeSortableHead head={head} column="cluster" defaultDir="asc">{t("kubernetes.columns.cluster")}</MaybeSortableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -139,7 +143,7 @@ export function PodLink({ pod, className }: { pod: Pick<KubernetesPod, "pod_uid"
   );
 }
 
-export function PodTable({ pods, showWorkload = true, showCluster = true }: { pods: KubernetesPod[]; showWorkload?: boolean; showCluster?: boolean }) {
+export function PodTable({ pods, showWorkload = true, showCluster = true, head }: { pods: KubernetesPod[]; showWorkload?: boolean; showCluster?: boolean; head?: SortHeadProps<PodSort> }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const locale = i18n.resolvedLanguage ?? "en";
@@ -147,16 +151,16 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
     <Table mobile="stack" data-testid="k8s-pod-table">
       <TableHeader>
         <TableRow>
-          <TableHead>{t("kubernetes.columns.name")}</TableHead>
-          <TableHead>{t("kubernetes.columns.status")}</TableHead>
-          <TableHead className="text-right">{t("kubernetes.columns.restarts")}</TableHead>
+          <MaybeSortableHead head={head} column="name" defaultDir="asc">{t("kubernetes.columns.name")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="status" defaultDir="asc">{t("kubernetes.columns.status")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="restarts" className="text-right">{t("kubernetes.columns.restarts")}</MaybeSortableHead>
           <TableHead className="text-right">{t("kubernetes.columns.cpu")}</TableHead>
           <TableHead className="text-right">{t("kubernetes.columns.memory")}</TableHead>
-          {showWorkload && <TableHead>{t("kubernetes.columns.workload")}</TableHead>}
-          <TableHead>{t("kubernetes.columns.node")}</TableHead>
-          <TableHead>{t("kubernetes.columns.ip")}</TableHead>
-          <TableHead>{t("kubernetes.columns.age")}</TableHead>
-          {showCluster && <TableHead>{t("kubernetes.columns.cluster")}</TableHead>}
+          {showWorkload && <MaybeSortableHead head={head} column="workload" defaultDir="asc">{t("kubernetes.columns.workload")}</MaybeSortableHead>}
+          <MaybeSortableHead head={head} column="node" defaultDir="asc">{t("kubernetes.columns.node")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="ip" defaultDir="asc">{t("kubernetes.columns.ip")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="age">{t("kubernetes.columns.age")}</MaybeSortableHead>
+          {showCluster && <MaybeSortableHead head={head} column="cluster" defaultDir="asc">{t("kubernetes.columns.cluster")}</MaybeSortableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -217,21 +221,21 @@ export function PodTable({ pods, showWorkload = true, showCluster = true }: { po
   );
 }
 
-export function NodeTable({ nodes, showCluster = true }: { nodes: KubernetesNode[]; showCluster?: boolean }) {
+export function NodeTable({ nodes, showCluster = true, head }: { nodes: KubernetesNode[]; showCluster?: boolean; head?: SortHeadProps<NodeSort> }) {
   const { t } = useTranslation();
   return (
     <Table mobile="stack" data-testid="k8s-node-table">
       <TableHeader>
         <TableRow>
-          <TableHead>{t("kubernetes.columns.name")}</TableHead>
-          <TableHead>{t("kubernetes.columns.status")}</TableHead>
+          <MaybeSortableHead head={head} column="name" defaultDir="asc">{t("kubernetes.columns.name")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="status">{t("kubernetes.columns.status")}</MaybeSortableHead>
           <TableHead className="text-right">{t("kubernetes.columns.pods")}</TableHead>
           <TableHead className="text-right">{t("kubernetes.columns.cpu")}</TableHead>
           <TableHead className="text-right">{t("kubernetes.columns.memory")}</TableHead>
           <TableHead>{t("kubernetes.columns.host")}</TableHead>
-          <TableHead>{t("kubernetes.columns.kubelet")}</TableHead>
-          <TableHead>{t("kubernetes.columns.lastSeen")}</TableHead>
-          {showCluster && <TableHead>{t("kubernetes.columns.cluster")}</TableHead>}
+          <MaybeSortableHead head={head} column="kubelet" defaultDir="asc">{t("kubernetes.columns.kubelet")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="last_seen">{t("kubernetes.columns.lastSeen")}</MaybeSortableHead>
+          {showCluster && <MaybeSortableHead head={head} column="cluster" defaultDir="asc">{t("kubernetes.columns.cluster")}</MaybeSortableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>

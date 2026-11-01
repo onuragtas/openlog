@@ -87,18 +87,23 @@ export const servicesQuery = (hostId: string) =>
       unwrap(await api.GET("/api/v1/hosts/{host_id}/services", { params: { path: { host_id: hostId } }, signal })),
   });
 
-export const inventorySearchQuery = (category: string, q: string) =>
+export const INVENTORY_SEARCH_LIMIT = 1000;
+
+/** The whole answer, for a screen that has to say the list was cut. */
+export const inventorySearchResultQuery = (category: string, q: string) =>
   queryOptions({
     queryKey: ["inventory-search", category, q],
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET("/api/v1/inventory/search", {
-          params: { query: { category, q: q || undefined, limit: 1000 } },
+          params: { query: { category, q: q || undefined, limit: INVENTORY_SEARCH_LIMIT } },
           signal,
         }),
-      ).items,
+      ),
     enabled: category !== "",
   });
+
+export const inventorySearchQuery = (category: string, q: string) => queryOptions({ ...inventorySearchResultQuery(category, q), select: (d) => d.items });
 
 /** Exact-match log attribute filters (`attr.<key>` on GET /api/v1/logs; allowlisted keys, see api.md). */
 export interface LogAttrFilters {

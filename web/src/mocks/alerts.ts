@@ -625,7 +625,10 @@ export const alertHandlers = [
       .filter((i) => (states.length === 0 || states.includes(i.state)) && (!severity || i.severity === severity))
       .sort((a, b) => b.opened_at.localeCompare(a.opened_at));
     const count = (s: string) => db.incidents.filter((i) => i.state === s).length;
-    return HttpResponse.json({ incidents: list, next_cursor: null, counts: { open: count("open"), acknowledged: count("acknowledged"), resolved: count("resolved") } });
+    // The cursor is opaque to the console, so here it can simply be where the next page starts.
+    const start = Number(url.searchParams.get("cursor") ?? 0);
+    const end = start + Number(url.searchParams.get("limit") ?? 50);
+    return HttpResponse.json({ incidents: list.slice(start, end), next_cursor: end < list.length ? String(end) : null, counts: { open: count("open"), acknowledged: count("acknowledged"), resolved: count("resolved") } });
   })),
   http.get(`${API}/incidents/:id`, guarded("read", (info) => {
     const inc = db.incidents.find((i) => i.id === idOf(info));

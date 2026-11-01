@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { login } from "@/api/account";
@@ -48,6 +49,52 @@ describe("PrometheusTargetsCard", () => {
     expect(rows[0]).toHaveTextContent("Container label");
     expect(within(rows[1]!).getByRole("link", { name: "web-1" })).toHaveAttribute("href", "/hosts/h1");
     expect(body).toMatchObject({ metric: "up", aggregation: "last", filters: [{ key: "resource.openlog.integration.id", op: "=", value: "prometheus" }] });
+  });
+
+  function targets(n: number, truncated: boolean) {
+    const now = Date.now();
+    server.use(
+      http.post("*/api/v1/metrics/query", () =>
+        HttpResponse.json({
+          metric: { name: "up", type: "gauge", unit: "1", temporality: "unspecified", monotonic: false },
+          aggregation: "last",
+          step: "60s",
+          truncated,
+          series: Array.from({ length: n }, (_, i) => ({
+            attributes: { "host.id": "h1", "host.name": "web-1", "service.name": `job-${String(i).padStart(3, "0")}`, "resource.service.instance.id": "127.0.0.1:9100" },
+            points: [[now - 60_000, 1]],
+          })),
+        }),
+      ),
+    );
+  }
+  const jobs = () => screen.getAllByTestId("prometheus-target").map((r) => within(r).getAllByRole("cell")[1]!.textContent);
+
+  it("sorts and pages what was fetched, in the browser", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    targets(60, false);
+    renderCard();
+    await screen.findByTestId("prometheus-summary");
+    expect(jobs()).toHaveLength(50);
+    expect(jobs()[0]).toBe("job-000");
+    await user.click(screen.getByRole("button", { name: "Job" }));
+    await user.click(screen.getByRole("button", { name: "Job" }));
+    await waitFor(() => expect(jobs()[0]).toBe("job-059"));
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(jobs()).toHaveLength(10));
+    // The summary is of every target and not of the page.
+    expect(screen.getByTestId("prometheus-summary")).toHaveTextContent("All 60 targets up");
+    expect(screen.queryByText(/Only the first/)).not.toBeInTheDocument();
+  });
+
+  it("says a cut list is cut, and does not call it all up", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    targets(200, true);
+    renderCard();
+    expect(await screen.findByTestId("prometheus-summary")).toHaveTextContent("200 targets up");
+    expect(screen.getByTestId("prometheus-summary")).not.toHaveTextContent("All");
+    expect(screen.getByText("Only the first 200 targets are shown.")).toBeInTheDocument();
   });
 
   it("stays hidden while nothing is scraped", async () => {

@@ -243,9 +243,8 @@ export const handlers = [
           .filter((it) => it.category === category && (!q || it.key.toLowerCase().includes(q)))
           .map((it) => ({ host_id: h.host_id, host_name: h.host_name, ...it })),
       )
-      .sort((a, b) => a.key.localeCompare(b.key) || a.host_id.localeCompare(b.host_id))
-      .slice(0, lim);
-    return HttpResponse.json({ items });
+      .sort((a, b) => a.key.localeCompare(b.key) || a.host_id.localeCompare(b.host_id));
+    return HttpResponse.json({ items: items.slice(0, lim), has_more: items.length > lim });
   })),
 
   http.get(`${API}/logs`, authed(({ request }) => {

@@ -1,13 +1,18 @@
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useEffect, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { Container } from "@/api/containers";
+import { containersQuery, type Container, type ContainerFilters, type ContainerSort } from "@/api/containers";
 import { Sparkline } from "@/components/apm/Charts";
+import { ListPager } from "@/components/ListPager";
+import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { MaybeSortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, type SortHeadProps } from "@/components/ui/table";
 import { containerImage, containerName, containerStatus, groupByComposeService, memoryRatio, shortContainerId } from "@/lib/containers";
 import { formatBytes, formatDateTime, formatRelative, formatValue } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
-import { parseTimeParam } from "@/lib/time";
+import { useListState } from "@/lib/list";
+import { parseTimeParam, type RangeSpec } from "@/lib/time";
 
 export function ContainerStatusBadge({ container }: { container: Pick<Container, "state" | "health" | "reporting"> }) {
   const { t } = useTranslation();
@@ -37,10 +42,17 @@ export interface ContainerTableProps {
   containers: Container[];
   showHost?: boolean;
   showCompose?: boolean;
+  head?: SortHeadProps<ContainerSort>;
 }
 
-/** Container rows; on phones every row becomes a card (Table mobile="stack"). */
-export function ContainerTable({ containers, showHost = true, showCompose = true }: ContainerTableProps) {
+/**
+ * Container rows; on phones every row becomes a card (Table mobile="stack").
+ *
+ * CPU and memory headings stay plain: the server reads them from metrics after it has cut the page, and only for its rows, since reading
+ * them for up to 10000 containers on each request would cost a metrics query over all of them to show fifty. They are not known when the
+ * order is decided, the same way p95 isn't on the APM database lists (api.md "Containers").
+ */
+export function ContainerTable({ containers, showHost = true, showCompose = true, head }: ContainerTableProps) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const now = useNow();
@@ -49,15 +61,15 @@ export function ContainerTable({ containers, showHost = true, showCompose = true
     <Table mobile="stack" data-testid="container-table">
       <TableHeader>
         <TableRow>
-          <TableHead>{t("containers.columns.name")}</TableHead>
-          <TableHead>{t("containers.columns.state")}</TableHead>
-          <TableHead className="hidden xl:table-cell">{t("containers.columns.image")}</TableHead>
-          {showCompose && <TableHead className="hidden lg:table-cell">{t("containers.columns.compose")}</TableHead>}
-          {showHost && <TableHead className="hidden md:table-cell">{t("containers.columns.host")}</TableHead>}
+          <MaybeSortableHead head={head} column="name" defaultDir="asc">{t("containers.columns.name")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="state" defaultDir="asc">{t("containers.columns.state")}</MaybeSortableHead>
+          <MaybeSortableHead head={head} column="image" defaultDir="asc" className="hidden xl:table-cell">{t("containers.columns.image")}</MaybeSortableHead>
+          {showCompose && <MaybeSortableHead head={head} column="compose" defaultDir="asc" className="hidden lg:table-cell">{t("containers.columns.compose")}</MaybeSortableHead>}
+          {showHost && <MaybeSortableHead head={head} column="host" defaultDir="asc" className="hidden md:table-cell">{t("containers.columns.host")}</MaybeSortableHead>}
           <TableHead className="text-right">{t("containers.columns.cpu")}</TableHead>
           <TableHead className="hidden lg:table-cell">{t("containers.columns.trend")}</TableHead>
           <TableHead className="text-right">{t("containers.columns.memory")}</TableHead>
-          <TableHead className="hidden md:table-cell">{t("containers.columns.lastSeen")}</TableHead>
+          <MaybeSortableHead head={head} column="last_seen" className="hidden md:table-cell">{t("containers.columns.lastSeen")}</MaybeSortableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -133,6 +145,36 @@ export function ContainerTable({ containers, showHost = true, showCompose = true
         })}
       </TableBody>
     </Table>
+  );
+}
+
+/** One page of the containers at a time, sorted and cut by the server. */
+export function PagedContainers({ range, filters, empty, showHost = true }: { range: RangeSpec; filters: ContainerFilters; empty: ReactNode; showHost?: boolean }) {
+  const { t } = useTranslation();
+  const list = useListState<ContainerSort>("name", "asc");
+  const q = useQuery(containersQuery(range, filters, list.state));
+  const { toFirstPage } = list;
+  const filterKey = JSON.stringify(filters);
+  // A filter changes what the pages hold, so staying on page five of it would usually show nothing.
+  useEffect(toFirstPage, [filterKey, toFirstPage]);
+  return (
+    <>
+      <div className="rounded-xl border bg-card">
+        {q.isPending ? (
+          <LoadingState />
+        ) : q.isError ? (
+          <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+        ) : q.data.containers.length === 0 && list.state.offset === 0 ? (
+          <EmptyState>{empty}</EmptyState>
+        ) : (
+          <>
+            <ContainerTable containers={q.data.containers} showHost={showHost} head={list.head} />
+            <ListPager list={list} count={q.data.containers.length} hasMore={q.data.has_more ?? false} />
+          </>
+        )}
+      </div>
+      {q.data && q.data.total > q.data.containers.length && <p className="mt-2 text-xs text-muted-foreground">{t("containers.shown", { shown: q.data.containers.length, total: q.data.total })}</p>}
+    </>
   );
 }
 

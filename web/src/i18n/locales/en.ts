@@ -1759,6 +1759,7 @@ export const en = {
   },
   integrations: {
     title: "Integrations",
+    truncated: "Only the first {{count}} discovered services were read, so this list and its counts may be incomplete.",
     subtitle: "Metrics integrations of discovered services on all hosts",
     status: {
       enabled: "Enabled",
@@ -3976,6 +3977,8 @@ export const en = {
     down_other: "{{count}} down",
     allUp_one: "{{count}} target up",
     allUp_other: "All {{count}} targets up",
+    seenUp_one: "{{count}} target up",
+    seenUp_other: "{{count}} targets up",
     empty: "No target was scraped in the last 15 minutes.",
     truncated: "Only the first {{count}} targets are shown.",
     openMetrics: "Metrics",
@@ -4143,6 +4146,7 @@ export const en = {
       allSeverities: "All severities",
       empty: "No incidents match these filters.",
       emptyActive: "No open incidents. All quiet.",
+      loadMore: "Load more incidents",
       columns: { state: "State", severity: "Severity", incident: "Incident", rule: "Rule", opened: "Opened", duration: "Duration" },
       muted: "Muted",
       flapping: "Flapping",

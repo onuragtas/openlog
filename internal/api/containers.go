@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -185,6 +186,54 @@ func (f containerFilter) match(c *containerJSON) bool {
 	return true
 }
 
+// The stats of a container come from metrics and are read after the page is cut, for its rows, because reading them for maxContainerRows
+// containers on each request would be a metrics query over ten thousand ids to show fifty. So CPU and memory can't be sorted: they are not
+// known until the order is decided, the way p95 isn't on the APM database lists. Order and page are complete only up to maxContainerRows.
+var containerKeys = map[string]func(*containerJSON) rowKey{
+	"name":  func(c *containerJSON) rowKey { return textKey(cmp.Or(c.Name, c.ContainerID)) },
+	"state": func(c *containerJSON) rowKey { return textKey(containerStatusLabel(c)) },
+	"image": func(c *containerJSON) rowKey {
+		if len(c.ImageTags) > 0 {
+			return textKey(c.ImageName + ":" + c.ImageTags[0])
+		}
+		return textKey(c.ImageName)
+	},
+	// The service is what the cell shows first, with its project under it.
+	"compose": func(c *containerJSON) rowKey {
+		if c.ComposeService == "" && c.ComposeProject == "" {
+			return rowKey{blank: true}
+		}
+		return textKey(c.ComposeService + "\x00" + c.ComposeProject)
+	},
+	"host":      func(c *containerJSON) rowKey { return textKey(cmp.Or(c.HostName, c.HostID)) },
+	"last_seen": func(c *containerJSON) rowKey { return timeKey(c.lastSeen) },
+}
+
+// maxLimit leaves the bound to OPENLOG_API_MAX_ROWS, as s.limit did before this list had pages, so a large limit keeps working.
+var containersList = listSpec{
+	columns:  columnsOf(containerKeys),
+	sort:     "name",
+	asc:      map[string]bool{"name": true, "state": true, "image": true, "compose": true, "host": true},
+	limit:    100,
+	maxLimit: wholeList,
+}
+
+// containerStatusLabel is what the state column of a row says (containerStatus in web/src/lib/containers.ts), so that the heading groups
+// what reads alike: a running container that stopped reporting does not sit among the running ones.
+func containerStatusLabel(c *containerJSON) string {
+	switch {
+	case !c.Reporting && (c.State == "running" || c.State == "" || c.State == "restarting"):
+		return "not reporting"
+	case c.State == "running" && c.Health == "unhealthy":
+		return "unhealthy"
+	}
+	return cmp.Or(c.State, "unknown")
+}
+
+func containerTie(a, b *containerJSON) int {
+	return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ContainerID, b.ContainerID), strings.Compare(a.HostID, b.HostID))
+}
+
 func sortContainers(cs []*containerJSON) {
 	sort.SliceStable(cs, func(i, j int) bool {
 		a, b := cs[i], cs[j]
@@ -205,7 +254,7 @@ func (s *Server) loadContainers(r *http.Request, sc *query.Scope, f containerFil
 	q := containersQuery(sc).
 		Where("last_seen >= fromUnixTimestamp64Nano({t_from:Int64})").Param("t_from", from.UnixNano()).
 		Where("first_seen <= fromUnixTimestamp64Nano({t_to:Int64})").Param("t_to", to.UnixNano()).
-		OrderBy("container_id").Limit(maxContainerRows)
+		OrderBy("container_id", "host_id").Limit(maxContainerRows)
 	if f.hostID != "" {
 		q.Where("host_id = {host_id:String}").Param("host_id", f.hostID)
 	}
@@ -300,7 +349,7 @@ func (s *Server) listContainers(w http.ResponseWriter, r *http.Request, sc *quer
 	if err != nil {
 		return err
 	}
-	limit, err := s.limit(r)
+	l, err := containersList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -313,11 +362,11 @@ func (s *Server) listContainers(w http.ResponseWriter, r *http.Request, sc *quer
 		return err
 	}
 	total := len(cs)
-	cs = cs[:min(len(cs), limit)]
+	cs, more := sortPageIfAsked(r, cs, l, containerKeys, containerTie)
 	if err := s.addContainerStats(r, sc, cs, from, to); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"containers": cs, "total": total, "step": formatStep(sparkStep(from, to))})
+	writeJSON(w, http.StatusOK, map[string]any{"containers": cs, "total": total, "step": formatStep(sparkStep(from, to)), "has_more": more})
 	return nil
 }
 

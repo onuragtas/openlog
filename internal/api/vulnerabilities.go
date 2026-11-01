@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/onuragtas/openlog/internal/api/query"
@@ -32,6 +31,36 @@ var vulnerabilitiesList = listSpec{
 	tiebreak: []string{"host_count DESC", "id"},
 	limit:    maxVulnRows,
 	maxLimit: maxVulnRows,
+}
+
+// vulnFindingsList starts as these lists always have, the most serious first and then by package, which is why its tiebreak begins there.
+// The rest of the tiebreak is the table's sorting key, on which a finding is unique.
+var vulnFindingsList = listSpec{
+	columns: map[string]string{
+		"severity":  "multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)",
+		"score":     "sc",
+		"advisory":  "vid",
+		"package":   "pkg",
+		"host":      "if(hname = '', hid, hname)",
+		"version":   "ver",
+		"ecosystem": "eco",
+	},
+	sort:     "severity",
+	asc:      map[string]bool{"severity": true, "advisory": true, "package": true, "host": true, "version": true, "ecosystem": true},
+	tiebreak: []string{"pkg", "vid", "hid"},
+	limit:    maxVulnRows,
+	maxLimit: maxVulnRows,
+}
+
+// vulnAdvisoryJSON is about the advisory and not about a row. It can't come from the first finding of the answer, since that depends on
+// the sort and there is no first finding past the last page.
+type vulnAdvisoryJSON struct {
+	CVE        string  `json:"cve"`
+	Severity   string  `json:"severity"`
+	Score      float64 `json:"score"`
+	Summary    string  `json:"summary"`
+	Findings   uint64  `json:"findings"`
+	WithoutFix uint64  `json:"without_fix"`
 }
 
 // SetVulnerabilities enables /api/v1/vulnerabilities/* with the catalog behind them. Must be called before Run.
@@ -174,15 +203,56 @@ func (s *Server) getVulnerability(w http.ResponseWriter, r *http.Request, sc *qu
 	if id == "" {
 		return &apiError{http.StatusBadRequest, "invalid_argument", "the advisory id is required"}
 	}
-	findings, err := s.vulnFindings(r, sc, "vuln_id = {vuln_id:String}", "vuln_id", id)
+	l, err := vulnFindingsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	if len(findings) == 0 {
+	// Whether the advisory exists is asked of the advisory, because a page past the end is empty too, and that is not "not found".
+	advisory, err := s.vulnAdvisory(r, sc, id)
+	if err != nil {
+		return err
+	}
+	if advisory == nil {
 		return notFound("no open finding for this advisory")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"vuln_id": id, "findings": findings})
+	findings, more, err := s.vulnFindings(r, sc, "vuln_id = {vuln_id:String}", "vuln_id", id, l)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"vuln_id": id, "findings": findings, "advisory": advisory, "has_more": more})
 	return nil
+}
+
+// vulnAdvisory sums up one advisory over all of its open findings, or answers nil when it has none. Hosts can disagree on a severity after
+// a feed update, and the worst of them is the one to show, as the first row of the default order was.
+func (s *Server) vulnAdvisory(r *http.Request, sc *query.Scope, id string) (*vulnAdvisoryJSON, error) {
+	q := sc.From(query.HostVulnerabilities).Final().Columns(
+		"any(cve) AS cve_id",
+		"argMin(severity, multiIf(severity = 'critical', 0, severity = 'high', 1, severity = 'medium', 2, severity = 'low', 3, 4)) AS sev",
+		"toFloat64(max(score)) AS sc",
+		"any(summary) AS sum",
+		"count() AS n",
+		"countIf(fixed_in = '') AS unfixed",
+	).Where("resolved_at = toDateTime(0)").Where("vuln_id = {vuln_id:String}").Param("vuln_id", id)
+	rows, err := sc.Query(r.Context(), q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var a vulnAdvisoryJSON
+	if rows.Next() {
+		if err := rows.Scan(&a.CVE, &a.Severity, &a.Score, &a.Summary, &a.Findings, &a.WithoutFix); err != nil {
+			return nil, err
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// An aggregate with no GROUP BY answers one row even over nothing, so the row alone proves nothing.
+	if a.Findings == 0 {
+		return nil, nil
+	}
+	return &a, nil
 }
 
 // hostVulnerabilities lists the open findings of one host, which is what the host's own screen shows.
@@ -192,23 +262,19 @@ func (s *Server) hostVulnerabilities(w http.ResponseWriter, r *http.Request, sc 
 	if err := requireHost(r, sc, hostID); err != nil {
 		return err
 	}
-	findings, err := s.vulnFindings(r, sc, "host_id = {host_id:String}", "host_id", hostID)
+	l, err := vulnFindingsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"host_id": hostID, "findings": findings})
+	findings, more, err := s.vulnFindings(r, sc, "host_id = {host_id:String}", "host_id", hostID, l)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"host_id": hostID, "findings": findings, "has_more": more})
 	return nil
 }
 
-func (s *Server) vulnFindings(r *http.Request, sc *query.Scope, where, param, value string) ([]vulnFindingJSON, error) {
-	limit := maxVulnRows
-	if v := r.URL.Query().Get("limit"); v != "" {
-		n, err := strconv.Atoi(v)
-		if err != nil || n < 1 || n > maxVulnRows {
-			return nil, &apiError{http.StatusBadRequest, "invalid_argument", "limit must be between 1 and 1000"}
-		}
-		limit = n
-	}
+func (s *Server) vulnFindings(r *http.Request, sc *query.Scope, where, param, value string, l listRequest) ([]vulnFindingJSON, bool, error) {
 	q := sc.From(query.HostVulnerabilities).Final().Columns(
 		"host_id AS hid", "host_name AS hname", "vuln_id AS vid", "cve AS cve_id", "severity AS sev",
 		"toFloat64(score) AS sc", "ecosystem AS eco", "package AS pkg", "version AS ver",
@@ -216,11 +282,10 @@ func (s *Server) vulnFindings(r *http.Request, sc *query.Scope, where, param, va
 		"toInt64(toUnixTimestamp64Milli(first_seen)) AS first_ms",
 		"toInt64(toUnixTimestamp64Milli(last_seen)) AS last_ms",
 	).Where("resolved_at = toDateTime(0)").Where(where).Param(param, value).
-		OrderBy("multiIf(sev = 'critical', 0, sev = 'high', 1, sev = 'medium', 2, sev = 'low', 3, 4)", "pkg", "vid").
-		Limit(limit)
+		OrderBy(vulnFindingsList.order(l)...).Limit(l.fetch()).Offset(l.offset)
 	rows, err := sc.Query(r.Context(), q)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	out := []vulnFindingJSON{}
@@ -229,12 +294,16 @@ func (s *Server) vulnFindings(r *http.Request, sc *query.Scope, where, param, va
 		var firstMs, lastMs int64
 		if err := rows.Scan(&f.HostID, &f.HostName, &f.VulnID, &f.CVE, &f.Severity, &f.Score, &f.Ecosystem,
 			&f.Package, &f.Version, &f.FixedIn, &f.Summary, &firstMs, &lastMs); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		f.FirstSeen, f.LastSeen = formatMillis(firstMs), formatMillis(lastMs)
 		out = append(out, f)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	out, more := page(out, l)
+	return out, more, nil
 }
 
 // vulnerabilityCatalogStatus says how fresh the catalog is, so "no findings" can be told from "the feed

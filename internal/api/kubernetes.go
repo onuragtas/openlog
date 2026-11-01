@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"encoding/json"
 	"net/http"
 	"sort"
@@ -99,6 +100,105 @@ func k8sPathParam(r *http.Request, name string) (string, error) {
 func seenIn(q *query.Select, from, to time.Time) *query.Select {
 	return q.Where("last_seen >= fromUnixTimestamp64Nano({t_from:Int64})").Param("t_from", from.UnixNano()).
 		Where("first_seen <= fromUnixTimestamp64Nano({t_to:Int64})").Param("t_to", to.UnixNano())
+}
+
+// ---- the lists ----
+//
+// The three lists below read up to maxK8sRows rows from the entity tables, filter and sort those in Go, and cut the page. Their usage comes
+// from kubelet metrics and is read after that cut, for the rows of the page, because reading it for maxK8sRows rows on each request would
+// be a metrics query over ten thousand keys to show fifty. So nothing read after the cut can be a sort: not CPU, not memory, and on a
+// workload not restarts or pods; the same is true of the pods and the host of a node. Those headings stay plain, as p95 does on the APM
+// database lists. Order and page are complete only up to maxK8sRows rows.
+
+// maxLimit leaves the bound to OPENLOG_API_MAX_ROWS, as s.limit did before these lists had pages, so a large limit keeps working.
+func k8sListSpec[T any](keys map[string]func(T) rowKey, asc ...string) listSpec {
+	natural := make(map[string]bool, len(asc))
+	for _, name := range asc {
+		natural[name] = true
+	}
+	return listSpec{columns: columnsOf(keys), sort: "name", asc: natural, limit: 100, maxLimit: wholeList}
+}
+
+var workloadKeys = map[string]func(*k8sWorkloadJSON) rowKey{
+	"name":      func(w *k8sWorkloadJSON) rowKey { return textKey(w.Name) },
+	"namespace": func(w *k8sWorkloadJSON) rowKey { return textKey(w.Namespace) },
+	"kind":      func(w *k8sWorkloadJSON) rowKey { return textKey(w.Kind) },
+	// The worst first when it starts descending, since alphabetically "degraded" and "healthy" say nothing.
+	"health": func(w *k8sWorkloadJSON) rowKey {
+		return numKey(float64(map[string]int{"unavailable": 3, "degraded": 2, "unknown": 1}[w.Health]))
+	},
+	// A CronJob has no replicas and shows none.
+	"replicas": func(w *k8sWorkloadJSON) rowKey {
+		if w.Kind == "CronJob" {
+			return rowKey{blank: true}
+		}
+		return numKey(float64(w.Ready))
+	},
+	"cluster": func(w *k8sWorkloadJSON) rowKey { return textKey(cmp.Or(w.ClusterName, w.ClusterUID)) },
+}
+
+var k8sWorkloadsList = k8sListSpec(workloadKeys, "name", "namespace", "kind", "cluster")
+
+func workloadTie(a, b *k8sWorkloadJSON) int {
+	return cmp.Or(strings.Compare(a.ClusterName, b.ClusterName), strings.Compare(a.Namespace, b.Namespace), strings.Compare(a.Kind, b.Kind),
+		strings.Compare(a.Name, b.Name), strings.Compare(a.ClusterUID, b.ClusterUID))
+}
+
+var podKeys = map[string]func(*k8sPodJSON) rowKey{
+	"name":      func(p *k8sPodJSON) rowKey { return textKey(p.PodName) },
+	"namespace": func(p *k8sPodJSON) rowKey { return textKey(p.Namespace) },
+	"status":    func(p *k8sPodJSON) rowKey { return textKey(podStatusLabel(p)) },
+	"restarts":  func(p *k8sPodJSON) rowKey { return numKey(float64(p.Restarts)) },
+	"workload":  func(p *k8sPodJSON) rowKey { return textKey(p.WorkloadName) },
+	"node":      func(p *k8sPodJSON) rowKey { return textKey(p.NodeName) },
+	"ip":        func(p *k8sPodJSON) rowKey { return ipKey(p.PodIP) },
+	// Largest age first means oldest first, so it is the creation time turned around.
+	"age": func(p *k8sPodJSON) rowKey {
+		k := parsedTimeKey(p.CreatedAt)
+		k.num = -k.num
+		return k
+	},
+	"cluster": func(p *k8sPodJSON) rowKey { return textKey(cmp.Or(p.ClusterName, p.ClusterUID)) },
+}
+
+var k8sPodsList = k8sListSpec(podKeys, "name", "namespace", "status", "workload", "node", "ip", "cluster")
+
+// podStatusLabel is what the status column of a row says (podStatus in web/src/lib/kubernetes.ts), so that the heading groups what reads
+// alike: a pod that stopped reporting shows that and not its last phase.
+func podStatusLabel(p *k8sPodJSON) string {
+	if !p.Reporting && (p.Phase == "Running" || p.Phase == "Pending" || p.Phase == "") {
+		return "not reporting"
+	}
+	return cmp.Or(p.Status, "unknown")
+}
+
+func podTie(a, b *k8sPodJSON) int {
+	return cmp.Or(strings.Compare(a.PodName, b.PodName), strings.Compare(a.PodUID, b.PodUID), strings.Compare(a.ClusterUID, b.ClusterUID))
+}
+
+var nodeKeys = map[string]func(*k8sNodeJSON) rowKey{
+	"name": func(n *k8sNodeJSON) rowKey { return textKey(n.NodeName) },
+	// As the status column reads it (nodeStatus in web/src/lib/kubernetes.ts), the worst first when it starts descending.
+	"status": func(n *k8sNodeJSON) rowKey {
+		switch {
+		case !n.Reporting:
+			return numKey(1)
+		case n.Ready == "true":
+			return numKey(0)
+		case n.Ready == "false":
+			return numKey(3)
+		}
+		return numKey(2)
+	},
+	"kubelet":   func(n *k8sNodeJSON) rowKey { return textKey(n.KubeletVersion) },
+	"last_seen": func(n *k8sNodeJSON) rowKey { return timeKey(n.lastSeen) },
+	"cluster":   func(n *k8sNodeJSON) rowKey { return textKey(cmp.Or(n.ClusterName, n.ClusterUID)) },
+}
+
+var k8sNodesList = k8sListSpec(nodeKeys, "name", "kubelet", "cluster")
+
+func nodeTie(a, b *k8sNodeJSON) int {
+	return cmp.Or(strings.Compare(a.NodeName, b.NodeName), strings.Compare(a.ClusterName, b.ClusterName), strings.Compare(a.ClusterUID, b.ClusterUID))
 }
 
 // ---- latest metric values ----
@@ -456,7 +556,7 @@ func (s *Server) k8sListPods(w http.ResponseWriter, r *http.Request, sc *query.S
 	if err != nil {
 		return err
 	}
-	limit, err := s.limit(r)
+	l, err := k8sPodsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -477,11 +577,11 @@ func (s *Server) k8sListPods(w http.ResponseWriter, r *http.Request, sc *query.S
 		return err
 	}
 	total := len(pods)
-	pods = pods[:min(len(pods), limit)]
+	pods, more := sortPageIfAsked(r, pods, l, podKeys, podTie)
 	if err := s.addPodStats(r, sc, pods, from, to); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pods": pods, "total": total})
+	writeJSON(w, http.StatusOK, map[string]any{"pods": pods, "total": total, "has_more": more})
 	return nil
 }
 
@@ -1089,7 +1189,7 @@ func (s *Server) k8sListWorkloads(w http.ResponseWriter, r *http.Request, sc *qu
 	if err != nil {
 		return err
 	}
-	limit, err := s.limit(r)
+	l, err := k8sWorkloadsList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -1102,14 +1202,14 @@ func (s *Server) k8sListWorkloads(w http.ResponseWriter, r *http.Request, sc *qu
 		return err
 	}
 	total := len(wls)
-	wls = wls[:min(len(wls), limit)]
+	wls, more := sortPageIfAsked(r, wls, l, workloadKeys, workloadTie)
 	if err := s.addWorkloadPods(r, sc, wls, from, to); err != nil {
 		return err
 	}
 	if err := s.addWorkloadStats(r, sc, wls, from, to); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"workloads": wls, "total": total, "step": formatStep(sparkStep(from, to))})
+	writeJSON(w, http.StatusOK, map[string]any{"workloads": wls, "total": total, "step": formatStep(sparkStep(from, to)), "has_more": more})
 	return nil
 }
 
@@ -1541,7 +1641,7 @@ func (s *Server) k8sListNodes(w http.ResponseWriter, r *http.Request, sc *query.
 	if err != nil {
 		return err
 	}
-	limit, err := s.limit(r)
+	l, err := k8sNodesList.parse(r, s.cfg.MaxRows)
 	if err != nil {
 		return err
 	}
@@ -1570,11 +1670,11 @@ func (s *Server) k8sListNodes(w http.ResponseWriter, r *http.Request, sc *query.
 		return nodes[i].NodeName < nodes[j].NodeName
 	})
 	total := len(nodes)
-	nodes = nodes[:min(len(nodes), limit)]
+	nodes, more := sortPageIfAsked(r, nodes, l, nodeKeys, nodeTie)
 	if err := s.addNodeStats(r, sc, nodes, from, to); err != nil {
 		return err
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "total": total})
+	writeJSON(w, http.StatusOK, map[string]any{"nodes": nodes, "total": total, "has_more": more})
 	return nil
 }
 

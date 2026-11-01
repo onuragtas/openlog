@@ -11,6 +11,8 @@ import {
   kubernetesPodTimeseriesQuery,
   kubernetesWorkloadQuery,
   kubernetesWorkloadTimeseriesQuery,
+  type KubernetesPod,
+  type PodSort,
   type WorkloadRef,
 } from "@/api/kubernetes";
 import { EventList } from "@/components/kubernetes/EventList";
@@ -19,6 +21,7 @@ import { PodStatusBadge, WorkloadHealthBadge } from "@/components/kubernetes/K8s
 import { PodTable, WorkloadLink } from "@/components/kubernetes/KubernetesTables";
 import type { QueryFilter } from "@/api/explorer";
 import { EmbeddedLogsExplorer } from "@/components/logs-explorer/EmbeddedLogsExplorer";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatDateTime, formatRelative, type UnitKind } from "@/lib/format";
 import { useNow } from "@/lib/hooks";
+import { timeOf, useLocalList } from "@/lib/list";
 import { podChartSeries, rangeOnly, replicasText, timeseriesBounds, workloadChartSeries } from "@/lib/kubernetes";
 import type { ChartSeriesInput } from "@/lib/series";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
@@ -115,6 +119,33 @@ function NotFound({ text, back }: { text: string; back: React.ReactNode }) {
 
 const isNotFound = (e: unknown) => e instanceof ApiError && (e.status === 404 || e.status === 400);
 
+const POD_READ: Record<PodSort, (p: KubernetesPod) => string | number | null> = {
+  name: (p) => p.pod_name,
+  namespace: (p) => p.namespace,
+  status: (p) => p.status,
+  restarts: (p) => p.restarts,
+  workload: (p) => p.workload_name,
+  node: (p) => p.node_name,
+  ip: (p) => p.pod_ip,
+  // Largest age first means oldest first, so it is the creation time turned around.
+  age: (p) => {
+    const created = timeOf(p.created_at);
+    return created === null ? null : -created;
+  },
+  cluster: (p) => p.cluster_name,
+};
+
+/** The detail of a workload answers all of its pods at once, stats included, so here they sort and page in the browser. */
+function WorkloadPods({ pods }: { pods: KubernetesPod[] }) {
+  const list = useLocalList(pods, POD_READ, "name", "asc");
+  return (
+    <>
+      <PodTable pods={list.visible} showWorkload={false} showCluster={false} head={list.head} />
+      <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+    </>
+  );
+}
+
 export function KubernetesWorkloadPage() {
   const { t } = useTranslation();
   const params = workloadRoute.useParams();
@@ -191,7 +222,7 @@ export function KubernetesWorkloadPage() {
             {t("kubernetes.workload.allPods")}
           </Link>
         </div>
-        {w.pod_list.length === 0 ? <EmptyState>{t("kubernetes.workload.podsEmpty")}</EmptyState> : <PodTable pods={w.pod_list} showWorkload={false} showCluster={false} />}
+        {w.pod_list.length === 0 ? <EmptyState>{t("kubernetes.workload.podsEmpty")}</EmptyState> : <WorkloadPods pods={w.pod_list} />}
       </section>
       <section className="min-w-0 rounded-xl border bg-card" aria-labelledby="k8s-workload-events">
         <h2 id="k8s-workload-events" className="border-b px-4 py-2 text-sm font-semibold">

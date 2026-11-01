@@ -704,10 +704,10 @@ none (no Docker API access); `health` is `healthy`/`unhealthy`/`starting` or `""
 `cpu_utilization` (0..1 of the host), `memory_usage` and `memory_limit` (bytes; host memory when unlimited) are the latest
 bucket of the range, `null` without data points.
 
-### `GET /api/v1/containers?host_id=&compose_project=&compose_service=&state=&q=&from=&to=&limit=`
-Containers with data in `[from, to]` (default last hour), ordered by compose project, compose service and name:
-`{"containers": [Container…], "total": 12, "step": "120s"}`. `total` counts matches before `limit`; sparklines have
-≈ 30 buckets of `step`. `compose_project`/`compose_service` are exact matches, present but empty = containers without
+### `GET /api/v1/containers?host_id=&compose_project=&compose_service=&state=&q=&from=&to=&limit=&sort=&dir=&offset=`
+Containers with data in `[from, to]` (default last hour), ordered by compose project, compose service and name unless asked otherwise:
+`{"containers": [Container…], "total": 12, "step": "120s", "has_more": false}`. `total` counts matches before the page; sparklines have
+≈ 30 buckets of `step`. `sort`: `name`, `state` (as the status reads, so `not reporting` and `unhealthy` are their own groups), `image`, `compose` (service, then project), `host`, `last_seen`; `dir` alone sorts by `name`; see [Lists](#lists). The list is read up to 10000 rows, then filtered and sorted in Go and cut to a page, so its order and pages are complete only up to that many. CPU and memory come from metrics, read only for the rows of the page, so they can't be sorted. `compose_project`/`compose_service` are exact matches, present but empty = containers without
 one; `state` is one of the states above or `unknown` (`400` otherwise); `q` (≤ 256 bytes) matches every whitespace-separated
 term, case-insensitive, against id, name, image, tags, host, compose and Kubernetes names.
 
@@ -855,8 +855,9 @@ newest first, Event objects below), `cpu_usage` / `memory_working_set` (sum of t
 `k8s.node.memory.working_set` over the nodes) and `allocatable_cpu` / `allocatable_memory` (sum of the latest
 `k8s.node.allocatable_*`).
 
-### `GET /api/v1/kubernetes/nodes?cluster_uid=&q=&from=&to=&limit=`
-Nodes seen in the range, ordered by cluster name and node name: `{"nodes": [KubernetesNode…], "total": 3}` (`total` before `limit`).
+### `GET /api/v1/kubernetes/nodes?cluster_uid=&q=&from=&to=&limit=&sort=&dir=&offset=`
+Nodes seen in the range, ordered by cluster name and node name unless asked otherwise: `{"nodes": [KubernetesNode…], "total": 3, "has_more": false}` (`total` before the page).
+`sort`: `name`, `status` (starts with the worst), `kubelet`, `last_seen`, `cluster`; `dir` alone sorts by `name`; see [Lists](#lists). The list is read up to 10000 rows, then filtered and sorted in Go and cut to a page, so its order and pages are complete only up to that many. Usage, pod counts and the host are read only for the rows of the page, so they can't be sorted.
 ```json
 {"cluster_uid": "…", "cluster_name": "prod", "node_name": "worker-1", "node_uid": "…", "ready": "true", "unschedulable": false,
  "roles": ["worker"], "kubelet_version": "v1.31.2", "os_image": "Ubuntu 24.04 LTS", "container_runtime": "containerd://1.7.22",
@@ -869,9 +870,9 @@ Nodes seen in the range, ordered by cluster name and node name: `{"nodes": [Kube
 no node agent reports); `conditions` are the latest `k8s.node.condition` values (`true`/`false`/`unknown`, by name). `q`
 matches every term against node name, uid, cluster name, roles, IP, kubelet version and OS image.
 
-### `GET /api/v1/kubernetes/workloads?cluster_uid=&namespace=&kind=&health=&q=&from=&to=&limit=`
-Workloads seen in the range, ordered by cluster name, namespace, kind and name:
-`{"workloads": [KubernetesWorkload…], "total": 18, "step": "120s"}`. `kind` ∈ `Deployment`, `StatefulSet`, `DaemonSet`,
+### `GET /api/v1/kubernetes/workloads?cluster_uid=&namespace=&kind=&health=&q=&from=&to=&limit=&sort=&dir=&offset=`
+Workloads seen in the range, ordered by cluster name, namespace, kind and name unless asked otherwise:
+`{"workloads": [KubernetesWorkload…], "total": 18, "step": "120s", "has_more": false}`. `sort`: `name`, `namespace`, `kind`, `health` (starts with the worst), `replicas` (ready ones; a CronJob has none and sorts last), `cluster`; `dir` alone sorts by `name`; see [Lists](#lists). The list is read up to 10000 rows, then filtered and sorted in Go and cut to a page, so its order and pages are complete only up to that many. Usage, sparklines, `pods` and `restarts` are read only for the rows of the page, so they can't be sorted. `kind` ∈ `Deployment`, `StatefulSet`, `DaemonSet`,
 `Job`, `CronJob`, `ReplicaSet`, `Pod` (the cluster agent reports no `Pod` workloads, so it matches nothing); `health` ∈
 `healthy`, `degraded`, `unavailable`, `unknown`; other values → `400`.
 ```json
@@ -896,8 +897,9 @@ attributes of its latest `openlog.k8s.workload.status` point). An unknown `kind`
 `memory_working_set` sum the per-pod bucket averages; `ready`/`desired` are the latest status values per bucket;
 `restarts` sums the latest restart count per pod per bucket.
 
-### `GET /api/v1/kubernetes/pods?cluster_uid=&namespace=&node=&workload_kind=&workload_name=&phase=&q=&from=&to=&limit=`
-Pods seen in the range, ordered by cluster name, namespace and pod name: `{"pods": [KubernetesPod…], "total": 41}`.
+### `GET /api/v1/kubernetes/pods?cluster_uid=&namespace=&node=&workload_kind=&workload_name=&phase=&q=&from=&to=&limit=&sort=&dir=&offset=`
+Pods seen in the range, ordered by cluster name, namespace and pod name unless asked otherwise: `{"pods": [KubernetesPod…], "total": 41, "has_more": false}`.
+`sort`: `name`, `namespace`, `status` (as the status reads, so `not reporting` is its own group), `restarts`, `workload`, `node`, `ip` (by address), `age` (starts with the oldest), `cluster`; `dir` alone sorts by `name`; see [Lists](#lists). The list is read up to 10000 rows, then filtered and sorted in Go and cut to a page, so its order and pages are complete only up to that many. Usage is read only for the rows of the page, so it can't be sorted.
 `phase` ∈ `Pending`, `Running`, `Succeeded`, `Failed`, `Unknown`; `workload_kind` as `kind` above; other values → `400`.
 ```json
 {"cluster_uid": "…", "cluster_name": "prod", "namespace": "shop", "pod_name": "orders-7d9c-x2k", "pod_uid": "…",
@@ -1051,7 +1053,7 @@ Shortcut for `category=discovered_service`; `data` is the discovered service bod
 
 ### `GET /api/v1/inventory/search?category=&q=&limit=`
 Across all hosts' latest complete snapshots: items in `category` (required) whose key contains `q` (case-insensitive).
-`{"items": [{"host_id": "…", "host_name": "…", "category": "package", "key": "dpkg:openssl", "data": {…}}]}`
+`{"items": [{"host_id": "…", "host_name": "…", "category": "package", "key": "dpkg:openssl", "data": {…}}], "has_more": false}`. `has_more` says more items match than `limit` let through. This list has no `offset`.
 
 ## Logs
 
@@ -2015,9 +2017,11 @@ most hosts first. `severity_counts` is the fleet summary the header shows.
  "severity_counts": {"critical": 1, "high": 4, "medium": 9, "low": 2, "none": 0}}
 ```
 
-### `GET /api/v1/vulnerabilities/{id}?limit=` · `GET /api/v1/hosts/{host_id}/vulnerabilities?limit=`
+### `GET /api/v1/vulnerabilities/{id}?limit=&sort=&dir=&offset=` · `GET /api/v1/hosts/{host_id}/vulnerabilities?limit=&sort=&dir=&offset=`
 The findings of one advisory, or of one host: `host_name`, `package`, the installed `version` and the
-`fixed_in` that resolves it (`""` when the feed knows no fix — the case that matters most).
+`fixed_in` that resolves it (`""` when the feed knows no fix — the case that matters most). `sort`: `severity` (default, the most serious first, then by package), `score`, `advisory`, `package`, `host`, `version` (as text), `ecosystem`. `limit` defaults to and stops at 1000; a larger one is cut to that rather than refused. The response carries `has_more` (see [Lists](#lists)).
+
+The advisory also answers `advisory`, `{"cve", "severity", "score", "summary", "findings", "without_fix"}`, over all of its open findings and whatever the page: the most serious severity and the highest score any host has. An advisory with no open finding is `404`. A page past the last one is `200` with no `findings`, because the advisory still exists.
 
 ### `GET /api/v1/vulnerabilities/catalog/status`
 What the catalog holds and when each ecosystem was last synced. This is what tells an empty list apart from
@@ -2321,7 +2325,7 @@ everything and manage channels. Not available with `OPENLOG_AUTH_MODE=static` (`
 | `POST /api/v1/alerts/rules/{id}/enable` · `…/disable` | disable resolves open incidents (`rule_disabled`) |
 | `POST /api/v1/alerts/rules/preview` `{"rule": RuleInput, "hours": 1..24}` | evaluates the unsaved definition over the last hours through the tenant-scoped query layer (viewer): `{"from", "to", "step_seconds", "operator", "threshold", "recovery_threshold", "unit", "series": [{"key", "labels", "points": [[ms, value\|null]], "transitions": [{"at", "state", "value"}], "incidents": [{"opened_at", "resolved_at", "peak"}]}], "truncated", "approximate"}` |
 | `GET /api/v1/alerts/rules/{id}/evaluations?from=&to=` | evaluation history from ClickHouse (alerting.md §3.6; default last 24 h, ≤ 30 days, ≤ 500 buckets): `{"from", "to", "step_seconds", "evaluations": [{"at", "firing_series", "evaluations", "errors", "duration_ms", "max_duration_ms"}], "series": [{"series_key", "labels", "points": [[ms, value\|null, state]]}], "truncated"}` |
-| `GET /api/v1/alerts/incidents?state=open,acknowledged&rule_id=&severity=&limit=&cursor=` | newest first (default 50, max 500), `next_cursor`, `counts {open, acknowledged, resolved (7 d)}` |
+| `GET /api/v1/alerts/incidents?state=open,acknowledged&rule_id=&severity=&limit=&cursor=` | newest first (default 50, max 500), `next_cursor` (`null` on the last page; pass it as `cursor` for the next one), `counts {open, acknowledged, resolved (7 d)}` |
 | `GET /api/v1/alerts/incidents/{id}` | Incident + `events` (timeline) + `deliveries` |
 | `POST /api/v1/alerts/incidents/{id}/acknowledge` · `…/resolve` `{"note"?}` · `…/notes` `{"text"}` | ack is idempotent (`409` when resolved; stops re-notifications) and enqueues an `acknowledged` notification for the incident's PagerDuty/Opsgenie channels (alerting.md §5.1); resolve enqueues resolve notifications; note → `201` event |
 | `GET /api/v1/alerts/channels` · `POST` · `GET/PUT/DELETE /api/v1/alerts/channels/{id}` | types `slack`·`email`·`webhook`·`teams`·`pagerduty`·`opsgenie`; secrets are write-only (`url`, `hmac_secret`, `smtp_password`, `routing_key`, `api_key`; `secret_hints` masked; omitted secret fields keep stored values; `generated_secrets` once on create); list carries `secrets_configured`. `409` without `OPENLOG_SECRETS_KEY` |

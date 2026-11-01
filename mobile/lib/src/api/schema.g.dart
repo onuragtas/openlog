@@ -18683,7 +18683,7 @@ class CostTrend {
 
 /// `InventoryPage` of the openlog API contract.
 class InventoryPage {
-  const InventoryPage({required this.items});
+  const InventoryPage({required this.items, this.hasMore});
 
   factory InventoryPage.fromJson(
     Object? json, [
@@ -18701,14 +18701,17 @@ class InventoryPage {
           (v, p) => InventorySearchItem.fromJson(v, p),
         ),
       ),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'items': [for (final e in items) e.toJson()],
+    'has_more': ?hasMore,
   };
 
   final List<InventorySearchItem> items;
+  final bool? hasMore;
 }
 
 /// `FleetHostPage` of the openlog API contract.
@@ -18933,6 +18936,7 @@ class ContainerPage {
   const ContainerPage({
     required this.containers,
     required this.total,
+    this.hasMore,
     required this.step,
   });
 
@@ -18950,6 +18954,7 @@ class ContainerPage {
             _list<ApiContainer>(v, p, (v, p) => ApiContainer.fromJson(v, p)),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
       step: _req(m, 'step', path, _str),
     );
   }
@@ -18957,17 +18962,19 @@ class ContainerPage {
   Map<String, Object?> toJson() => {
     'containers': [for (final e in containers) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
     'step': step,
   };
 
   final List<ApiContainer> containers;
   final int total;
+  final bool? hasMore;
   final String step;
 }
 
 /// `PodPage` of the openlog API contract.
 class PodPage {
-  const PodPage({required this.pods, required this.total});
+  const PodPage({required this.pods, required this.total, this.hasMore});
 
   factory PodPage.fromJson(Object? json, [String path = 'PodPage']) {
     final m = _obj(json, path);
@@ -18980,16 +18987,19 @@ class PodPage {
             _list<KubernetesPod>(v, p, (v, p) => KubernetesPod.fromJson(v, p)),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'pods': [for (final e in pods) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
   };
 
   final List<KubernetesPod> pods;
   final int total;
+  final bool? hasMore;
 }
 
 /// `ComposeProjectPage` of the openlog API contract.
@@ -19054,7 +19064,11 @@ class KubernetesClusterPage {
 
 /// `KubernetesNodePage` of the openlog API contract.
 class KubernetesNodePage {
-  const KubernetesNodePage({required this.nodes, required this.total});
+  const KubernetesNodePage({
+    required this.nodes,
+    required this.total,
+    this.hasMore,
+  });
 
   factory KubernetesNodePage.fromJson(
     Object? json, [
@@ -19073,16 +19087,19 @@ class KubernetesNodePage {
         ),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
     );
   }
 
   Map<String, Object?> toJson() => {
     'nodes': [for (final e in nodes) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
   };
 
   final List<KubernetesNode> nodes;
   final int total;
+  final bool? hasMore;
 }
 
 /// `KubernetesWorkloadPage` of the openlog API contract.
@@ -19090,6 +19107,7 @@ class KubernetesWorkloadPage {
   const KubernetesWorkloadPage({
     required this.workloads,
     required this.total,
+    this.hasMore,
     required this.step,
   });
 
@@ -19110,6 +19128,7 @@ class KubernetesWorkloadPage {
         ),
       ),
       total: _req(m, 'total', path, _int),
+      hasMore: _opt(m, 'has_more', path, _bool),
       step: _req(m, 'step', path, _str),
     );
   }
@@ -19117,11 +19136,13 @@ class KubernetesWorkloadPage {
   Map<String, Object?> toJson() => {
     'workloads': [for (final e in workloads) e.toJson()],
     'total': total,
+    'has_more': ?hasMore,
     'step': step,
   };
 
   final List<KubernetesWorkload> workloads;
   final int total;
+  final bool? hasMore;
   final String step;
 }
 

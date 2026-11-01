@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { login } from "@/api/account";
@@ -10,6 +11,7 @@ import { applyPrefill, createAlertSearch } from "@/lib/alerts";
 import { ThemeProvider } from "@/lib/theme";
 import { MOCK_EMAIL, MOCK_PASSWORD, MOCK_STAGING_ORG_ID } from "@/mocks/account";
 import { MOCK_ALERT_IDS, resetMockAlerts } from "@/mocks/alerts";
+import { server } from "@/mocks/server";
 import { ChannelsManager } from "./ChannelsManager";
 import { RulesList } from "./RulesList";
 
@@ -226,5 +228,59 @@ describe("RulesList", () => {
     expect(severities[0]).toBe("Critical");
     expect(severities[severities.length - 1]).not.toBe("Critical");
     expect(screen.getByRole("columnheader", { name: "Severity" })).toHaveAttribute("aria-sort", "descending");
+  });
+});
+
+describe("the incidents list", () => {
+  it("reaches the rest with the next cursor, keeping the order and the filters", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const seen: URLSearchParams[] = [];
+    const incident = (id: string, summary: string) => ({
+      id, rule_id: null, rule_name: "rule", state: "open", severity: "critical", muted: false, flapping: false, summary, labels: {}, value: null, threshold: null, last_value: null,
+      opened_at: "2026-10-01T10:00:00.000000000Z", resolved_at: null, acknowledged_at: null, acknowledged_by_email: null, resolved_by_email: null, resolve_reason: null,
+    });
+    server.use(
+      http.get("*/api/v1/alerts/incidents", ({ request }) => {
+        const p = new URL(request.url).searchParams;
+        seen.push(p);
+        const counts = { open: 2, acknowledged: 0, resolved: 0 };
+        return HttpResponse.json(p.get("cursor") === "page-2" ? { incidents: [incident("b", "the older one")], next_cursor: null, counts } : { incidents: [incident("a", "the newer one")], next_cursor: "page-2", counts });
+      }),
+    );
+    renderUi(<IncidentsList stateFilter="active" onFilterChange={vi.fn()} />);
+    await screen.findByText("the newer one");
+    expect(seen[0]!.get("cursor")).toBeNull();
+    expect(seen[0]!.has("offset")).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Load more incidents" }));
+    await screen.findByText("the older one");
+    const last = seen[seen.length - 1]!;
+    expect(last.get("cursor")).toBe("page-2");
+    expect(last.get("state")).toBe("open,acknowledged");
+    expect(last.has("offset")).toBe(false);
+    // The second page goes under the first, and there is no third to ask for.
+    const rows = screen.getAllByTestId("incident-row").map((r) => r.textContent);
+    expect(rows[0]).toContain("the newer one");
+    expect(rows[1]).toContain("the older one");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Load more incidents" })).not.toBeInTheDocument());
+  });
+
+  it("keeps what it has when the next page fails, and can try again", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const incident = { id: "a", rule_id: null, rule_name: "rule", state: "open", severity: "critical", muted: false, flapping: false, summary: "the newer one", labels: {}, value: null, threshold: null, last_value: null, opened_at: "2026-10-01T10:00:00.000000000Z", resolved_at: null };
+    server.use(
+      http.get("*/api/v1/alerts/incidents", ({ request }) =>
+        new URL(request.url).searchParams.get("cursor")
+          ? HttpResponse.json({ error: { code: "internal", message: "broken" } }, { status: 500 })
+          : HttpResponse.json({ incidents: [incident], next_cursor: "page-2", counts: { open: 1, acknowledged: 0, resolved: 0 } }),
+      ),
+    );
+    renderUi(<IncidentsList stateFilter="active" onFilterChange={vi.fn()} />);
+    await screen.findByText("the newer one");
+    await user.click(screen.getByRole("button", { name: "Load more incidents" }));
+    await screen.findByRole("alert");
+    expect(screen.getByText("the newer one")).toBeInTheDocument();
   });
 });

@@ -153,6 +153,9 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, description: "Without sort and dir the list keeps the order described above. CPU and memory are read after the page is cut and have no name here.", schema: { type: string, enum: [name, state, image, compose, host, last_seen], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -166,6 +169,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/Container" }
                   total: { type: integer, description: "Matching containers before limit" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
                   step: { type: string, example: 120s }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
@@ -544,6 +548,9 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, description: "Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here.", schema: { type: string, enum: [name, status, kubelet, last_seen, cluster], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -557,6 +564,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/KubernetesNode" }
                   total: { type: integer, description: "Matching nodes before limit" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -576,6 +584,9 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, description: "Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here.", schema: { type: string, enum: [name, namespace, kind, health, replicas, cluster], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -589,6 +600,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/KubernetesWorkload" }
                   total: { type: integer, description: "Matching workloads before limit" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
                   step: { type: string, example: 120s }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
@@ -659,6 +671,9 @@ paths:
         - $ref: "#/components/parameters/From"
         - $ref: "#/components/parameters/To"
         - $ref: "#/components/parameters/Limit"
+        - { name: sort, in: query, description: "Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here.", schema: { type: string, enum: [name, namespace, status, restarts, workload, node, ip, age, cluster], default: name } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: OK
@@ -672,6 +687,7 @@ paths:
                     type: array
                     items: { $ref: "#/components/schemas/KubernetesPod" }
                   total: { type: integer, description: "Matching pods before limit" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -956,6 +972,7 @@ paths:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/InventorySearchItem" }
+                  has_more: { type: boolean, description: "More items match than `limit` let through. A server older than this field does not send it." }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "500": { $ref: "#/components/responses/Internal" }
@@ -2454,9 +2471,14 @@ paths:
     get:
       tags: [vulnerabilities]
       operationId: getVulnerability
-      description: The hosts one advisory was found on, with the installed and the fixed version of each.
+      description: >-
+        The hosts one advisory was found on, with the installed and the fixed version of each. It answers 404 when the advisory has no open
+        finding at all; a page past the last one is 200 with no findings.
       parameters:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 } }
+        - { name: sort, in: query, schema: { type: string, enum: [severity, score, advisory, package, host, version, ecosystem], default: severity } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Findings of the advisory
@@ -2470,6 +2492,8 @@ paths:
                   findings:
                     type: array
                     items: { $ref: "#/components/schemas/VulnFinding" }
+                  advisory: { $ref: "#/components/schemas/VulnAdvisorySummary" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -2482,6 +2506,9 @@ paths:
       description: The open findings of one host, most serious first.
       parameters:
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 } }
+        - { name: sort, in: query, schema: { type: string, enum: [severity, score, advisory, package, host, version, ecosystem], default: severity } }
+        - { $ref: "#/components/parameters/ListDir" }
+        - { $ref: "#/components/parameters/ListOffset" }
       responses:
         "200":
           description: Findings of the host
@@ -2495,6 +2522,7 @@ paths:
                   findings:
                     type: array
                     items: { $ref: "#/components/schemas/VulnFinding" }
+                  has_more: { type: boolean, description: "Whether there is another page; a server older than these pages does not send it." }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "404": { $ref: "#/components/responses/NotFound" }
 
@@ -11300,6 +11328,17 @@ components:
         summary: { type: string }
         first_seen: { $ref: "#/components/schemas/Timestamp" }
         last_seen: { $ref: "#/components/schemas/Timestamp" }
+    VulnAdvisorySummary:
+      type: object
+      description: One advisory over all of its open findings, whichever page of them the response holds. A server older than this field does not send it.
+      required: [cve, severity, score, summary, findings, without_fix]
+      properties:
+        cve: { type: string }
+        severity: { $ref: "#/components/schemas/VulnSeverity" }
+        score: { type: number }
+        summary: { type: string }
+        findings: { type: integer, description: Open findings of the advisory }
+        without_fix: { type: integer, description: "Of those, the ones whose fixed_in is ''" }
     VulnCatalogStatus:
       type: object
       required: [vulnerabilities, affected_ranges, ecosystems, last_synced_at, sources]

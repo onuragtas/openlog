@@ -2,8 +2,11 @@ package api
 
 import (
 	"cmp"
+	"net/http"
+	"net/netip"
 	"sort"
 	"strings"
+	"time"
 )
 
 // The sorted, paged lists of the APM screens (api.md "Lists").
@@ -52,6 +55,35 @@ func optKey(v *float64) rowKey {
 
 func textKey(v string) rowKey { return rowKey{blank: v == "", text: strings.ToLower(v)} }
 
+func timeKey(t time.Time) rowKey {
+	if t.IsZero() {
+		return rowKey{blank: true}
+	}
+	return numKey(float64(t.UnixMilli()))
+}
+
+// parsedTimeKey is for a time as the agent sent it. As text, two of them with a different number of fractional digits compare wrongly.
+func parsedTimeKey(v *string) rowKey {
+	if v == nil {
+		return rowKey{blank: true}
+	}
+	t, err := time.Parse(time.RFC3339Nano, *v)
+	if err != nil {
+		return rowKey{blank: true}
+	}
+	return timeKey(t)
+}
+
+// ipKey orders addresses by value, since as text 10.0.0.10 comes before 10.0.0.9. What does not parse sorts as the text it is.
+func ipKey(v string) rowKey {
+	a, err := netip.ParseAddr(v)
+	if err != nil {
+		return textKey(v)
+	}
+	b := a.As16()
+	return rowKey{text: string(b[:])}
+}
+
 // sortPage sorts every row it was given and cuts one page, for a list whose values are only known in Go. A column missing from keys is
 // a bug, which is why columnsOf builds the spec from the same map. What has no value goes last in either direction, because a blank is
 // not the smallest of anything. tie makes the order total, so that a row can't swap pages between two requests.
@@ -67,6 +99,20 @@ func sortPage[T any](rows []T, l listRequest, keys map[string]func(T) rowKey, ti
 		}
 		return tie(rows[i], rows[j]) < 0
 	})
+	return cutPage(rows, l)
+}
+
+// sortPageIfAsked is sortPage for a list that had an order of its own before it had sorting. A client that asks for neither sort nor dir
+// keeps that order exactly, which no column can promise: rowKey folds case and puts blanks last, and the old order does neither.
+func sortPageIfAsked[T any](r *http.Request, rows []T, l listRequest, keys map[string]func(T) rowKey, tie func(a, b T) int) ([]T, bool) {
+	if q := r.URL.Query(); q.Get("sort") == "" && q.Get("dir") == "" {
+		return cutPage(rows, l)
+	}
+	return sortPage(rows, l, keys, tie)
+}
+
+// cutPage cuts one page out of rows that are already in order.
+func cutPage[T any](rows []T, l listRequest) ([]T, bool) {
 	if l.offset >= len(rows) {
 		return rows[:0], false
 	}

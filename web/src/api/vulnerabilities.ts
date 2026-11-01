@@ -26,18 +26,21 @@ export const vulnerabilitiesQuery = (severity: VulnSeverity | undefined, list: L
     refetchInterval: VULN_REFRESH_MS,
   });
 
-export const vulnerabilityQuery = (id: string) =>
+export type VulnFindingSort = "severity" | "score" | "advisory" | "package" | "host" | "version" | "ecosystem";
+
+export const vulnerabilityQuery = (id: string, list: ListState<VulnFindingSort>) =>
   queryOptions({
-    queryKey: ["vulnerabilities", "one", id],
-    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/vulnerabilities/{id}", { params: { path: { id } }, signal })),
+    queryKey: ["vulnerabilities", "one", id, list],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/vulnerabilities/{id}", { params: { path: { id }, query: list }, signal })),
+    placeholderData: keepPreviousData,
     enabled: id !== "",
   });
 
-export const hostVulnerabilitiesQuery = (hostId: string) =>
+export const hostVulnerabilitiesQuery = (hostId: string, list: ListState<VulnFindingSort>) =>
   queryOptions({
-    queryKey: ["vulnerabilities", "host", hostId],
+    queryKey: ["vulnerabilities", "host", hostId, list],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/hosts/{host_id}/vulnerabilities", { params: { path: { host_id: hostId } }, signal })),
+      unwrap(await api.GET("/api/v1/hosts/{host_id}/vulnerabilities", { params: { path: { host_id: hostId }, query: list }, signal })),
     enabled: hostId !== "",
     placeholderData: keepPreviousData,
   });

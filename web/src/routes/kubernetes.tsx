@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { BellPlus, Search, Ship, X } from "lucide-react";
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import { useTranslation } from "react-i18next";
 import {
   kubernetesClusterQuery,
@@ -10,6 +10,11 @@ import {
   kubernetesPodsQuery,
   kubernetesWorkloadsQuery,
   type KubernetesCluster,
+  type NodeSort,
+  type PodFilters,
+  type PodSort,
+  type WorkloadFilters,
+  type WorkloadSort,
 } from "@/api/kubernetes";
 import { PageHeader } from "@/components/AppShell";
 import { ClusterTiles, WorkloadsByKind } from "@/components/kubernetes/ClusterOverview";
@@ -17,6 +22,7 @@ import { EventList } from "@/components/kubernetes/EventList";
 import { KubernetesNav } from "@/components/kubernetes/KubernetesNav";
 import { NodeTable, PodTable, WorkloadTable } from "@/components/kubernetes/KubernetesTables";
 import { AddDataLink } from "@/components/onboarding/AddDataLink";
+import { ListPager } from "@/components/ListPager";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +40,7 @@ import {
   type WorkloadHealthParam,
   type WorkloadKind,
 } from "@/lib/kubernetes";
+import { useListState } from "@/lib/list";
 import { parseTimeParam, type RangeSpec } from "@/lib/time";
 import type { KubernetesNodesSearch, KubernetesPodsSearch, KubernetesWorkloadsSearch } from "@/router";
 
@@ -150,7 +157,6 @@ export function KubernetesOverviewPage() {
   const selected = clusters.data ? pickCluster(clusters.data, search.cluster) : undefined;
   const uid = selected?.cluster_uid ?? "";
   const detail = useQuery(kubernetesClusterQuery(uid, range));
-  const nodes = useQuery({ ...kubernetesNodesQuery(range, { clusterUid: uid }), enabled: uid !== "" });
   const actions = (
     <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
       {clusters.data && clusters.data.length > 1 && (
@@ -208,15 +214,7 @@ export function KubernetesOverviewPage() {
             </Link>
           }
         >
-          {nodes.isPending ? (
-            <LoadingState />
-          ) : nodes.isError ? (
-            <ErrorState error={nodes.error} onRetry={() => void nodes.refetch()} />
-          ) : nodes.data.nodes.length === 0 ? (
-            <EmptyState>{t("kubernetes.nodes.empty")}</EmptyState>
-          ) : (
-            <NodeTable nodes={nodes.data.nodes} showCluster={false} />
-          )}
+          <NodesList range={range} filters={{ clusterUid: c.cluster_uid }} emptyText={t("kubernetes.nodes.empty")} showCluster={false} bare />
         </Section>
       </div>
     );
@@ -241,13 +239,82 @@ function ListFrame({ children, shown, total }: { children: React.ReactNode; show
   );
 }
 
+/** A filter changes what the pages hold, so staying on page five of it would usually show nothing. */
+function useFirstPageOn(filters: object, toFirstPage: () => void) {
+  const key = JSON.stringify(filters);
+  useEffect(toFirstPage, [key, toFirstPage]);
+}
+
+export function WorkloadsList({ range, filters, emptyText, showCluster }: { range: RangeSpec; filters: WorkloadFilters; emptyText: string; showCluster: boolean }) {
+  const list = useListState<WorkloadSort>("name", "asc");
+  const q = useQuery(kubernetesWorkloadsQuery(range, filters, list.state));
+  useFirstPageOn(filters, list.toFirstPage);
+  return (
+    <ListFrame shown={q.data?.workloads.length} total={q.data?.total}>
+      {q.isPending ? (
+        <LoadingState />
+      ) : q.isError ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : q.data.workloads.length === 0 && list.state.offset === 0 ? (
+        <EmptyState>{emptyText}</EmptyState>
+      ) : (
+        <>
+          <WorkloadTable workloads={q.data.workloads} showCluster={showCluster} head={list.head} />
+          <ListPager list={list} count={q.data.workloads.length} hasMore={q.data.has_more ?? false} />
+        </>
+      )}
+    </ListFrame>
+  );
+}
+
+export function PodsList({ range, filters, emptyText, showCluster }: { range: RangeSpec; filters: PodFilters; emptyText: string; showCluster: boolean }) {
+  const list = useListState<PodSort>("name", "asc");
+  const q = useQuery(kubernetesPodsQuery(range, filters, list.state));
+  useFirstPageOn(filters, list.toFirstPage);
+  return (
+    <ListFrame shown={q.data?.pods.length} total={q.data?.total}>
+      {q.isPending ? (
+        <LoadingState />
+      ) : q.isError ? (
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+      ) : q.data.pods.length === 0 && list.state.offset === 0 ? (
+        <EmptyState>{emptyText}</EmptyState>
+      ) : (
+        <>
+          <PodTable pods={q.data.pods} showCluster={showCluster} head={list.head} />
+          <ListPager list={list} count={q.data.pods.length} hasMore={q.data.has_more ?? false} />
+        </>
+      )}
+    </ListFrame>
+  );
+}
+
+/** `bare` is for a place that already has its own frame and says nothing of how many there are, like the cluster overview's section. */
+export function NodesList({ range, filters, emptyText, showCluster, bare }: { range: RangeSpec; filters: { clusterUid?: string; q?: string }; emptyText: string; showCluster: boolean; bare?: boolean }) {
+  const list = useListState<NodeSort>("name", "asc");
+  const q = useQuery(kubernetesNodesQuery(range, filters, list.state));
+  useFirstPageOn(filters, list.toFirstPage);
+  const body = q.isPending ? (
+    <LoadingState />
+  ) : q.isError ? (
+    <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+  ) : q.data.nodes.length === 0 && list.state.offset === 0 ? (
+    <EmptyState>{emptyText}</EmptyState>
+  ) : (
+    <>
+      <NodeTable nodes={q.data.nodes} showCluster={showCluster} head={list.head} />
+      <ListPager list={list} count={q.data.nodes.length} hasMore={q.data.has_more ?? false} />
+    </>
+  );
+  return bare ? body : <ListFrame shown={q.data?.nodes.length} total={q.data?.total}>{body}</ListFrame>;
+}
+
 export function KubernetesWorkloadsPage() {
   const { t } = useTranslation();
   const search = workloadsRoute.useSearch();
   const navigate = useNavigate({ from: "/kubernetes/workloads" });
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const clusters = useQuery(kubernetesClustersQuery(range)).data ?? [];
-  const list = useQuery(kubernetesWorkloadsQuery(range, { clusterUid: search.cluster, namespace: search.ns, kind: search.kind, health: search.health, q: search.q }));
   const set = (patch: Partial<KubernetesWorkloadsSearch>) => void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
   const filtered = !!(search.cluster || search.ns || search.kind || search.health || search.q);
   return (
@@ -278,17 +345,12 @@ export function KubernetesWorkloadsPage() {
         }
       />
       <KubernetesNav active="workloads" />
-      <ListFrame shown={list.data?.workloads.length} total={list.data?.total}>
-        {list.isPending ? (
-          <LoadingState />
-        ) : list.isError ? (
-          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-        ) : list.data.workloads.length === 0 ? (
-          <EmptyState>{filtered ? t("kubernetes.noMatch") : t("kubernetes.workloads.empty")}</EmptyState>
-        ) : (
-          <WorkloadTable workloads={list.data.workloads} showCluster={clusters.length > 1 && !search.cluster} />
-        )}
-      </ListFrame>
+      <WorkloadsList
+        range={range}
+        filters={{ clusterUid: search.cluster, namespace: search.ns, kind: search.kind, health: search.health, q: search.q }}
+        emptyText={filtered ? t("kubernetes.noMatch") : t("kubernetes.workloads.empty")}
+        showCluster={clusters.length > 1 && !search.cluster}
+      />
     </div>
   );
 }
@@ -299,9 +361,6 @@ export function KubernetesPodsPage() {
   const navigate = useNavigate({ from: "/kubernetes/pods" });
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const clusters = useQuery(kubernetesClustersQuery(range)).data ?? [];
-  const list = useQuery(
-    kubernetesPodsQuery(range, { clusterUid: search.cluster, namespace: search.ns, node: search.node, phase: search.phase, workloadKind: search.wkind, workloadName: search.wname, q: search.q }),
-  );
   const set = (patch: Partial<KubernetesPodsSearch>) => void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
   const filtered = !!(search.cluster || search.ns || search.node || search.phase || search.wkind || search.wname || search.q);
   return (
@@ -341,17 +400,12 @@ export function KubernetesPodsPage() {
           )}
         </div>
       )}
-      <ListFrame shown={list.data?.pods.length} total={list.data?.total}>
-        {list.isPending ? (
-          <LoadingState />
-        ) : list.isError ? (
-          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-        ) : list.data.pods.length === 0 ? (
-          <EmptyState>{filtered ? t("kubernetes.noMatch") : t("kubernetes.pods.empty")}</EmptyState>
-        ) : (
-          <PodTable pods={list.data.pods} showCluster={clusters.length > 1 && !search.cluster} />
-        )}
-      </ListFrame>
+      <PodsList
+        range={range}
+        filters={{ clusterUid: search.cluster, namespace: search.ns, node: search.node, phase: search.phase, workloadKind: search.wkind, workloadName: search.wname, q: search.q }}
+        emptyText={filtered ? t("kubernetes.noMatch") : t("kubernetes.pods.empty")}
+        showCluster={clusters.length > 1 && !search.cluster}
+      />
     </div>
   );
 }
@@ -362,7 +416,6 @@ export function KubernetesNodesPage() {
   const navigate = useNavigate({ from: "/kubernetes/nodes" });
   const range: RangeSpec = { range: search.range, from: search.from, to: search.to };
   const clusters = useQuery(kubernetesClustersQuery(range)).data ?? [];
-  const list = useQuery(kubernetesNodesQuery(range, { clusterUid: search.cluster, q: search.q }));
   const set = (patch: Partial<KubernetesNodesSearch>) => void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true });
   return (
     <div>
@@ -377,17 +430,12 @@ export function KubernetesNodesPage() {
         }
       />
       <KubernetesNav active="nodes" />
-      <ListFrame shown={list.data?.nodes.length} total={list.data?.total}>
-        {list.isPending ? (
-          <LoadingState />
-        ) : list.isError ? (
-          <ErrorState error={list.error} onRetry={() => void list.refetch()} />
-        ) : list.data.nodes.length === 0 ? (
-          <EmptyState>{search.q || search.cluster ? t("kubernetes.noMatch") : t("kubernetes.nodes.empty")}</EmptyState>
-        ) : (
-          <NodeTable nodes={list.data.nodes} showCluster={clusters.length > 1 && !search.cluster} />
-        )}
-      </ListFrame>
+      <NodesList
+        range={range}
+        filters={{ clusterUid: search.cluster, q: search.q }}
+        emptyText={search.q || search.cluster ? t("kubernetes.noMatch") : t("kubernetes.nodes.empty")}
+        showCluster={clusters.length > 1 && !search.cluster}
+      />
     </div>
   );
 }

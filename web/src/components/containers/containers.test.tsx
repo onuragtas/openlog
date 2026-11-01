@@ -1,6 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
 import { login } from "@/api/account";
@@ -8,8 +10,9 @@ import type { Container } from "@/api/containers";
 import { containerStatus, groupByComposeService, memoryRatio } from "@/lib/containers";
 import { MOCK_EMAIL, MOCK_PASSWORD } from "@/mocks/account";
 import { CONTAINER_IDS } from "@/mocks/containers";
+import { server } from "@/mocks/server";
 import { ContainerServices } from "./ContainerServices";
-import { ContainerGroups, ContainerTable } from "./ContainerTable";
+import { ContainerGroups, ContainerTable, PagedContainers } from "./ContainerTable";
 import { ServiceContainers } from "./ServiceContainers";
 
 function renderWithRouter(ui: ReactElement) {
@@ -106,5 +109,42 @@ describe("container components", () => {
     expect(within(table).getByRole("link", { name: /orders/ })).toBeInTheDocument();
     expect(within(table).getByText("190 rpm")).toBeInTheDocument();
     expect(within(table).getByText("1.2%")).toBeInTheDocument();
+  });
+});
+
+describe("the containers list", () => {
+  it("sends a heading and Next to the server, and leaves CPU and memory unsortable", async () => {
+    await login(MOCK_EMAIL, MOCK_PASSWORD);
+    const user = userEvent.setup();
+    const seen: URLSearchParams[] = [];
+    server.use(
+      http.get("*/api/v1/containers", ({ request }) => {
+        seen.push(new URL(request.url).searchParams);
+        return HttpResponse.json({ containers: [mk({})], total: 120, step: "120s", has_more: true });
+      }),
+    );
+    const last = () => seen[seen.length - 1]!;
+    renderWithRouter(<PagedContainers range={{ range: "1h" }} filters={{ hostId: "h1" }} empty="none" />);
+    const table = await screen.findByTestId("container-table");
+    expect(last().get("sort")).toBe("name");
+    expect(last().get("host_id")).toBe("h1");
+
+    await user.click(within(table).getByRole("button", { name: "Last seen" }));
+    await waitFor(() => expect(last().get("sort")).toBe("last_seen"));
+    expect(last().get("dir")).toBe("desc");
+
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    await waitFor(() => expect(last().get("offset")).toBe("50"));
+    expect(last().get("limit")).toBe("50");
+
+    expect(within(table).queryByRole("button", { name: "CPU" })).not.toBeInTheDocument();
+    expect(within(table).queryByRole("button", { name: "Memory" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the grouped table without a sort, since a group is not a page", async () => {
+    renderWithRouter(<ContainerGroups containers={[mk({})]} />);
+    const groups = await screen.findByTestId("container-groups");
+    expect(within(groups).queryByRole("button", { name: "Container" })).not.toBeInTheDocument();
+    expect(within(groups).getByRole("columnheader", { name: "Container" })).toBeInTheDocument();
   });
 });

@@ -1,6 +1,6 @@
 // Alerting API: docs/contracts/alerting.md, api.md "Alerting". Query factories follow queries.ts; mutations are
 // plain async functions for useMutation. The server enforces permissions (roles.ts only hides actions).
-import { keepPreviousData, queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api, expectOk, unwrap } from "./client";
 import type { components } from "./schema.gen";
 
@@ -77,16 +77,22 @@ export interface IncidentFilter {
   severity?: string;
 }
 
+/**
+ * Incidents page by cursor and never by offset: one opening while you read would move every offset by one, and this list changes all the
+ * time. A refresh refetches every page loaded so far from the first, so what is on the screen stays current as a whole.
+ */
 export const alertIncidentsQuery = (f: IncidentFilter) =>
-  queryOptions({
+  infiniteQueryOptions({
     queryKey: ["alerts", "incidents", f.state ?? "", f.severity ?? ""],
-    queryFn: async ({ signal }) =>
+    queryFn: async ({ signal, pageParam }) =>
       unwrap(
         await api.GET("/api/v1/alerts/incidents", {
-          params: { query: { state: f.state || undefined, severity: (f.severity || undefined) as AlertSeverity | undefined, limit: 200 } },
+          params: { query: { state: f.state || undefined, severity: (f.severity || undefined) as AlertSeverity | undefined, limit: 200, cursor: pageParam } },
           signal,
         }),
       ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     refetchInterval: INCIDENT_REFRESH_MS,
     placeholderData: keepPreviousData,
   });

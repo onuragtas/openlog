@@ -1,10 +1,10 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, BellPlus, CircleAlert, CircleCheck, CircleMinus, CircleX, Cloud, Container, Info, LineChart, Search, Settings2 } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMe } from "@/api/account";
-import { hostQuery, inventorySearchQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
+import { hostQuery, INVENTORY_SEARCH_LIMIT, inventorySearchQuery, inventorySearchResultQuery, metricQuery, servicesQuery, type MetricRequest } from "@/api/queries";
 import { can } from "@/api/roles";
 import { hostOsOf } from "@/lib/host-os";
 import { PageHeader } from "@/components/AppShell";
@@ -33,10 +33,11 @@ import { IntegrationStatusBadge } from "@/components/integrations/StatusBadge";
 import { PrometheusTargetsCard } from "@/components/integrations/PrometheusTargets";
 import { EmptyState, ErrorState, LoadingState } from "@/components/StateViews";
 import { TimeSeriesChart } from "@/components/TimeSeriesChart";
+import { ListPager } from "@/components/ListPager";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { DiscoveredService } from "@/api/types";
 import { formatBytes, formatDateTime, formatNumber, formatRelative, formatValue } from "@/lib/format";
 import {
@@ -60,6 +61,7 @@ import {
   type IntegrationStatus,
   type InstanceRef,
 } from "@/lib/integrations";
+import { useLocalList } from "@/lib/list";
 import { usePermissions } from "@/lib/org-writable";
 import type { ChartSeriesInput } from "@/lib/series";
 import type { RangeSpec } from "@/lib/time";
@@ -716,13 +718,133 @@ function IntegrationDashboard({ integration, rows, range }: { integration: strin
   );
 }
 
+type IntegrationSort = "host" | "service" | "instance" | "status";
+
+// The sort is stable and summarizeIntegrations has already ordered by host, service and instance, so the first view is that order.
+const INTEGRATION_READ: Record<IntegrationSort, (r: IntegrationRow) => string> = {
+  host: (r) => r.hostName,
+  service: (r) => r.name,
+  instance: (r) => instanceLabel(r).primary,
+  status: (r) => r.integration.status,
+};
+
+/** Rows built in the browser out of one inventory read, so this is where they sort and page. */
+export function IntegrationsTable({ rows, resetKey }: { rows: IntegrationRow[]; resetKey: string }) {
+  const { t } = useTranslation();
+  const list = useLocalList(rows, INTEGRATION_READ, "host", "asc");
+  const { toFirstPage } = list;
+  // A filter changes what the pages hold, so staying on page five of it would usually show nothing.
+  useEffect(toFirstPage, [resetKey, toFirstPage]);
+  return (
+    <>
+          {/* Phones: stacked cards; from 768px: table. The cards have no headings of their own, and these are the only way to reorder them. */}
+          <div className="md:hidden">
+            <Table mobile="stack">
+              <TableHeader>
+                <TableRow>
+                  <SortableHead column="host" defaultDir="asc" {...list.head}>{t("integrations.columns.host")}</SortableHead>
+                  <SortableHead column="service" defaultDir="asc" {...list.head}>{t("integrations.columns.service")}</SortableHead>
+                  <SortableHead column="status" defaultDir="asc" {...list.head}>{t("integrations.columns.status")}</SortableHead>
+                </TableRow>
+              </TableHeader>
+            </Table>
+          </div>
+          <ul className="divide-y md:hidden">
+            {list.visible.map((r) => (
+              <li key={`${r.hostId}/${r.key}`} className="flex flex-col gap-2 p-3" data-testid="integration-card">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">{r.integration.id}</span>
+                  </span>
+                  <IntegrationStatusBadge status={r.integration.status} />
+                </div>
+                <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="inline-flex min-h-10 items-center self-start text-sm text-primary hover:underline">
+                  {r.hostName}
+                </Link>
+                <InstanceName row={r} />
+                {(r.integration.error || r.integration.endpoint) && (
+                  <p className={cn("text-xs break-words", r.integration.status === "enabled" && "font-mono")}>
+                    {r.integration.status === "enabled" ? r.integration.endpoint : r.integration.error}
+                  </p>
+                )}
+                {r.panel && (
+                  <Link
+                    to="/hosts/$hostId/integrations/$discoveryId/$instance"
+                    params={{ hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }}
+                    aria-label={t("integrations.openPanelFor", { name: r.name, host: r.hostName })}
+                    className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10 self-start" })}
+                  >
+                    <LineChart aria-hidden="true" />
+                    {t("integrations.openPanel")}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden md:block">
+          <Table data-testid="integrations-table">
+            <TableHeader>
+              <TableRow>
+                <SortableHead column="host" defaultDir="asc" {...list.head}>{t("integrations.columns.host")}</SortableHead>
+                <SortableHead column="service" defaultDir="asc" {...list.head}>{t("integrations.columns.service")}</SortableHead>
+                <SortableHead column="instance" defaultDir="asc" className="hidden md:table-cell" {...list.head}>{t("integrations.columns.instance")}</SortableHead>
+                <SortableHead column="status" defaultDir="asc" {...list.head}>{t("integrations.columns.status")}</SortableHead>
+                <TableHead className="hidden lg:table-cell">{t("integrations.columns.details")}</TableHead>
+                <TableHead>
+                  <span className="sr-only">{t("integrations.openPanel")}</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.visible.map((r) => (
+                <TableRow key={`${r.hostId}/${r.key}`} data-testid="integration-row">
+                  <TableCell>
+                    <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="font-medium text-primary hover:underline">
+                      {r.hostName}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">{r.integration.id}</span>
+                  </TableCell>
+                  <TableCell className="hidden max-w-64 md:table-cell">
+                    <InstanceName row={r} truncate />
+                  </TableCell>
+                  <TableCell>
+                    <IntegrationStatusBadge status={r.integration.status} />
+                  </TableCell>
+                  <TableCell className="hidden max-w-96 truncate text-xs lg:table-cell" title={r.integration.error ?? r.integration.endpoint}>
+                    {r.integration.status === "enabled" ? <span className="font-mono">{r.integration.endpoint ?? "–"}</span> : (r.integration.error ?? "–")}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {r.panel && (
+                      <Link
+                        to="/hosts/$hostId/integrations/$discoveryId/$instance"
+                        params={{ hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }}
+                        aria-label={t("integrations.openPanelFor", { name: r.name, host: r.hostName })}
+                        className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10" })}
+                      >
+                        <LineChart aria-hidden="true" />
+                        {t("integrations.openPanel")}
+                      </Link>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          </div>
+          <ListPager list={list} count={list.visible.length} hasMore={list.hasMore} />
+    </>
+  );
+}
+
 export function IntegrationsPage() {
   const { t } = useTranslation();
   const search = listRoute.useSearch();
   const navigate = useNavigate({ from: "/integrations" });
   const inputId = useId();
-  const query = useQuery(inventorySearchQuery("discovered_service", ""));
-  const { rows: allRows, counts: allCounts } = useMemo(() => summarizeIntegrations(query.data ?? []), [query.data]);
+  const query = useQuery(inventorySearchResultQuery("discovered_service", ""));
+  const { rows: allRows, counts: allCounts } = useMemo(() => summarizeIntegrations(query.data?.items ?? []), [query.data]);
   const integrationIds = useMemo(() => [...new Set([...INTEGRATION_IDS, ...allRows.map((r) => r.integration.id!)])].filter((id) => allRows.some((r) => r.integration.id === id)), [allRows]);
   const integration = search.integration && integrationIds.includes(search.integration) ? search.integration : undefined;
   const rows = useMemo(() => (integration ? allRows.filter((r) => r.integration.id === integration) : allRows), [allRows, integration]);
@@ -807,95 +929,15 @@ export function IntegrationsPage() {
         ) : shown.length === 0 ? (
           <EmptyState>{t("integrations.noMatch")}</EmptyState>
         ) : (
-          <>
-          {/* Phones: stacked cards; from 768px: table. */}
-          <ul className="divide-y md:hidden">
-            {shown.map((r) => (
-              <li key={`${r.hostId}/${r.key}`} className="flex flex-col gap-2 p-3" data-testid="integration-card">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="min-w-0">
-                    <span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">{r.integration.id}</span>
-                  </span>
-                  <IntegrationStatusBadge status={r.integration.status} />
-                </div>
-                <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="inline-flex min-h-10 items-center self-start text-sm text-primary hover:underline">
-                  {r.hostName}
-                </Link>
-                <InstanceName row={r} />
-                {(r.integration.error || r.integration.endpoint) && (
-                  <p className={cn("text-xs break-words", r.integration.status === "enabled" && "font-mono")}>
-                    {r.integration.status === "enabled" ? r.integration.endpoint : r.integration.error}
-                  </p>
-                )}
-                {r.panel && (
-                  <Link
-                    to="/hosts/$hostId/integrations/$discoveryId/$instance"
-                    params={{ hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }}
-                    aria-label={t("integrations.openPanelFor", { name: r.name, host: r.hostName })}
-                    className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10 self-start" })}
-                  >
-                    <LineChart aria-hidden="true" />
-                    {t("integrations.openPanel")}
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-          <div className="hidden md:block">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t("integrations.columns.host")}</TableHead>
-                <TableHead>{t("integrations.columns.service")}</TableHead>
-                <TableHead className="hidden md:table-cell">{t("integrations.columns.instance")}</TableHead>
-                <TableHead>{t("integrations.columns.status")}</TableHead>
-                <TableHead className="hidden lg:table-cell">{t("integrations.columns.details")}</TableHead>
-                <TableHead>
-                  <span className="sr-only">{t("integrations.openPanel")}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {shown.map((r) => (
-                <TableRow key={`${r.hostId}/${r.key}`} data-testid="integration-row">
-                  <TableCell>
-                    <Link to="/hosts/$hostId" params={{ hostId: r.hostId }} className="font-medium text-primary hover:underline">
-                      {r.hostName}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-medium">{r.name}</span> <span className="text-xs text-muted-foreground">{r.integration.id}</span>
-                  </TableCell>
-                  <TableCell className="hidden max-w-64 md:table-cell">
-                    <InstanceName row={r} truncate />
-                  </TableCell>
-                  <TableCell>
-                    <IntegrationStatusBadge status={r.integration.status} />
-                  </TableCell>
-                  <TableCell className="hidden max-w-96 truncate text-xs lg:table-cell" title={r.integration.error ?? r.integration.endpoint}>
-                    {r.integration.status === "enabled" ? <span className="font-mono">{r.integration.endpoint ?? "–"}</span> : (r.integration.error ?? "–")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {r.panel && (
-                      <Link
-                        to="/hosts/$hostId/integrations/$discoveryId/$instance"
-                        params={{ hostId: r.hostId, discoveryId: r.discoveryId, instance: r.instance }}
-                        aria-label={t("integrations.openPanelFor", { name: r.name, host: r.hostName })}
-                        className={buttonVariants({ variant: "outline", size: "sm", className: "min-h-10" })}
-                      >
-                        <LineChart aria-hidden="true" />
-                        {t("integrations.openPanel")}
-                      </Link>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </div>
-          </>
+          <IntegrationsTable rows={shown} resetKey={`${integration ?? ""}|${status ?? ""}|${q}`} />
         )}
       </div>
+      {/* The counts above are of what was read too, so a cut list must not pass for all of them. */}
+      {query.data?.has_more && (
+        <p role="note" className="mt-2 text-xs text-muted-foreground" data-testid="integrations-cut">
+          {t("integrations.truncated", { count: INVENTORY_SEARCH_LIMIT })}
+        </p>
+      )}
     </div>
   );
 }

@@ -1417,7 +1417,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description The hosts one advisory was found on, with the installed and the fixed version of each. */
+        /** @description The hosts one advisory was found on, with the installed and the fixed version of each. It answers 404 when the advisory has no open finding at all; a page past the last one is 200 with no findings. */
         get: operations["getVulnerability"];
         put?: never;
         post?: never;
@@ -7556,6 +7556,17 @@ export interface components {
             first_seen: components["schemas"]["Timestamp"];
             last_seen: components["schemas"]["Timestamp"];
         };
+        /** @description One advisory over all of its open findings, whichever page of them the response holds. A server older than this field does not send it. */
+        VulnAdvisorySummary: {
+            cve: string;
+            severity: components["schemas"]["VulnSeverity"];
+            score: number;
+            summary: string;
+            /** @description Open findings of the advisory */
+            findings: number;
+            /** @description Of those, the ones whose fixed_in is '' */
+            without_fix: number;
+        };
         VulnCatalogStatus: {
             vulnerabilities: number;
             affected_ranges: number;
@@ -11139,6 +11150,12 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Without sort and dir the list keeps the order described above. CPU and memory are read after the page is cut and have no name here. */
+                sort?: "name" | "state" | "image" | "compose" | "host" | "last_seen";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11156,6 +11173,8 @@ export interface operations {
                         containers: components["schemas"]["Container"][];
                         /** @description Matching containers before limit */
                         total: number;
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                         /** @example 120s */
                         step: string;
                     };
@@ -11649,6 +11668,12 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here. */
+                sort?: "name" | "status" | "kubelet" | "last_seen" | "cluster";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11666,6 +11691,8 @@ export interface operations {
                         nodes: components["schemas"]["KubernetesNode"][];
                         /** @description Matching nodes before limit */
                         total: number;
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -11689,6 +11716,12 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here. */
+                sort?: "name" | "namespace" | "kind" | "health" | "replicas" | "cluster";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11706,6 +11739,8 @@ export interface operations {
                         workloads: components["schemas"]["KubernetesWorkload"][];
                         /** @description Matching workloads before limit */
                         total: number;
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                         /** @example 120s */
                         step: string;
                     };
@@ -11805,6 +11840,12 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Default 100, capped by OPENLOG_API_MAX_ROWS. */
                 limit?: components["parameters"]["Limit"];
+                /** @description Without sort and dir the list keeps the order described above. CPU, memory and what else is read after the page is cut have no name here. */
+                sort?: "name" | "namespace" | "status" | "restarts" | "workload" | "node" | "ip" | "age" | "cluster";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path?: never;
@@ -11822,6 +11863,8 @@ export interface operations {
                         pods: components["schemas"]["KubernetesPod"][];
                         /** @description Matching pods before limit */
                         total: number;
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -12172,6 +12215,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         items: components["schemas"]["InventorySearchItem"][];
+                        /** @description More items match than `limit` let through. A server older than this field does not send it. */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14109,6 +14154,11 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                sort?: "severity" | "score" | "advisory" | "package" | "host" | "version" | "ecosystem";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path: {
@@ -14128,6 +14178,9 @@ export interface operations {
                     "application/json": {
                         vuln_id: string;
                         findings: components["schemas"]["VulnFinding"][];
+                        advisory?: components["schemas"]["VulnAdvisorySummary"];
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                     };
                 };
             };
@@ -14139,6 +14192,11 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                sort?: "severity" | "score" | "advisory" | "package" | "host" | "version" | "ecosystem";
+                /** @description Sort direction. Each column has a natural default. See "Lists" in api.md. */
+                dir?: components["parameters"]["ListDir"];
+                /** @description Rows to skip, at most 100000. Page with this and `limit`, and `has_more` says whether there is another page. */
+                offset?: components["parameters"]["ListOffset"];
             };
             header?: never;
             path: {
@@ -14157,6 +14215,8 @@ export interface operations {
                     "application/json": {
                         host_id: string;
                         findings: components["schemas"]["VulnFinding"][];
+                        /** @description Whether there is another page; a server older than these pages does not send it. */
+                        has_more?: boolean;
                     };
                 };
             };

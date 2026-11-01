@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { BellRing, CheckCircle2, MessageSquare, Repeat, Send, ShieldAlert, VolumeX, Waves, XCircle } from "lucide-react";
 import { useId, useState } from "react";
@@ -50,8 +50,10 @@ export function IncidentsList({
   const { t } = useTranslation();
   const uid = useId();
   const now = useNow(15_000);
-  const q = useQuery(alertIncidentsQuery({ state: stateParam(stateFilter), severity }));
-  const counts = q.data?.counts;
+  const q = useInfiniteQuery(alertIncidentsQuery({ state: stateParam(stateFilter), severity }));
+  const pages = q.data?.pages;
+  const incidents = pages?.flatMap((p) => p.incidents) ?? [];
+  const counts = pages?.[0]?.counts;
   const countOf = (f: IncidentStateFilter) =>
     !counts ? undefined : f === "active" ? counts.open + counts.acknowledged : f === "open" || f === "acknowledged" || f === "resolved" ? counts[f] : undefined;
   return (
@@ -88,9 +90,9 @@ export function IncidentsList({
       </div>
       {q.isPending ? (
         <LoadingState />
-      ) : q.isError ? (
+      ) : q.isError && !q.isFetchNextPageError ? (
         <ErrorState error={q.error} onRetry={() => void q.refetch()} />
-      ) : q.data.incidents.length === 0 ? (
+      ) : incidents.length === 0 ? (
         <EmptyState icon={<CheckCircle2 className="size-5 text-success-text" aria-hidden="true" />}>
           {stateFilter === "active" ? t("alerts.incidents.emptyActive") : t("alerts.incidents.empty")}
         </EmptyState>
@@ -108,7 +110,7 @@ export function IncidentsList({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {q.data.incidents.map((inc) => {
+              {incidents.map((inc) => {
                 const end = inc.resolved_at ? parse(inc.resolved_at) : now;
                 return (
                   <TableRow key={inc.id} data-testid="incident-row">
@@ -144,6 +146,14 @@ export function IncidentsList({
               })}
             </TableBody>
           </Table>
+          {q.isFetchNextPageError && <ErrorState error={q.error} onRetry={() => void q.fetchNextPage()} />}
+          {q.hasNextPage && !q.isFetchNextPageError && (
+            <div className="flex justify-center border-t px-3 py-2">
+              <Button type="button" variant="outline" size="sm" disabled={q.isFetchingNextPage} onClick={() => void q.fetchNextPage()}>
+                {t("alerts.incidents.loadMore")}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@
 // cluster "prod-eu" (3 nodes, the shop namespace with a crash-looping payments deployment) and a small
 // "staging" cluster that stopped reporting.
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
+import { pageOf } from "./list";
 import type {
   ApmServiceKubernetesPod,
   KubernetesCluster,
@@ -417,6 +418,15 @@ const matches = (text: string[], q: string | null) => {
 
 const lim = (url: URL, def = 100) => Math.min(Number(url.searchParams.get("limit") ?? def) || def, 1000);
 
+/** The order the server keeps when neither sort nor dir is asked for: the rows as they were built. */
+const asked = <T,>(url: URL, rows: T[], keys: Parameters<typeof pageOf<T>>[2]) => {
+  const p = url.searchParams;
+  const offset = Number(p.get("offset") ?? 0);
+  const limit = lim(url);
+  if (!p.has("sort") && !p.has("dir")) return { rows: rows.slice(offset, offset + limit), has_more: offset + limit < rows.length };
+  return pageOf(url, rows, keys, { sort: "name", asc: ["name", "namespace", "kind", "cluster", "status", "workload", "node", "ip", "kubelet"], limit });
+};
+
 export const kubernetesHandlers = [
   http.get(`${API}/kubernetes/clusters`, authed(({ request }) => {
     const w = window(new URL(request.url));
@@ -435,7 +445,8 @@ export const kubernetesHandlers = [
     const url = new URL(request.url);
     const p = url.searchParams;
     const all = NODES.filter((n) => (!p.get("cluster_uid") || CLUSTER_UIDS[n.cluster] === p.get("cluster_uid")) && matches([n.name, ...n.roles], p.get("q"))).map(node);
-    return HttpResponse.json({ nodes: all.slice(0, lim(url)), total: all.length });
+    const list = asked(url, all, { name: (n) => n.node_name, status: (n) => (n.reporting ? (n.ready === "true" ? 0 : n.ready === "false" ? 3 : 2) : 1), kubelet: (n) => n.kubelet_version, last_seen: (n) => n.last_seen, cluster: (n) => n.cluster_name });
+    return HttpResponse.json({ nodes: list.rows, total: all.length, has_more: list.has_more });
   })),
 
   http.get(`${API}/kubernetes/workloads`, authed(({ request }) => {
@@ -455,7 +466,9 @@ export const kubernetesHandlers = [
         (!hl || health(x) === hl) &&
         matches([x.name, x.namespace], p.get("q")),
     ).map((x) => workload(x, w.from, w.to));
-    return HttpResponse.json({ workloads: all.slice(0, lim(url)), total: all.length, step: "120s" });
+    const rank: Record<string, number> = { unavailable: 3, degraded: 2, unknown: 1 };
+    const list = asked(url, all, { name: (x) => x.name, namespace: (x) => x.namespace, kind: (x) => x.kind, health: (x) => rank[x.health] ?? 0, replicas: (x) => (x.kind === "CronJob" ? null : x.ready), cluster: (x) => x.cluster_name });
+    return HttpResponse.json({ workloads: list.rows, total: all.length, step: "120s", has_more: list.has_more });
   })),
 
   http.get(`${API}/kubernetes/workloads/:uid/:ns/:kind/:name/timeseries`, authed(({ request, params }) => {
@@ -510,7 +523,11 @@ export const kubernetesHandlers = [
         (!p.get("phase") || x.phase === p.get("phase")) &&
         matches([x.name, x.namespace, x.ip, x.node], p.get("q")),
     ).map(pod);
-    return HttpResponse.json({ pods: all.slice(0, lim(url)), total: all.length });
+    const list = asked(url, all, {
+      name: (x) => x.pod_name, namespace: (x) => x.namespace, status: (x) => x.status, restarts: (x) => x.restarts, workload: (x) => x.workload_name, node: (x) => x.node_name,
+      ip: (x) => x.pod_ip, age: (x) => (x.created_at ? -Date.parse(x.created_at.replace(/(\.\d{3})\d+/, "$1")) : null), cluster: (x) => x.cluster_name,
+    });
+    return HttpResponse.json({ pods: list.rows, total: all.length, has_more: list.has_more });
   })),
 
   http.get(`${API}/kubernetes/pods/:uid/timeseries`, authed(({ request, params }) => {

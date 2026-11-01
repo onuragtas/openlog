@@ -108,6 +108,13 @@ function groups(severity?: string): VulnGroup[] {
   return [...byVuln.values()];
 }
 
+const SEVERITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+const findingPage = (url: URL, findings: VulnFinding[]) =>
+  pageOf(url, findings, {
+    severity: (f) => SEVERITY_RANK[f.severity] ?? 4, score: (f) => f.score, advisory: (f) => f.vuln_id, package: (f) => f.package, host: (f) => f.host_name || f.host_id, version: (f) => f.version, ecosystem: (f) => f.ecosystem,
+  }, { sort: "severity", asc: ["severity", "advisory", "package", "host", "version", "ecosystem"] });
+
 export const vulnerabilityHandlers = [
   http.get(`${API}/vulnerabilities`, authed(({ request }) => {
     const url = new URL(request.url);
@@ -133,14 +140,22 @@ export const vulnerabilityHandlers = [
       ],
     }),
   )),
-  http.get(`${API}/vulnerabilities/:id`, authed(({ params }) => {
+  http.get(`${API}/vulnerabilities/:id`, authed(({ params, request }) => {
     const findings = FINDINGS.filter((f) => f.vuln_id === params.id);
     if (findings.length === 0) {
       return HttpResponse.json({ error: { code: "not_found", message: "no open finding for this advisory" } }, { status: 404 });
     }
-    return HttpResponse.json({ vuln_id: params.id, findings });
+    const list = findingPage(new URL(request.url), findings);
+    const first = findings[0]!;
+    return HttpResponse.json({
+      vuln_id: params.id,
+      findings: list.rows,
+      has_more: list.has_more,
+      advisory: { cve: first.cve, severity: first.severity, score: first.score, summary: first.summary, findings: findings.length, without_fix: findings.filter((f) => !f.fixed_in).length },
+    });
   })),
-  http.get(`${API}/hosts/:hostId/vulnerabilities`, authed(({ params }) =>
-    HttpResponse.json({ host_id: params.hostId, findings: FINDINGS.filter((f) => f.host_id === params.hostId) }),
-  )),
+  http.get(`${API}/hosts/:hostId/vulnerabilities`, authed(({ params, request }) => {
+    const list = findingPage(new URL(request.url), FINDINGS.filter((f) => f.host_id === params.hostId));
+    return HttpResponse.json({ host_id: params.hostId, findings: list.rows, has_more: list.has_more });
+  })),
 ];

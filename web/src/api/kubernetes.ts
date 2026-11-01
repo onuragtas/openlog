@@ -3,6 +3,7 @@
 // api/containers.ts).
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import type { ServiceScope } from "@/lib/apm";
+import type { ListState } from "@/lib/list";
 import { resolveRange, type RangeSpec } from "@/lib/time";
 import { api, unwrap } from "./client";
 import type { components } from "./schema.gen";
@@ -35,6 +36,10 @@ export interface WorkloadRef {
   kind: string;
   name: string;
 }
+
+export type WorkloadSort = "name" | "namespace" | "kind" | "health" | "replicas" | "cluster";
+export type PodSort = "name" | "namespace" | "status" | "restarts" | "workload" | "node" | "ip" | "age" | "cluster";
+export type NodeSort = "name" | "status" | "kubelet" | "last_seen" | "cluster";
 
 export interface WorkloadFilters {
   clusterUid?: string;
@@ -101,18 +106,18 @@ export const kubernetesClusterQuery = (clusterUid: string, range: RangeSpec) =>
     enabled: clusterUid !== "",
   });
 
-export const kubernetesNodesQuery = (range: RangeSpec, f: { clusterUid?: string; q?: string } = {}) =>
+export const kubernetesNodesQuery = (range: RangeSpec, f: { clusterUid?: string; q?: string }, list: ListState<NodeSort>) =>
   queryOptions({
-    queryKey: ["k8s-nodes", ...rangeKey(range), f.clusterUid ?? "", f.q ?? ""],
+    queryKey: ["k8s-nodes", ...rangeKey(range), f.clusterUid ?? "", f.q ?? "", list],
     queryFn: async ({ signal }) =>
-      unwrap(await api.GET("/api/v1/kubernetes/nodes", { params: { query: { ...window(range), cluster_uid: opt(f.clusterUid), q: opt(f.q), limit: 1000 } }, signal })),
+      unwrap(await api.GET("/api/v1/kubernetes/nodes", { params: { query: { ...window(range), cluster_uid: opt(f.clusterUid), q: opt(f.q), ...list } }, signal })),
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
 
-export const kubernetesWorkloadsQuery = (range: RangeSpec, f: WorkloadFilters = {}) =>
+export const kubernetesWorkloadsQuery = (range: RangeSpec, f: WorkloadFilters, list: ListState<WorkloadSort>) =>
   queryOptions({
-    queryKey: ["k8s-workloads", ...rangeKey(range), f.clusterUid ?? "", f.namespace ?? "", f.kind ?? "", f.health ?? "", f.q ?? ""],
+    queryKey: ["k8s-workloads", ...rangeKey(range), f.clusterUid ?? "", f.namespace ?? "", f.kind ?? "", f.health ?? "", f.q ?? "", list],
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET("/api/v1/kubernetes/workloads", {
@@ -124,12 +129,12 @@ export const kubernetesWorkloadsQuery = (range: RangeSpec, f: WorkloadFilters = 
               kind: kindOpt(f.kind),
               health: opt(f.health) as WorkloadHealth | undefined,
               q: opt(f.q),
-              limit: 1000,
+              ...list,
             },
           },
           signal,
         }),
-      ) as { workloads: KubernetesWorkload[]; total: number; step: string },
+      ) as { workloads: KubernetesWorkload[]; total: number; step: string; has_more?: boolean },
     placeholderData: keepPreviousData,
     refetchInterval: live(range),
   });
@@ -156,9 +161,9 @@ export const kubernetesWorkloadTimeseriesQuery = (w: WorkloadRef, range: RangeSp
     refetchInterval: live(range),
   });
 
-export const kubernetesPodsQuery = (range: RangeSpec, f: PodFilters = {}) =>
+export const kubernetesPodsQuery = (range: RangeSpec, f: PodFilters, list: ListState<PodSort>) =>
   queryOptions({
-    queryKey: ["k8s-pods", ...rangeKey(range), f.clusterUid ?? "", f.namespace ?? "", f.node ?? "", f.workloadKind ?? "", f.workloadName ?? "", f.phase ?? "", f.q ?? ""],
+    queryKey: ["k8s-pods", ...rangeKey(range), f.clusterUid ?? "", f.namespace ?? "", f.node ?? "", f.workloadKind ?? "", f.workloadName ?? "", f.phase ?? "", f.q ?? "", list],
     queryFn: async ({ signal }) =>
       unwrap(
         await api.GET("/api/v1/kubernetes/pods", {
@@ -172,7 +177,7 @@ export const kubernetesPodsQuery = (range: RangeSpec, f: PodFilters = {}) =>
               workload_name: opt(f.workloadName),
               phase: opt(f.phase) as PodPhase | undefined,
               q: opt(f.q),
-              limit: 1000,
+              ...list,
             },
           },
           signal,

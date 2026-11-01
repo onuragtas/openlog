@@ -285,7 +285,7 @@ func (s *Server) inventorySearch(w http.ResponseWriter, r *http.Request, sc *que
 	q := sc.From(query.InventoryItems).Columns("host_id", "category", "item_key", "any(data)").
 		Where("category = {category:String}").Param("category", category).
 		WhereIn("(host_id, snapshot_id)", latest).
-		GroupBy("host_id", "category", "item_key").OrderBy("item_key", "host_id").Limit(limit)
+		GroupBy("host_id", "category", "item_key").OrderBy("item_key", "host_id").Limit(limit + 1)
 	if qs := r.URL.Query().Get("q"); qs != "" {
 		q.Where("positionCaseInsensitiveUTF8(item_key, {q:String}) > 0").Param("q", qs)
 	}
@@ -295,6 +295,7 @@ func (s *Server) inventorySearch(w http.ResponseWriter, r *http.Request, sc *que
 	}
 	items := []itemJSON{}
 	hostSet := map[string]bool{}
+	more := false
 	for rows.Next() {
 		var it itemJSON
 		var data string
@@ -303,6 +304,11 @@ func (s *Server) inventorySearch(w http.ResponseWriter, r *http.Request, sc *que
 			return err
 		}
 		it.Data = jsonData(data)
+		// One row past the limit says the list was cut, and neither it nor its host is part of the answer.
+		if len(items) == limit {
+			more = true
+			continue
+		}
 		hostSet[it.HostID] = true
 		items = append(items, it)
 	}
@@ -335,7 +341,7 @@ func (s *Server) inventorySearch(w http.ResponseWriter, r *http.Request, sc *que
 			items[i].HostName = names[items[i].HostID]
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "has_more": more})
 	return nil
 }
 
