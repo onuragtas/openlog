@@ -15,7 +15,7 @@ import 'package:openlog/openlog.dart';
 
 final openlog = Openlog.init(OpenlogOptions(
   key: 'olb_…',                       // a mobile key, from Settings → Browser keys
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
   appId: 'com.example.shop',          // must be on the key's application allowlist
   serviceVersion: '4.2.1',
   osName: 'Android', osVersion: '15',

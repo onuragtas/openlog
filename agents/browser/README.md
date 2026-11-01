@@ -18,7 +18,7 @@ import { init } from 'openlog-browser';
 
 init({
   key: 'olb_…',                                   // browser key, from Add data → Browser
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
 });
 ```
 
@@ -48,7 +48,7 @@ The full threat model — what someone who copies your key can and cannot do, an
 Everything above is automatic. When you want to record something only your application knows:
 
 ```js
-const openlog = init({ key: 'olb_…', endpoint: 'https://ingest.example.com:4318' });
+const openlog = init({ key: 'olb_…', endpoint: 'https://apm.resoft.org' });
 
 openlog.recordEvent('checkout_started', { plan: 'pro', step: 2 });
 openlog.recordTiming('cart_priced', 42, { currency: 'try' });
@@ -97,7 +97,7 @@ your trace ids to whoever runs it. To trace your own API on another host, list i
 ```js
 init({
   key: 'olb_…',
-  endpoint: 'https://ingest.example.com:4318',
+  endpoint: 'https://apm.resoft.org',
   propagateTraceHeaders: ['https://api.example.com', /^https:\/\/.*\.internal\.example\.com/],
 });
 ```

@@ -16,7 +16,7 @@ already exist. Three materialized views (§5) add what spans answer too slowly �
 
 ```js
 import { init } from 'openlog-browser';
-init({ key: 'olb_…', endpoint: 'https://ingest.example.com:4318' });
+init({ key: 'olb_…', endpoint: 'https://apm.resoft.org' });
 ```
 
 No dependencies, ES modules, side-effect free, ~10 KB gzipped with a budget enforced by
