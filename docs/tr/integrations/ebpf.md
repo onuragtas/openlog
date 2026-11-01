@@ -3,7 +3,10 @@
 Tüm makineyi kapsayan CPU profili: makinedeki her süreç, enstrümante edilmiş olsun olmasın, örneklenir ve OTLP profili olarak
 gönderilir. [ebpf-profiler.md](/contracts/ebpf-profiler) dokümanını uygular: kontrat o dokümandır, burası onun gerçeklemesi.
 
-**Kernel tarafındaki kodun CI'ı yok.** İki Linux mimarisi için derleniyor ve saf kısımları test ediliyor, ama bu repoda ayrıcalıklı bir Linux işi yok ve geliştirme Mac'i BPF yükleyemiyor, bu yüzden bu koddaki bir değişiklik ancak gerçek bir makinede kanıtlanır. `New` orada ya çalışır ya da hangi yetkinin veya `perf_event_paranoid` ayarının engel olduğunu tam olarak söyler.
+**Ayrı bir bileşendir, altyapı ajanının parçası değildir.** Altyapı ajanının sandbox'ı bu işi bilerek yasaklar: systemd unit'i
+`bpf(2)` ve `perf_event_open(2)` çağrılarını filtreler, yalnızca `CAP_DAC_READ_SEARCH` ve `CAP_SYS_PTRACE` yetkilerini taşır,
+Kubernetes DaemonSet duruşu da ayrıcalıklı olmadığına dair bir garanti olarak yayımlanmıştır. Bunu hiç kurmayan bir operatör o
+duruşu olduğu gibi korur (D-148).
 
 **Yalnızca Linux**, üstelik derleme açısından değil işlev açısından: buradaki her paket darwin ve windows'ta da derlenir ve vet'ten
 geçer, örnekleyici bir build tag'in arkasında durur. Hiç çalışmayacağı yerde derlenmeyen bir bileşen, bütün repoda çalışmayı
