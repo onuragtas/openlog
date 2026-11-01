@@ -87,7 +87,7 @@ export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: stri
                 return (
                   <Fragment key={key}>
                     <TableRow data-testid="app-db-query">
-                      <TableCell className="max-w-[32rem]">
+                      <TableCell className="max-w-[22rem]">
                         <button
                           type="button"
                           aria-expanded={expanded}
@@ -112,18 +112,23 @@ export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: stri
                       <TableCell className="whitespace-nowrap">
                         <Badge variant="secondary">{d.db_name ? `${d.db_system}/${d.db_name}` : d.db_system}</Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatRpm(d.throughput, locale)}</TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatMs(d.avg_ms, locale)}</TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatMs(d.p95_ms, locale)}</TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatRate(d.error_rate, locale)}</TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{formatRate(d.time_share, locale)}</TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">{formatRpm(d.throughput, locale)}</TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">{formatMs(d.avg_ms, locale)}</TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">{formatMs(d.p95_ms, locale)}</TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">{formatRate(d.error_rate, locale)}</TableCell>
+                      <TableCell className="text-right font-mono whitespace-nowrap tabular-nums">{formatRate(d.time_share, locale)}</TableCell>
                     </TableRow>
                     {expanded && (
                       <TableRow>
-                        <TableCell colSpan={8} className="flex flex-col gap-2 whitespace-normal">
-                          <code className="block font-mono text-xs break-all whitespace-pre-wrap">{d.statement}</code>
-                          <ServerViewLink dbSystem={d.db_system} statement={d.statement} range={range} />
-                          <Plans range={range} query={d} />
+                        {/* The flex is inside the cell: a cell that is itself flex stops being a table cell and loses its colSpan. */}
+                        <TableCell colSpan={8} className="whitespace-normal">
+                          <div className="flex max-w-[calc(100vw-20rem)] flex-col items-start gap-2 max-md:max-w-[85vw]">
+                            <code className="block font-mono text-xs break-all whitespace-pre-wrap">{d.statement}</code>
+                            <ServerViewLink dbSystem={d.db_system} statement={d.statement} range={range} />
+                            <div className="w-full">
+                              <Plans range={range} query={d} />
+                            </div>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )}
