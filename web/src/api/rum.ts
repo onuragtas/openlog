@@ -18,6 +18,58 @@ export type RumSession = S["RumSession"];
 export type RumEvent = S["RumEvent"];
 export type RumRelease = S["RumRelease"];
 export type RumFunnelStep = S["RumFunnelStep"];
+export type RumCrash = S["RumCrash"];
+export type AnalyticsCohort = S["AnalyticsCohort"];
+export type AnalyticsGrain = "day" | "week" | "month";
+
+/** How far back each retention grain reads: enough cohorts to compare, and no more than the table can show. */
+const RETENTION_DAYS: Record<AnalyticsGrain, number> = { day: 30, week: 180, month: 365 };
+
+/** Over days and not the page's range: an hour of DAU means nothing, so the server's 30-day default applies. */
+export const analyticsActivityQuery = (app: string, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "activity", app, environment ?? ""],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/activity", { params: { query: { app, environment } }, signal })),
+    enabled: app !== "",
+  });
+
+export const rumCrashesQuery = (range: RangeSpec, app: string, environment?: string) =>
+  queryOptions({
+    queryKey: ["rum", "crashes", app, environment ?? "", ...rangeKey(range)],
+    queryFn: async ({ signal }) =>
+      unwrap(await api.GET("/api/v1/rum/crashes", { params: { query: { app, environment, ...window(range) } }, signal })),
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
+    refetchInterval: live(range),
+  });
+
+export const analyticsEventsQuery = (app: string, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "events", app, environment ?? ""],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/events", { params: { query: { app, environment } }, signal })),
+    enabled: app !== "",
+  });
+
+export type AnalyticsSourceBy = "referrer" | "source" | "medium" | "campaign";
+
+export const analyticsAcquisitionQuery = (app: string, by: AnalyticsSourceBy, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "acquisition", app, environment ?? "", by],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/acquisition", { params: { query: { app, environment, by } }, signal })),
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
+  });
+
+export const analyticsRetentionQuery = (app: string, grain: AnalyticsGrain, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "retention", app, environment ?? "", grain],
+    queryFn: async ({ signal }) => {
+      const from = String(Date.now() - RETENTION_DAYS[grain] * 86_400_000);
+      return unwrap(await api.GET("/api/v1/analytics/retention", { params: { query: { app, environment, grain, from } }, signal }));
+    },
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
+  });
 
 /** `slowest` orders by total time consumed, the same reasoning as APM's "most time consuming". */
 export type RumPageSort = "views" | "slowest" | "avg";

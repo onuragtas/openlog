@@ -5,9 +5,8 @@
 // code that does not use it. The one thing a Flutter application must wire by hand is the lifecycle — call
 // onAppBackgrounded() when the app is paused — and that is three lines, shown in the README.
 //
-// What this does NOT do is as deliberate as what it does: no crash reporting. An unhandled native crash is
-// not something the process lives to send, and offline capture with next-launch delivery needs its own
-// design (mobile-agent.md §7). Claiming it here would lose crashes quietly.
+// What this does NOT do is as deliberate as what it does: it does not see a native crash of the engine or a plugin.
+// That needs the Swift or Kotlin SDK in the host application (mobile-crash.md §2). recordFatal reports Dart errors.
 
 import 'dart:async';
 import 'dart:convert';
@@ -19,6 +18,7 @@ import 'src/limits.dart';
 import 'src/otlp.dart';
 import 'src/session.dart';
 import 'src/transport.dart';
+import 'src/visitor.dart';
 
 export 'src/config.dart' show ConfigError, OpenlogOptions;
 
@@ -46,13 +46,17 @@ Future<Map<String, Object?>?> _defaultFetchConfig(String url, Map<String, String
 
 /// The SDK. One per application: a second would double-count every screen.
 class Openlog {
-  Openlog._(this._session, this._transport);
+  Openlog._(this._session, this._transport, this._visitor);
 
   static Openlog? _active;
 
   final SessionState _session;
   final Transport _transport;
+  final Visitor _visitor;
   String _userId = '';
+
+  /// The screen last opened, which is where a fatal error happened.
+  String _route = '';
 
   /// Starts the SDK. Calling it twice returns the first instance rather than starting a second.
   ///
@@ -62,7 +66,9 @@ class Openlog {
     if (existing != null) return existing;
 
     final cfg = resolveConfig(options); // throws rather than starting a silently useless SDK
-    final sdk = Openlog._(SessionState(options.sampleRate), Transport(cfg, send: send));
+    final visitor = Visitor(enabled: options.analyticsCollection, directory: options.visitorDirectory);
+    final session = SessionState(options.sampleRate, roll: () => visitor.id.isEmpty ? nextUnit() : visitorRoll(visitor.id));
+    final sdk = Openlog._(session, Transport(cfg, send: send), visitor);
     _active = sdk;
 
     // The operator's sample rate wins, so volume can be turned down without shipping a release. Until it
@@ -76,6 +82,12 @@ class Openlog {
       cfg.environment = (conf['environment'] as String?) ?? '';
       final rate = conf['sample_rate'];
       if (rate is num) sdk._session.sampleRate = rate.toDouble();
+      // Only this answer lets the id reach the disk. A server without the field is one without the feature.
+      if (conf['analytics_mode'] == 'visitors') {
+        visitor.confirm();
+      } else {
+        visitor.discard();
+      }
     }));
 
     return sdk;
@@ -93,10 +105,19 @@ class Openlog {
   /// interprets it, so the discipline has to live here (mobile-agent.md §3.1).
   void identify(String userId) => _userId = truncate(userId.trim(), maxUserIdBytes);
 
+  /// Turns recognising this person across launches on or off, e.g. from a consent dialog (analytics.md §1). Off deletes
+  /// the stored id and is remembered across launches. It stops collection and erases nothing already sent: that is
+  /// `POST /api/v1/analytics/erase`, called from your backend with [visitorId].
+  void setAnalyticsCollection(bool enabled) => _visitor.setEnabled(enabled);
+
+  /// The current visitor id, or '' when there is none.
+  String get visitorId => _visitor.id;
+
   /// A screen the person opened. [isColdStart] marks the first one of a launch.
   void recordScreen(String name, {bool isColdStart = false, int durationMs = 0}) {
     final route = truncate(name.trim(), maxNameBytes);
     if (route.isEmpty) return;
+    _route = route;
     if (!_session.touch()) _session.newScreen();
     _emit(RumEvent.screen, 'screen $route', durationMs: durationMs, spanId: _session.screenSpanId, attributes: {
       'openlog.rum.route': route,
@@ -114,6 +135,24 @@ class Openlog {
       'message': error.toString(),
       'stacktrace': stack?.toString() ?? '',
     });
+  }
+
+  /// An uncaught Dart error, counted as a crash. Wire it to `FlutterError.onError` and `PlatformDispatcher.onError`.
+  ///
+  /// Sent at once rather than written to disk, because a Dart error usually leaves the process running.
+  Future<void> recordFatal(Object error, {StackTrace? stack}) {
+    final type = error.runtimeType.toString();
+    _emit(RumEvent.error, 'error $type', isError: true, attributes: {
+      'openlog.rum.route': _route,
+      'openlog.rum.error.source': 'error',
+      'openlog.rum.crash.kind': 'uncaught_exception',
+      'openlog.rum.crash.id': newSessionId(),
+    }, exception: {
+      'type': type,
+      'message': error.toString(),
+      'stacktrace': stack?.toString() ?? '',
+    });
+    return _transport.flush();
   }
 
   /// An application-defined event, e.g. `recordEvent('checkout_started', params: {'plan': 'pro'})`.
@@ -178,6 +217,7 @@ class Openlog {
         'session.id': _session.id,
         'openlog.rum.page_view.id': _session.screenSpanId,
         if (_userId.isNotEmpty) 'user.id': _userId,
+        if (_visitor.id.isNotEmpty) 'openlog.rum.visitor.id': _visitor.id,
         ...attributes,
       },
     ));

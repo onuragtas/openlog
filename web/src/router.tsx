@@ -769,7 +769,7 @@ const vulnerabilityDetailRoute = createRoute({
 });
 
 // ---- Real user monitoring (routes/rum.tsx, docs/contracts/rum.md §7, D-136) ----
-const RUM_TABS = ["overview", "pages", "sessions", "releases", "funnel"] as const;
+const RUM_TABS = ["overview", "pages", "sessions", "releases", "crashes", "funnel", "analytics"] as const;
 const RUM_SORTS = ["views", "slowest", "avg"] as const;
 
 export interface RumSearch {

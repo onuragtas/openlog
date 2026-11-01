@@ -69,6 +69,9 @@ second authentication factor, and this SDK will not pretend otherwise. The full 
 | `maxBatchSize` | `32` | Spans buffered before an early send |
 | `flushInterval` | `5s` | How often a non-empty queue is sent |
 | `debug` | `false` | Log what the SDK does |
+| `analyticsCollection` | `true` | Recognise a person across launches, for DAU, MAU and retention. This stores a persistent id, which may need consent. See [Product analytics](../../docs/guide/product-analytics.md) |
+| `captureCrashes` | `false` | Says this build reports uncaught errors through `recordFatal`. See [Crash reporting](../../docs/guide/crash-reporting.md) |
+| `visitorDirectory` | none | A directory private to the app, e.g. from `path_provider`. **Without it no visitor id is sent**, and DAU, MAU and retention stay empty |
 
 ## Sampling and sessions
 
@@ -81,9 +84,7 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 ## What it does not do
 
-**No crash reporting.** An unhandled native crash is not something the process lives to send, and capturing
-it offline for delivery on the next launch needs its own design. Claiming it here would lose crashes
-quietly. `recordError` reports what your code catches, which is a different and smaller promise.
+**No native crashes.** Uncaught Dart errors are reported through `recordFatal`: see [Crash reporting](../../docs/guide/crash-reporting.md). A crash of the Flutter engine or a plugin needs the Swift or Kotlin SDK in the host application.
 
 **No symbolication.** Browser stacks are un-minified with uploaded source maps; dSYM and ProGuard mappings
 have no equivalent yet.

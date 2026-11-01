@@ -250,6 +250,16 @@ one trace runs from the click through your backend to the database.
 
 Visits with their duration, page views, errors, entry route and browser.
 
+### Crashes
+
+Uncaught exceptions and native crashes from the mobile SDKs, with the crash-free rate of each release. See
+[Crash reporting](guide/crash-reporting.md).
+
+### Analytics
+
+DAU, WAU, MAU, new users, retention by cohort, events and traffic sources for each application, with funnels through
+the API. See [Product analytics](guide/product-analytics.md).
+
 Mobile SDKs for iOS (Swift), Android (Kotlin/JVM) and Flutter (Dart) report screens, errors, custom events
 and identity through the same pipeline; a mobile key is scoped by an application allowlist rather than an
 origin, since a mobile app has none.

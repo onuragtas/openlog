@@ -42,7 +42,8 @@ var StorageClasses = []StorageClass{
 	{Name: "apm", DefaultCold: 7},         // apm_* rollups (OPENLOG_APM_RETENTION_DAYS)
 	{Name: "alerts", DefaultCold: 7},      // alert_evaluations_local (30 days)
 	{Name: "rum", DefaultCold: 7},
-	{Name: "profiles", DefaultCold: 3}, // profiles_local (0095_profiles): the widest rows, moved early         // rum_* rollups (30 days, D-136)
+	{Name: "analytics", DefaultCold: 30}, // analytics_* (0102_analytics): 90 and 395 days, fixed
+	{Name: "profiles", DefaultCold: 3},   // profiles_local (0095_profiles): the widest rows, moved early         // rum_* rollups (30 days, D-136)
 }
 
 // DefaultStoragePolicy is the policy defined by deploy/compose/clickhouse/storage-tiered.xml and the Helm chart.

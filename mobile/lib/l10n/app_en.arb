@@ -2722,7 +2722,7 @@
   "rumReleasesEmpty": "No versions or deployments in this range.",
   "rumReleaseVersions": "Versions",
   "rumReleaseDeployments": "Deployments",
-  "rumReleaseCrashFree": "Crash-free",
+  "rumReleaseCrashFree": "Error-free",
   "rumReleaseSessions": "Sessions",
   "rumReleaseErrorSessions": "With errors",
   "rumReleaseNoSessions": "no sessions",

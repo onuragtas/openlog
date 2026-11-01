@@ -63,6 +63,12 @@ var TTLTables = []TTLTable{
 	{"rum_page_views_1m_local", "rum", "timestamp", 30},
 	{"rum_vitals_1m_local", "rum", "timestamp", 30},
 	{"rum_sessions_local", "rum", "toDateTime(last_seen)", 30},
+	{"rum_release_sessions_1h_local", "rum", "hour", 30},
+	// Product analytics (0102_analytics) is pseudonymous personal data, so how long it is kept is fixed by the
+	// contract and must not widen with some other class's per-tenant retention (analytics.md §5.4).
+	{"analytics_events_local", "analytics", "toDateTime(timestamp)", 90},
+	{"analytics_actors_local", "analytics", "toDateTime(last_seen)", 395},
+	{"analytics_actor_days_local", "analytics", "toDateTime(day)", 395},
 	// Profiles get their own class rather than borrowing traces: per-tenant retention (D-081) widens a class
 	// as a whole, and a profile is the widest row openlog stores — a tenant that lengthens its trace
 	// retention must not silently multiply its profiling bill too.

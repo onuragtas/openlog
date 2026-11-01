@@ -290,6 +290,31 @@ var eventTypes = []*eventType{
 		},
 	},
 	{
+		// Page views and custom events for 90 days (0102_analytics), which is what makes them alertable past the
+		// trace retention. Plain rows, so `sum(weight)` is the extrapolated count. actor_hash is left out: this
+		// language answers about events, and the API is what counts people.
+		name: "AnalyticsEvent", desc: "Page views and custom events, 90 days (analytics_events)", table: query.AnalyticsEvents,
+		timeCol: "timestamp", maxRange: maxRawRange,
+		attrs: []attrDef{
+			s("app", "app"),
+			s("deployment.environment", "deployment_environment"),
+			s("kind", "kind"),
+			s("name", "name"),
+			s("route", "route"),
+			s("session.id", "session_id"),
+			s("version", "version"),
+			s("country", "country"),
+			s("device.type", "device_type"),
+			s("os.name", "os_name"),
+			s("browser.name", "browser_name"),
+			s("referrer.host", "referrer_host"),
+			s("utm.source", "utm_source"),
+			s("utm.medium", "utm_medium"),
+			s("utm.campaign", "utm_campaign"),
+			n("weight", "weight"),
+		},
+	},
+	{
 		// Database statement statistics (0096_db_monitoring): deltas per collection interval, plain columns.
 		name: "DbQuery", desc: "Database statement statistics per interval (db_query_stats)", table: query.DBQueryStats,
 		timeCol: "timestamp", maxRange: maxRawRange,

@@ -7,7 +7,9 @@ import { ArrowLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { RumPageSort } from "@/api/rum";
 import { PageHeader } from "@/components/AppShell";
+import { RumAnalyticsTab } from "@/components/rum/RumAnalyticsTab";
 import { RumApps } from "@/components/rum/RumApps";
+import { RumCrashesTab } from "@/components/rum/RumCrashesTab";
 import { RumFunnelTab } from "@/components/rum/RumFunnelTab";
 import { RumOverviewTab } from "@/components/rum/RumOverviewTab";
 import { RumPagesTab } from "@/components/rum/RumPagesTab";
@@ -75,7 +77,9 @@ export function RumAppPage() {
           <TabsTrigger value="pages">{t("rum.tabs.pages")}</TabsTrigger>
           <TabsTrigger value="sessions">{t("rum.tabs.sessions")}</TabsTrigger>
           <TabsTrigger value="releases">{t("rum.tabs.releases")}</TabsTrigger>
+          <TabsTrigger value="crashes">{t("rum.tabs.crashes")}</TabsTrigger>
           <TabsTrigger value="funnel">{t("rum.tabs.funnel")}</TabsTrigger>
+          <TabsTrigger value="analytics">{t("rum.tabs.analytics")}</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">{tab === "overview" && <RumOverviewTab range={range} app={app} environment={search.env} />}</TabsContent>
         <TabsContent value="pages">
@@ -112,6 +116,8 @@ export function RumAppPage() {
           )}
         </TabsContent>
         <TabsContent value="releases">{tab === "releases" && <RumReleasesTab range={range} app={app} environment={search.env} />}</TabsContent>
+        <TabsContent value="crashes">{tab === "crashes" && <RumCrashesTab range={range} app={app} environment={search.env} />}</TabsContent>
+        <TabsContent value="analytics">{tab === "analytics" && <RumAnalyticsTab app={app} environment={search.env} />}</TabsContent>
         <TabsContent value="funnel">
           {tab === "funnel" && (
             <RumFunnelTab

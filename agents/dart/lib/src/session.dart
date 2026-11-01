@@ -14,11 +14,16 @@ const Duration sessionMaxAge = Duration(hours: 4);
 
 /// Tracks the current session and the current screen within it.
 class SessionState {
-  SessionState(this.sampleRate, {DateTime Function()? now}) : _now = now ?? DateTime.now {
+  SessionState(this.sampleRate, {DateTime Function()? now, double Function()? roll})
+      : _now = now ?? DateTime.now,
+        _place = roll ?? nextUnit {
     _start(_now());
   }
 
   final DateTime Function() _now;
+
+  /// Where this session falls in [0, 1) for sampling: the visitor's fixed place when there is one (analytics.md §2).
+  final double Function() _place;
 
   /// The share of sessions kept, decided **once per session** rather than per event: half a session is not
   /// a cheaper session, it is an unreadable one.
@@ -43,7 +48,7 @@ class SessionState {
   bool _roll() {
     if (sampleRate >= 1) return true;
     if (sampleRate <= 0) return false;
-    return nextUnit() < sampleRate;
+    return _place() < sampleRate;
   }
 
   /// Records activity, starting a new session when the old one has expired. Returns true when a new session

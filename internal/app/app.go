@@ -18,6 +18,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/admin"
 	"github.com/onuragtas/openlog/internal/alert/secrets"
+	"github.com/onuragtas/openlog/internal/analytics"
 	"github.com/onuragtas/openlog/internal/api"
 	"github.com/onuragtas/openlog/internal/apm"
 	"github.com/onuragtas/openlog/internal/auth"
@@ -305,6 +306,9 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 		srv.SetSLOs(slo.NewPGStore(pgPool))                    // service level objectives (slo.md)
 		sourceMapService = newSourceMaps(cfg, pgPool, log)
 		srv.SetSourceMaps(sourceMapService) // browser stack symbolication (rum.md §8)
+		if cfg.RUM.Enabled {
+			srv.SetAnalyticsErasures(analytics.PGStore{Pool: pgPool}) // analytics.md §7
+		}
 	}
 	if err := startAlertAPI(cfg, pgPool, srv, apmSettings, log); err != nil { // alert.go
 		return err
@@ -350,6 +354,11 @@ func RunAPI(ctx context.Context, cfg config.Config, adm *admin.Server, log *slog
 	usageTasks = append(usageTasks, startDiskSpace(cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	// sourcemaps.go: delete the maps of builds nobody deploys any more (OPENLOG_SOURCE_MAPS_RETENTION_DAYS).
 	usageTasks = append(usageTasks, startSourceMapPrune(cfg, sourceMapService, log)...)
+	// The API reads ClickHouse as a read-only user, so deleting a person's analytics data happens here (analytics.md §7).
+	if pgPool != nil && cfg.RUM.Enabled {
+		usageTasks = append(usageTasks, leaderTask{"analytics-erasure", (&analytics.Job{Conn: conn, Database: cfg.ClickHouseDatabase,
+			Cluster: cfg.ClickHouseCluster, Store: analytics.PGStore{Pool: pgPool}, Log: log.With("job", "analytics-erasure")}).Run})
+	}
 	// synthetics.go: scheduled outside-in checks; the scheduler and the result writer run on the leader (D-132)
 	usageTasks = append(usageTasks, startSynthetics(ctx, cfg, pgPool, conn, srv, adm.Registry(), log)...)
 	// jobs.go: cron and heartbeat monitoring; pings are served by every pod, the sweeper runs on the leader (D-141)

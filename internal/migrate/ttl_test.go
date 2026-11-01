@@ -182,8 +182,8 @@ func TestBuildTTLPlan(t *testing.T) {
 	// APM default cold 7 equals the 7-day retention: the APM tables get no move and keep the default policy.
 	// The RUM rollups keep 30 days in their own class (D-136), so they do move, like alerts and synthetics, and so
 	// do the profiles (D-139), the three database monitoring tables (metrics and traces classes, D-138) and
-	// the job runs (D-141).
-	if policies != 17 || ttls != 17 {
+	// the job runs (D-141) and the three analytics tables.
+	if policies != 21 || ttls != 21 {
 		t.Fatalf("enable: %d policy and %d TTL steps: %+v", policies, ttls, plan.Steps)
 	}
 	want := map[string]string{
@@ -200,9 +200,14 @@ func TestBuildTTLPlan(t *testing.T) {
 		// Profiles are their own class too, and move earliest: they are the widest rows stored.
 		"profiles_local": "toDateTime(timestamp) + INTERVAL 3 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 7 DAY",
 		// RUM rollups are their own class so their 30 days cannot be widened by per-tenant retention (D-136).
-		"rum_page_views_1m_local": "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
-		"rum_vitals_1m_local":     "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
-		"rum_sessions_local":      "toDateTime(last_seen) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(last_seen) + INTERVAL 30 DAY",
+		"rum_page_views_1m_local":       "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
+		"rum_vitals_1m_local":           "timestamp + INTERVAL 7 DAY TO VOLUME 'cold', timestamp + INTERVAL 30 DAY",
+		"rum_sessions_local":            "toDateTime(last_seen) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(last_seen) + INTERVAL 30 DAY",
+		"rum_release_sessions_1h_local": "hour + INTERVAL 7 DAY TO VOLUME 'cold', hour + INTERVAL 30 DAY",
+		// Product analytics has a class of its own for the same reason, with retention fixed by its contract.
+		"analytics_events_local":     "toDateTime(timestamp) + INTERVAL 30 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 90 DAY",
+		"analytics_actors_local":     "toDateTime(last_seen) + INTERVAL 30 DAY TO VOLUME 'cold', toDateTime(last_seen) + INTERVAL 395 DAY",
+		"analytics_actor_days_local": "toDateTime(day) + INTERVAL 30 DAY TO VOLUME 'cold', toDateTime(day) + INTERVAL 395 DAY",
 		// Database monitoring (D-138): statistics and plans in the metrics class, session samples in the traces class.
 		"db_query_stats_local":     "toDateTime(timestamp) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(timestamp) + INTERVAL 30 DAY",
 		"db_query_plans_local":     "toDateTime(captured_at) + INTERVAL 7 DAY TO VOLUME 'cold', toDateTime(captured_at) + INTERVAL 30 DAY",
@@ -244,7 +249,7 @@ func TestBuildTTLPlan(t *testing.T) {
 
 	// Disable again: the move clauses go, the policy stays. Every table that got a move above reverts.
 	plan, _ = BuildTTLPlan(apm, tiered)
-	if len(plan.Steps) != 17 || plan.Tiering {
+	if len(plan.Steps) != 21 || plan.Tiering {
 		t.Fatalf("disable: %+v", plan)
 	}
 	for _, s := range plan.Steps {

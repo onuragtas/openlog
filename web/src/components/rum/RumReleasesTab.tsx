@@ -1,13 +1,8 @@
 // How each version of the application behaved, and when its releases happened (rum.md §2.7).
 //
-// The crash-free rate leads, because that is the number a release is judged on: "98% of the sessions on
-// v1.4.2 saw no error" is the question somebody asks right after a deploy. A session with twelve errors
-// counts once, so this is a share of visits, not of errors.
-//
-// The two halves of the answer see different distances and the screen says so rather than letting the
-// reader assume: deployments come from the 30-day version rollup, while sessions are counted from the raw
-// spans and stop at the 7-day trace retention. A version older than that is listed with zero sessions —
-// which is a gap in what is kept, not a week in which nobody visited.
+// The crash-free rate leads, because that is the number a release is judged on. It is a share of visits and not of
+// crashes, and a version that cannot report a crash shows a dash: 100% would claim something nobody measured. The
+// error-free rate beside it counts errors the application handled too (mobile-crash.md §5).
 import { useQuery } from "@tanstack/react-query";
 import { Rocket } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,16 +12,22 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { versionLabel } from "@/lib/deployments";
 import { formatDateTime, formatNumber } from "@/lib/format";
-import { apiTimeMs, formatShare } from "@/lib/rum";
+import { apiTimeMs } from "@/lib/rum";
 import type { RangeSpec } from "@/lib/time";
 
 /** Below 99% is worth a colour; below 95% is worth the loud one. The bands are this screen's own. */
+function Rate({ rate }: { rate: number }) {
+  const variant = rate >= 0.99 ? "success" : rate >= 0.95 ? "warning" : "destructive";
+  // One decimal, because 99.6% rounded to a whole number would read as a release with no problems at all.
+  return <Badge variant={variant}>{(rate * 100).toFixed(1)}%</Badge>;
+}
+
 function CrashFree({ release }: { release: RumRelease }) {
   const { t } = useTranslation();
   if (release.sessions === 0) return <span className="text-muted-foreground">{t("rum.releases.noSessions")}</span>;
-  const rate = release.crash_free_rate;
-  const variant = rate >= 0.99 ? "success" : rate >= 0.95 ? "warning" : "destructive";
-  return <Badge variant={variant}>{formatShare(rate)}</Badge>;
+  const rate = release.session_crash_free_rate;
+  if (rate === null || rate === undefined) return <span className="text-muted-foreground" title={t("rum.releases.noCrashCapture")}>—</span>;
+  return <Rate rate={rate} />;
 }
 
 export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; app: string; environment?: string }) {
@@ -59,6 +60,7 @@ export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; 
               <TableRow>
                 <TableHead>{t("rum.releases.columns.version")}</TableHead>
                 <TableHead className="text-right">{t("rum.releases.columns.crashFree")}</TableHead>
+                <TableHead className="text-right">{t("rum.releases.columns.errorFree")}</TableHead>
                 <TableHead className="text-right">{t("rum.releases.columns.sessions")}</TableHead>
                 <TableHead className="text-right">{t("rum.releases.columns.errorSessions")}</TableHead>
                 <TableHead className="hidden md:table-cell">{t("rum.releases.columns.firstSeen")}</TableHead>
@@ -71,6 +73,9 @@ export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; 
                   <TableCell className="font-mono text-xs">{r.version ? versionLabel(r.version) : t("rum.releases.noVersion")}</TableCell>
                   <TableCell label={t("rum.releases.columns.crashFree")} className="text-right">
                     <CrashFree release={r} />
+                  </TableCell>
+                  <TableCell label={t("rum.releases.columns.errorFree")} className="text-right">
+                    {r.sessions === 0 ? "" : <Rate rate={r.error_free_rate ?? r.crash_free_rate} />}
                   </TableCell>
                   <TableCell label={t("rum.releases.columns.sessions")} className="text-right tabular-nums">
                     {formatNumber(r.sessions, i18n.language)}

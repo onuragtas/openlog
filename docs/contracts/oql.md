@@ -53,6 +53,7 @@ variable   := '{{' name '}}'
 | `RumPageView` | `rum_page_views_1m` | `timestamp` | 30-day retention; per-minute rollup, always aggregate |
 | `RumVital` | `rum_vitals_1m` | `timestamp` | 30-day retention; per-minute rollup, always aggregate |
 | `RumSession` | `rum_sessions` | `last_seen` | 30-day retention; sessions seen in the range |
+| `AnalyticsEvent` | `analytics_events` | `timestamp` | 90-day retention; page views and custom events of keys with analytics on ([analytics.md](analytics.md)). `sum(weight)` is the extrapolated count |
 | `DbQuery` | `db_query_stats` | `timestamp` | statement statistics per collection interval |
 
 Attributes (`GET /api/v1/query/schema` lists them with types):
@@ -68,6 +69,7 @@ Attributes (`GET /api/v1/query/schema` lists them with types):
 | `RumPageView` | `app`, `deployment.environment`, `route`, `page.kind` (`load` or `route_change`), `device.type`, `browser.name`, and the numbers `views`, `samples`, `duration.sum.ms`, `duration.max.ms`, `ttfb.sum.ms`, `dns.sum.ms`, `connect.sum.ms`, `tls.sum.ms`, `response.sum.ms`, `dom.interactive.sum.ms`, `dom.content_loaded.sum.ms`, `load.event.sum.ms` |
 | `RumVital` | `app`, `deployment.environment`, `vital` (`lcp`, `inp`, `cls`, `fcp`, `ttfb`), `route`, `device.type`, and the numbers `count`, `samples`, `value.sum`, `value.max`, `good`, `needs_improvement`, `poor` |
 | `RumSession` | `app`, `deployment.environment`, `session.id`, `device.type`, `browser.name`, `browser.version`, `os.name`, and the numbers `page.views`, `errors`, `spans` |
+| `AnalyticsEvent` | `app`, `deployment.environment`, `kind` (`page_view` or `custom`), `name`, `route`, `session.id`, `version`, `country`, `device.type`, `os.name`, `browser.name`, `referrer.host`, `utm.source`, `utm.medium`, `utm.campaign`, and the number `weight` |
 | `DbQuery` | `db.system`, `instance`, `db.name`, `db.user`, `host.id`, `host.name`, `server.address`, `query.id`, `query.text`, `fingerprint`, and the numbers `server.port`, `calls`, `total_time.ms`, `rows`, `rows_examined`, `errors`, `no_index_used`, `blocks.hit`, `blocks.read`, `interval.seconds` |
 
 The rollup types (`RumPageView`, `RumVital`, `RumSession`, `DbQuery`) store weighted sums, not averages: an

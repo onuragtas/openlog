@@ -37,6 +37,7 @@ interface Draft {
   appIds: string;
   rateLimit: string;
   sampleRate: string;
+  analyticsMode: NonNullable<BrowserKey["analytics_mode"]>;
 }
 
 const newDraft = (): Draft => ({
@@ -48,6 +49,7 @@ const newDraft = (): Draft => ({
   appIds: "",
   rateLimit: String(DEFAULT_RATE_LIMIT),
   sampleRate: "1",
+  analyticsMode: "visitors",
 });
 
 const draftOf = (k: BrowserKey): Draft => ({
@@ -59,6 +61,7 @@ const draftOf = (k: BrowserKey): Draft => ({
   appIds: k.app_ids.join(", "),
   rateLimit: String(k.rate_limit_per_minute),
   sampleRate: String(k.sample_rate),
+  analyticsMode: k.analytics_mode ?? "off",
 });
 
 /** Both allowlists are typed as a list. The server refuses an empty one: a blank field must not be the unsafe setting (rum.md §3.2). */
@@ -77,6 +80,7 @@ const toInput = (d: Draft): BrowserKeyInput => ({
   ...(d.kind === "mobile" ? { app_ids: scopeOf(d) } : { origins: scopeOf(d) }),
   rate_limit_per_minute: Number(d.rateLimit) || DEFAULT_RATE_LIMIT,
   sample_rate: Number(d.sampleRate),
+  analytics_mode: d.analyticsMode,
 });
 
 /** Events/min: a whole number in the server's range. */
@@ -165,6 +169,22 @@ function KeyFields({ id, draft, onChange, showName }: { id: string; draft: Draft
           onChange={(e) => set({ sampleRate: e.target.value })}
         />
         {sampleRateError(draft) && <p className="text-xs text-destructive">{t("settings.browserKeys.sampleRateHelp")}</p>}
+      </div>
+      <div className="flex w-full flex-col gap-1.5">
+        <Label htmlFor={`${id}-analytics`}>{t("settings.browserKeys.analyticsMode")}</Label>
+        <NativeSelect
+          id={`${id}-analytics`}
+          className="w-40"
+          value={draft.analyticsMode}
+          onChange={(e) => set({ analyticsMode: e.target.value as Draft["analyticsMode"] })}
+        >
+          {(["visitors", "sessions", "off"] as const).map((m) => (
+            <option key={m} value={m}>
+              {t(`settings.browserKeys.analyticsModes.${m}`)}
+            </option>
+          ))}
+        </NativeSelect>
+        <p className="text-xs text-muted-foreground">{t("settings.browserKeys.analyticsModeHelp")}</p>
       </div>
     </div>
   );

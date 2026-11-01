@@ -82,6 +82,9 @@ second authentication factor, and this SDK will not pretend otherwise. The full 
 | `maxBatchSize` | `32` | Spans buffered before an early send |
 | `flushIntervalMs` | `5000` | How often a non-empty queue is sent |
 | `debug` | `false` | Log what the SDK does |
+| `analyticsCollection` | `true` | Recognise a person across launches, for DAU, MAU and retention. This stores a persistent id, which may need consent: see [Product analytics](../../docs/guide/product-analytics.md) |
+| `captureCrashes`, `crashDirectory` | `false`, none | Report uncaught JVM exceptions on the next launch. Needs both. See [Crash reporting](../../docs/guide/crash-reporting.md) |
+| `visitorDirectory` | none | A directory private to the app, such as `context.filesDir.path`. **Without it no visitor id is sent**, and DAU, MAU and retention stay empty |
 
 ## Sampling and sessions
 
@@ -94,9 +97,7 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 ## What it does not do
 
-**No crash reporting.** An unhandled crash is not something the process lives to send, and capturing it for
-delivery on the next launch needs its own design. Claiming it here would lose crashes quietly.
-`recordError` reports what your code catches, which is a different and smaller promise.
+**No NDK crashes or ANRs.** Uncaught JVM exceptions are reported when `captureCrashes` is on: see [Crash reporting](../../docs/guide/crash-reporting.md). Those two are not JVM exceptions, and reading them needs an Android API this plain JVM library does not have.
 
 **No symbolication.** Browser stacks are un-minified with uploaded source maps; ProGuard mappings have no
 equivalent yet.

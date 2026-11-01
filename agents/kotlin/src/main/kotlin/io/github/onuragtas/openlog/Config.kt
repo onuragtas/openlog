@@ -29,6 +29,25 @@ data class Options(
     val maxBatchSize: Int = 32,
     val flushIntervalMs: Long = 5_000,
     val debug: Boolean = false,
+    /**
+     * Recognise a person across launches, which is what DAU, MAU and retention need (analytics.md §1). On by default,
+     * as in Firebase. **This stores a persistent id on the device, and whether that needs consent is your question.**
+     * If it does, pass false and call `setAnalyticsCollection(true)` once they agree.
+     */
+    val analyticsCollection: Boolean = true,
+    /**
+     * A directory private to the application, e.g. `context.filesDir.path`. This is a plain JVM library and has no way
+     * to find one. Without it no visitor id is sent, rather than a new one per launch.
+     */
+    val visitorDirectory: String? = null,
+    /**
+     * Report unhandled JVM exceptions on the next launch (mobile-crash.md §2). Off by default, because it installs a
+     * global handler in your process; one already installed is always called afterwards. It needs [crashDirectory]. An
+     * NDK crash or an ANR is not an exception here and is not reported.
+     */
+    val captureCrashes: Boolean = false,
+    /** A directory private to the application, e.g. `context.filesDir.path`. */
+    val crashDirectory: String? = null,
 )
 
 internal class ResolvedConfig(val options: Options, val rumUrl: String, val configUrl: String) {

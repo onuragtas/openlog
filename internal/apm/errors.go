@@ -66,6 +66,9 @@ func NormalizeMessage(msg string) string {
 	return Truncate(s, MaxErrorMessage)
 }
 
+// crashKindAttr is rum.AttrCrashKind, repeated because internal/rum imports this package.
+const crashKindAttr = "openlog.rum.crash.kind"
+
 // ErrorGroup returns the error type, normalized message and group id of an error span.
 func ErrorGroup(service, namespace, env string, in *Input, httpStatus uint16) (string, string, uint64) {
 	var typ, msg, stack string
@@ -88,6 +91,12 @@ func ErrorGroup(service, namespace, env string, in *Input, httpStatus uint16) (s
 	}
 	norm := NormalizeMessage(msg)
 	frame := TopFrame(stack)
+	// A release build obfuscates its frames differently each time, so a frame in the group of a mobile crash would
+	// reopen every group on every release (mobile-crash.md §4). Coarser groups are the lesser problem until symbols
+	// can be applied on the write path.
+	if in.Attributes[crashKindAttr] != "" {
+		frame = ""
+	}
 	h := xxhash.New()
 	for i, part := range []string{service, namespace, env, typ, norm, frame} {
 		if i > 0 {

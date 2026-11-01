@@ -44,6 +44,7 @@ function seed(): BrowserKey[] {
       app_ids: [],
       rate_limit_per_minute: 6000,
       sample_rate: 1,
+      analytics_mode: "visitors",
       created_by_email: "owner@example.com",
       created_at: formatTs(now - 30 * 86_400_000),
       updated_at: formatTs(now - 30 * 86_400_000),
@@ -102,6 +103,7 @@ export const browserKeyHandlers = [
       app_ids: input.app_ids ?? [],
       rate_limit_per_minute: input.rate_limit_per_minute,
       sample_rate: input.sample_rate,
+      analytics_mode: input.analytics_mode ?? "visitors",
       created_by_email: "owner@example.com",
       created_at: formatTs(now),
       updated_at: formatTs(now),
@@ -130,6 +132,7 @@ export const browserKeyHandlers = [
       app_ids: input.app_ids ?? [],
       rate_limit_per_minute: input.rate_limit_per_minute,
       sample_rate: input.sample_rate,
+      analytics_mode: input.analytics_mode ?? key.analytics_mode ?? "off",
       updated_at: formatTs(Date.now()),
     };
     keys = keys.map((k) => (k.id === updated.id ? updated : k));

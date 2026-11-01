@@ -101,6 +101,7 @@ class Transport {
         'device.manufacturer': cfg.options.deviceManufacturer,
         'os.name': cfg.options.osName,
         'os.version': cfg.options.osVersion,
+        if (cfg.options.captureCrashes) 'openlog.rum.crash.capture': '1',
       };
 
   void _log(String message) {

@@ -90,6 +90,14 @@ var (
 	RumPageViews1m = Table{"rum_page_views_1m"}
 	RumVitals1m    = Table{"rum_vitals_1m"}
 	RumSessions    = Table{"rum_sessions"}
+	// RumReleaseSessions is how each version behaved, hour by hour (0103_release_sessions).
+	RumReleaseSessions = Table{"rum_release_sessions_1h"}
+
+	// Product analytics (schema 0102_analytics, analytics.md §5). analytics_events is plain rows; the two actor tables
+	// are aggregating, so a read of them must re-aggregate per actor.
+	AnalyticsEvents    = Table{"analytics_events"}
+	AnalyticsActors    = Table{"analytics_actors"}
+	AnalyticsActorDays = Table{"analytics_actor_days"}
 
 	// Database monitoring (schema 0096_db_monitoring, db-monitoring.md, D-138): statement statistics per interval,
 	// session samples and execution plans. DBQueryPlans is aggregating: always re-aggregate with GROUP BY.

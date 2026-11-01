@@ -9,11 +9,12 @@
 import { ConfigError, resolveConfig, type OpenLogBrowserOptions, type ResolvedConfig } from './config.js';
 import { captureErrors } from './errors.js';
 import { cleanURL, instrumentRequests, type RequestSpan } from './fetch.js';
-import { afterLoad, navigationTimings, onRouteChange } from './navigation.js';
+import { afterLoad, landingAttribution, navigationTimings, onRouteChange } from './navigation.js';
 import { buildSpan, type AnyAttr, type OtlpSpan, type RumEvent } from './otlp.js';
 import { collectResources } from './resources.js';
 import { SessionState } from './session.js';
 import { onPageHidden, Transport } from './transport.js';
+import { Visitor, visitorRoll } from './visitor.js';
 import { collectVitals, type VitalSample } from './vitals.js';
 import { VERSION } from './version.js';
 
@@ -61,6 +62,14 @@ export interface OpenLogBrowser {
    * identity store of its own.
    */
   identify(userId: string): void;
+  /**
+   * Turns recognising this visitor across visits on or off, e.g. from a consent dialog (analytics.md §1). Turning it
+   * off deletes the stored id and is remembered across page loads. It stops collection and erases nothing already
+   * sent: that is `POST /api/v1/analytics/erase`, called from your backend with `visitorId()`.
+   */
+  setAnalyticsCollection(enabled: boolean): void;
+  /** The current visitor id, or "" when there is none. */
+  visitorId(): string;
 }
 
 const NOOP: OpenLogBrowser = {
@@ -71,6 +80,8 @@ const NOOP: OpenLogBrowser = {
   recordEvent() {},
   recordTiming() {},
   identify() {},
+  setAnalyticsCollection() {},
+  visitorId: () => '',
 };
 
 let active: OpenLogBrowser | null = null;
@@ -100,18 +111,22 @@ export function init(options: OpenLogBrowserOptions): OpenLogBrowser {
 }
 
 function start(cfg: ResolvedConfig): OpenLogBrowser {
-  const session = new SessionState(cfg.sampleRate);
+  const visitor = new Visitor(cfg.analyticsCollection);
+  const session = new SessionState(cfg.sampleRate, Date.now(), () => (visitor.id ? visitorRoll(visitor.id) : Math.random()));
   const transport = new Transport(cfg);
   const teardown: (() => void)[] = [];
 
   // The server's sample rate (from the key) wins, so an operator can turn the volume down without a deploy.
   // The page reports with the local rate until this answers; failure is silent by design.
   void fetch(cfg.configUrl, { headers: { 'openlog-browser-key': cfg.key }, credentials: 'omit', mode: 'cors' })
-    .then((r) => (r.ok ? (r.json() as Promise<{ service_name?: string; environment?: string; sample_rate?: number }>) : null))
+    .then((r) => (r.ok ? (r.json() as Promise<{ service_name?: string; environment?: string; sample_rate?: number; analytics_mode?: string }>) : null))
     .then((conf) => {
       if (!conf) return;
       transport.setResource(conf.service_name ?? cfg.serviceName, conf.environment ?? cfg.environment);
       if (typeof conf.sample_rate === 'number') session.applyServerSampleRate(conf.sample_rate);
+      // Only this answer lets the id reach the device. A server without the field is one without the feature.
+      if (conf.analytics_mode === 'visitors') visitor.confirm();
+      else visitor.discard();
     })
     .catch(() => undefined);
 
@@ -135,6 +150,7 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
       // mechanisms for one rule are how they drift apart. An empty string never reaches the wire, so
       // "signed out" and "identified as nothing" stay indistinguishable — which is the point.
       'user.id': userId,
+      'openlog.rum.visitor.id': visitor.id,
     };
   };
 
@@ -191,10 +207,13 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
 
   // ---- page views ----
   const sendPageView = (kind: 'load' | 'route_change', durationMs: number, attributes: AnyAttr = {}) => {
+    // Rolled over first, or the page view that starts a new session after an idle spell would not know it does.
+    session.touch();
+    const landing = session.takeLanding() ? landingAttribution(kind === 'load') : {};
     emit('page_view', `pageview ${location.pathname}`, {
       durationMs,
       spanId: session.pageViewSpanId,
-      attributes: { 'openlog.rum.page_view.kind': kind, ...attributes },
+      attributes: { 'openlog.rum.page_view.kind': kind, ...landing, ...attributes },
     });
   };
 
@@ -284,6 +303,8 @@ function start(cfg: ResolvedConfig): OpenLogBrowser {
       // discover that by having its spans silently change shape.
       userId = String(id ?? '').trim().slice(0, MAX_USER_ID_LENGTH);
     },
+    setAnalyticsCollection: (enabled: boolean) => visitor.setEnabled(Boolean(enabled)),
+    visitorId: () => visitor.id,
     recordError: (error: unknown) => {
       const e = error instanceof Error ? error : new Error(String(error));
       emit('error', `error ${e.name}`, {

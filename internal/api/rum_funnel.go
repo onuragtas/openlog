@@ -81,15 +81,9 @@ func (s *Server) rumFunnel(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
-	steps := r.URL.Query()["step"]
-	if len(steps) < rumMinFunnelSteps || len(steps) > rumMaxFunnelSteps {
-		return badRequest("between %d and %d step parameters are required", rumMinFunnelSteps, rumMaxFunnelSteps)
-	}
-	for i, st := range steps {
-		steps[i] = strings.TrimSpace(st)
-		if steps[i] == "" || len(steps[i]) > rum.MaxCustomNameBytes {
-			return badRequest("step %d must be 1-%d bytes", i+1, rum.MaxCustomNameBytes)
-		}
+	steps, err := parseFunnelSteps(r)
+	if err != nil {
+		return err
 	}
 	from, to, err := s.timeRange(r)
 	if err != nil {
@@ -104,6 +98,32 @@ func (s *Server) rumFunnel(w http.ResponseWriter, r *http.Request, sc *query.Sco
 	if err != nil {
 		return err
 	}
+	out, err := funnelSteps(rows, steps)
+	if err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"steps": out, "window_seconds": int(window / time.Second)})
+	return nil
+}
+
+// parseFunnelSteps reads and bounds the step parameters.
+func parseFunnelSteps(r *http.Request) ([]string, error) {
+	steps := r.URL.Query()["step"]
+	if len(steps) < rumMinFunnelSteps || len(steps) > rumMaxFunnelSteps {
+		return nil, badRequest("between %d and %d step parameters are required", rumMinFunnelSteps, rumMaxFunnelSteps)
+	}
+	for i, st := range steps {
+		steps[i] = strings.TrimSpace(st)
+		if steps[i] == "" || len(steps[i]) > rum.MaxCustomNameBytes {
+			return nil, badRequest("step %d must be 1-%d bytes", i+1, rum.MaxCustomNameBytes)
+		}
+	}
+	return steps, nil
+}
+
+// funnelSteps reads (level, count) rows into the steps, and closes them.
+func funnelSteps(rows query.Rows, steps []string) ([]rumFunnelStepJSON, error) {
+	defer rows.Close()
 	// windowFunnel answers with the furthest step each session reached, so a session that finished is
 	// counted once at the last level and has to be added back into every level before it.
 	reached := make([]uint64, len(steps)+1)
@@ -111,16 +131,14 @@ func (s *Server) rumFunnel(w http.ResponseWriter, r *http.Request, sc *query.Sco
 		var level uint8
 		var sessions uint64
 		if err := rows.Scan(&level, &sessions); err != nil {
-			rows.Close()
-			return err
+			return nil, err
 		}
 		if int(level) < len(reached) {
 			reached[level] += sessions
 		}
 	}
-	rows.Close()
 	if err := rows.Err(); err != nil {
-		return err
+		return nil, err
 	}
 
 	out := make([]rumFunnelStepJSON, len(steps))
@@ -136,6 +154,5 @@ func (s *Server) rumFunnel(w http.ResponseWriter, r *http.Request, sc *query.Sco
 			out[i].Rate = float64(out[i].Sessions) / float64(first)
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"steps": out, "window_seconds": int(window / time.Second)})
-	return nil
+	return out, nil
 }
