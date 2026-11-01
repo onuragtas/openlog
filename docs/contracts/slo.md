@@ -6,7 +6,7 @@ the **burn rate** (how fast that budget is being spent), which the `slo_burn` al
 multi-window multi-burn-rate conditions.
 
 This file is binding for the PostgreSQL table `slos` (`migrations/postgres/0087_slo.sql`,
-[postgres.md](postgres.md#slos-0087_slo)), the budget math (`internal/slo`), the API (`/api/v1/slos/*`,
+[postgres.md](postgres.md#slos-0087-slo)), the budget math (`internal/slo`), the API (`/api/v1/slos/*`,
 [api.md](api.md#service-level-objectives)) and the alert rule type `slo_burn`
 ([alerting.md](alerting.md) §2.11). Everything is computed **at query time** from the APM rollup
 `apm_transactions_1m` ([apm.md](apm.md) §4, §8); nothing is precomputed and no new telemetry table is written.

@@ -4,7 +4,7 @@ Rules evaluate telemetry of one organization, open **incidents** and deliver **n
 (SMTP), generic webhooks (HMAC-signed), Microsoft Teams, PagerDuty and Opsgenie; **routing rules** (§5.6) decide
 which channels an incident reaches. Plan: [10-m2.md §1](../plan/10-m2.md), cluster rule:
 [04-cluster.md](../plan/04-cluster.md) (Alert row). HTTP API: [api.md](api.md#alerting) /
-[openapi.yaml](openapi.yaml) (tag `alerts`). Tables: [postgres.md](postgres.md#alerting-0004_alerting).
+[openapi.yaml](openapi.yaml) (tag `alerts`). Tables: [postgres.md](postgres.md#alerting-0004-alerting-0088-alert-routing).
 Configuration: [config.md](config.md#openlog-alert). Code: `internal/alert`, `cmd/openlog-alert`, `internal/api/alerts.go`.
 
 ## 1. Components

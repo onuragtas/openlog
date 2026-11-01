@@ -1,8 +1,8 @@
 # Runbook: Kubernetes'i openlog ile izlemek {#runbook-monitoring-kubernetes-with-openlog}
 
 `deploy/helm/openlog-agent` chart'ı (Apache-2.0) openlog infra ajanını bir Kubernetes cluster'ında çalıştırır ve OTLP'yi bir
-openlog ingest endpoint'ine (cluster içinde veya dışında) gönderir. Veri modeli: [semantic-conventions.md §7](/contracts/semantic-conventions);
-kararlar D-070, D-071; API: [api.md](/contracts/api) "Kubernetes".
+openlog ingest endpoint'ine (cluster içinde veya dışında) gönderir. Veri modeli: [semantic-conventions.md §7](/tr/contracts/semantic-conventions);
+kararlar D-070, D-071; API: [api.md](/tr/contracts/api) "Kubernetes".
 
 | İş yükü | Ne yapar | Host erişimi |
 |---|---|---|

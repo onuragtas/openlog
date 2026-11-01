@@ -11,8 +11,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 DOCS = Path("docs")
-# Written for people changing openlog, and in English on purpose (docs-check step 3).
-ENGLISH_ONLY = {"contracts", "node_modules", "images", "public"}
+# Not pages.
+ENGLISH_ONLY = {"node_modules", "images", "public"}
 
 
 def site_locales() -> list[str]:

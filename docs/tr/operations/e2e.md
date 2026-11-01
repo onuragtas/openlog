@@ -120,7 +120,7 @@ Ayakta tutulan bir stack'e karşı: `E2E_SKIP_UP=1 E2E_KEEP=1 E2E_UI=1 go test -
 ## TLS entegrasyon testi {#tls-integration-test}
 
 `make tlstest` (`go test -tags tlstest -v -count=1 -timeout 30m ./test/e2e/tlstest`),
-[config.md](/contracts/config#tls-and-sasl-all-services-that-use-the-dependency) içindeki TLS/SASL ayarlarını uçtan uca kanıtlar.
+[config.md](/tr/contracts/config#tls-and-sasl-all-services-that-use-the-dependency) içindeki TLS/SASL ayarlarını uçtan uca kanıtlar.
 `crypto/x509` ile bir CA, sunucu/istemci sertifikaları ve ilgisiz bir CA üretir (`internal/testutil/testcerts`, `/tmp` altında yeni bir
 klasöre yazılır, hiçbir şey commit edilmez) ve `openlog-tlstest` compose projesini başlatır
 (`test/e2e/tlstest/docker-compose.yml`, çalışma ağacından derlenen `openlog:tlstest` imajı):

@@ -8,7 +8,7 @@
 Sunucu, veritabanlarının değil query API'nin önyüzüdür. Her araç çağrısı, **senin API key'ini** taşıyan bir veya iki
 `/api/v1` isteğidir, bu yüzden API'nin uyguladığı her şey aynen geçerlidir: anahtar kendi rolüyle kimlik doğrular, her ClickHouse
 sorgusunun tenant'ı yalnızca o anahtardan gelir ve sorgular, organizasyonun limitleriyle salt okunur ClickHouse kullanıcısı olarak
-çalışır ([api.md](/contracts/api#authentication), [config.md](/contracts/config)). Sürecin kendisi ClickHouse, PostgreSQL veya Kafka
+çalışır ([api.md](/tr/contracts/api#authentication), [config.md](/tr/contracts/config)). Sürecin kendisi ClickHouse, PostgreSQL veya Kafka
 erişimi istemez ve hiçbir şey saklamaz.
 
 ## 1. API key {#_1-an-api-key}
@@ -17,7 +17,7 @@ Web arayüzünde **Settings → API keys** altından veya `openlog-admin bootstr
 (`OPENLOG_BOOTSTRAP_API_KEY`) bir tane oluştur. Anahtar `ola_…` biçimindedir ve yalnızca bir kez gösterilir.
 
 Bir API key tek bir organizasyona aittir ve bir rol taşır: `viewer` (varsayılan), `member` veya
-`admin` ([api.md "Roles"](/contracts/api#roles), D-133). Buradaki her araç yalnızca okuma endpoint'lerini çağırır, yani
+`admin` ([api.md "Roles"](/tr/contracts/api#roles), D-133). Buradaki her araç yalnızca okuma endpoint'lerini çağırır, yani
 `viewer` anahtarı yeterlidir: MCP sunucusuna fazlasını verme. Ingest lisans anahtarları
 (`olk_…`) API key **değildir** ve burada çalışmaz.
 
@@ -32,7 +32,7 @@ Bir API key tek bir organizasyona aittir ve bir rol taşır: `viewer` (varsayıl
 karıştırmadan hizmet verir; anahtarsız ve yapılandırılmış yedeği olmayan bir istek, oturum başlamadan `401` ile reddedilir.
 API'de olduğu gibi önüne TLS koy (binary düz HTTP sunar).
 
-Değişkenler: [config.md → `openlog-mcp`](/contracts/config#openlog-mcp).
+Değişkenler: [config.md → `openlog-mcp`](/tr/contracts/config#openlog-mcp).
 
 ```sh
 # yerel, bu makinedeki bir stack'e karşı
@@ -53,15 +53,15 @@ Hepsi salt okunur, hepsi anahtarın organizasyonuyla sınırlı.
 
 | Araç | Argümanlar | Yanıtladığı |
 |---|---|---|
-| `run_oql` | `query`, `from`/`to`, `variables` | bir OQL aggregate'i: tek satır, facet'ler, zaman serisi veya histogram ([oql.md](/contracts/oql)) |
+| `run_oql` | `query`, `from`/`to`, `variables` | bir OQL aggregate'i: tek satır, facet'ler, zaman serisi veya histogram ([oql.md](/tr/contracts/oql)) |
 | `oql_schema` | `event_type` | event tipleri, attribute'lar, fonksiyonlar, anahtar kelimeler; `event_type` ile son bir saatin canlı attribute anahtarları da |
 | `list_services` | `from`/`to`, `namespace`, `environment`, `q` | RED metrikleriyle APM servisleri (istekler, throughput, hatalar, hata oranı, gecikme yüzdelikleri, Apdex) |
 | `service_summary` | `service`, `from`/`to`, `namespace`, `environment`, `transaction`, `limit` | bir servisin RED toplamları ve serileri, ayrıca harcanan süreye göre transaction'ları |
 | `list_incidents` | `state`, `rule_id`, `severity`, `limit`, `cursor` | alarm olayları, en yenisi önce, duruma göre sayılarla |
 | `get_incident` | `id` | zaman çizelgesi ve bildirim teslimatlarıyla bir olay |
-| `search_logs` | `from`/`to`, `q`, `filters`, `order`, `limit`, `columns`, `cursor` | tek tek log kayıtları ([api.md “Fields”](/contracts/api#fields) filtre koşulları) |
+| `search_logs` | `from`/`to`, `q`, `filters`, `order`, `limit`, `columns`, `cursor` | tek tek log kayıtları ([api.md “Fields”](/tr/contracts/api#fields) filtre koşulları) |
 | `list_slos` | `status` | kayan pencere üzerindeki error budget'larıyla SLO'lar |
-| `slo_status` | `id`, `step` | bir SLO'nun budget'ı, çok pencereli burn rate'leri ve burndown serisi ([slo.md](/contracts/slo)) |
+| `slo_status` | `id`, `step` | bir SLO'nun budget'ı, çok pencereli burn rate'leri ve burndown serisi ([slo.md](/tr/contracts/slo)) |
 
 Aralıklar varsayılan olarak son bir saattir. `OPENLOG_MCP_MAX_ROWS` (100) her `limit` için üst sınır koyar, böylece bir model
 bağlamına sınırsız sonuç çekemez. Organizasyonun sorgu limitleri yine geçerlidir: fazla pahalı bir sorgu `resource_exhausted`,

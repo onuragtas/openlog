@@ -5,7 +5,7 @@ Backend'in (ingest, processor, api, allinone, migration'lar) Docker Compose ve K
 (docs/contracts/releases-updates.md §3); backend güncellemesi ajanları asla bozmaz (backend `N`, `N`, `N-1` ve `N-2`
 ajanlarını kabul eder).
 
-Arka plan: [plan §5](https://github.com/onuragtas/openlog/blob/master/docs/plan/09-releases-updates.md), [kontrat §5–§6](/contracts/releases-updates), D-025…D-029.
+Arka plan: [plan §5](https://github.com/onuragtas/openlog/blob/master/docs/plan/09-releases-updates.md), [kontrat §5–§6](/tr/contracts/releases-updates), D-025…D-029.
 
 ## 1. Uyumluluk kuralları {#_1-compatibility-rules}
 
@@ -84,7 +84,7 @@ yazar. Her pod bunu `GET /api/v1/version` ile sunar:
     veya bu özellikten eski bir updater container'ı) sayfa bunu söyler: container'ı
     `docker compose --profile updater up -d openlog-updater` ile yeniden oluştur. Hiçbir updater'ın almadığı istekler 15
     dakika sonra zaman aşımına uğrar. Kubernetes'te CronJob istekleri bir sonraki çalışmasında işler (§4).
-  - Mekanizma ve audit eylemleri: [releases-updates.md §5.1](/contracts/releases-updates), D-041.
+  - Mekanizma ve audit eylemleri: [releases-updates.md §5.1](/tr/contracts/releases-updates), D-041.
 - Fleet (ajanlar): aktif bir rollout'taki **Deploy now**, kalan dalga bekleme sürelerini atlar (bir anda %100). Dalga
   bekleyen ajanlar her `OPENLOG_FLEET_ROLLOUT_SYNC_INTERVAL` (60 sn) aralığında eşitlenir, yani yaklaşık bir dakika içinde
   başlarlar; politikanın bakım pencereleri ve durdurma eşiği yine geçerlidir.
@@ -189,7 +189,7 @@ bilgilerini de `openlog`'a verirdi (ve veri export'larını tiered storage bucke
 **install-server.sh kurulumları** (`/opt/openlog-server/.bundle-version` varsa) çalışan sürümde tutulur:
 
 - Her sürümde `openlog-compose-<v>.tar.gz` asset'i bulunur (manifest bileşeni `compose`,
-  [releases-updates.md §2](/contracts/releases-updates)): `docker-compose.yml` (`x-openlog-compose-version: "<v>"` ile),
+  [releases-updates.md §2](/tr/contracts/releases-updates)): `docker-compose.yml` (`x-openlog-compose-version: "<v>"` ile),
   `.env.example`, `clickhouse/`, `README.md`.
 - `migrate`'ten önce doğrulanıp hazırlanır ve yalnızca yeni sürüm sağlıklı olduktan sonra kurulur: değiştireceği dosyalar
   (ve `.bundle-version`) `.bundle-previous/` içine kopyalanır, `.bundle-swap.json` günlüğü yazılır, her dosya rename ile

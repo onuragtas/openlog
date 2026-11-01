@@ -1,6 +1,6 @@
 # openlog mobil SDK'sı (Swift) {#openlog-mobile-sdk-swift}
 
-Apple platformundaki bir uygulamadan ekranlar, hatalar, özel event'ler ve kimlik, OTLP/JSON üzerinden. [mobile-agent.md](/contracts/mobile-agent)
+Apple platformundaki bir uygulamadan ekranlar, hatalar, özel event'ler ve kimlik, OTLP/JSON üzerinden. [mobile-agent.md](/tr/contracts/mobile-agent)
 kontratını uygular, fazlasını değil: kontrat o dokümandır, bu onun istemcilerinden biridir ve Dart ile Kotlin istemcileri de aynısını uygular.
 
 **Bağımlılık yok.** URLSession, zamanlayıcılar ve JSON gerekir, hepsi Foundation'da var. Bu, uygulamanın çıkarmayı seçemeyeceği tek kütüphanedir,
@@ -63,7 +63,7 @@ dayanmaz: anahtar tek bir endpoint'e yetki verir, her veri sunucu tarafında ana
 sınırı anahtar başınadır ve iptal edildiğinde bir dakika içinde geçerli olur.
 
 Uygulama id'sini **uygulama kendisi beyan eder**. Bir derlemeden alınan anahtarın gelişigüzel yeniden kullanılmasını zorlaştırır; ikinci bir
-kimlik doğrulama faktörü değildir ve bu SDK öyleymiş gibi davranmaz. Tehdit modelinin tamamı [rum.md §3.5](/contracts/rum) içinde.
+kimlik doğrulama faktörü değildir ve bu SDK öyleymiş gibi davranmaz. Tehdit modelinin tamamı [rum.md §3.5](/tr/contracts/rum) içinde.
 
 ## Seçenekler {#options}
 

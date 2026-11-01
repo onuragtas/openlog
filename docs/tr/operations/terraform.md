@@ -1,7 +1,7 @@
 # Terraform provider'ı (`terraform-provider-openlog`) {#terraform-provider-terraform-provider-openlog}
 
 Provider, bir openlog organizasyonunun **yapılandırmasını** kod olarak yönetir: alarm kuralları, bildirim kanalları, yönlendirme
-kuralları, service level objective'ler ve dashboard'lar (D-131). Belgelenmiş HTTP API'nin (`/api/v1`, [api.md](/contracts/api)) bir
+kuralları, service level objective'ler ve dashboard'lar (D-131). Belgelenmiş HTTP API'nin (`/api/v1`, [api.md](/tr/contracts/api)) bir
 istemcisidir ve başka hiçbir şeye ihtiyaç duymaz: veritabanı erişimi de, sunucuda bir dosya da gerekmez.
 
 Kaynak kodu: bu repodaki `terraform/`. Ajanlar ve SDK'lar gibi Apache-2.0 altında kendi başına bir Go modülüdür
@@ -15,7 +15,7 @@ tercihidir (§7).
 ## 1. Yazma yetkisi olan bir kimlik bilgisi {#_1-a-credential-that-may-write}
 
 **İlk kontrol etmen gereken ön koşul bu.** Bir openlog API key'inin (`ola_…`) kendi rolü vardır: `viewer` (varsayılan), `member` veya
-`admin` ([api.md "Roles"](/contracts/api#roles), D-133). Provider'a rolü yazmaya izin veren bir key gerekir. **`admin`** kullan: key hiçbir
+`admin` ([api.md "Roles"](/tr/contracts/api#roles), D-133). Provider'a rolü yazmaya izin veren bir key gerekir. **`admin`** kullan: key hiçbir
 şeye sahip olmaz, bu yüzden `member` key'iyle oluşturulan bir kuralın, SLO'nun veya dashboard'un oluşturanı olmaz ve aynı key onu sonradan
 değiştiremez. `admin` key'i organizasyondaki her şeyi yönetir, kendi kaynaklarına sahip çıkan bir provider'ın yaptığı da budur.
 

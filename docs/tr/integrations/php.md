@@ -1,7 +1,7 @@
 # openlog PHP ajan eklentisi (`openlog.so`) {#openlog-php-agent-extension-openlog-so}
 
-Lisans: Apache-2.0. Kontrat: [docs/contracts/php-agent.md](/contracts/php-agent) (wire format v1),
-APM semantiği: [docs/contracts/apm.md](/contracts/apm). Kararlar D-035…D-038.
+Lisans: Apache-2.0. Kontrat: [docs/contracts/php-agent.md](/tr/contracts/php-agent) (wire format v1),
+APM semantiği: [docs/contracts/apm.md](/tr/contracts/apm). Kararlar D-035…D-038.
 
 ```
 PHP worker (openlog.so) --unix datagram, JSON--> openlog-infra-agent (php_forwarder) --OTLP/HTTP--> openlog

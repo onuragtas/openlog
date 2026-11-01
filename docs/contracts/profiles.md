@@ -35,7 +35,7 @@ what the bytes mean.
 A payload carrying no profile at all is accepted and produces nothing — an agent whose process was idle has
 nothing to report, and an error would make it retry forever.
 
-**Producers.** Two agents produce profiles, and their defaults differ for a reason worth writing down.
+**Producers.** Two agents produce profiles, and their defaults differ for a reason worth writing down. The whole-host profiler is a third, with its own contract ([ebpf-profiler.md](ebpf-profiler.md)).
 
 The **Go agent** (`agents/go`) takes a CPU profile of the process over `OPENLOG_PROFILE_INTERVAL` and posts
 it here, **on by default** — a service nobody profiled is a service whose slow span has no answer, and the

@@ -142,7 +142,7 @@ Pyramid 2.0/2.1, gunicorn 23/26, uWSGI 2.0.31, gevent 25.9/26.8, eventlet 0.40/0
 SQLAlchemy 2.0, redis 8.1, Celery 5.6, grpcio 1.83, aiohttp 3.14, aio-pika 9.6 (RabbitMQ 4.1), confluent-kafka 2.15, kafka-python 2.3 ve aiokafka 0.14 (Kafka 4.1)
 (veritabanı, broker, Celery ve gRPC paketi Python 3.12 üzerinde).
 
-**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/contracts/apm)). Route'u olmayan istekler
+**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/tr/contracts/apm)). Route'u olmayan istekler
 (404'ler) backend'in path normalizasyonuyla gruplanır. gRPC transaction'ları `<rpc.service>/<rpc.method>` biçimindedir. Celery görevleri ve RabbitMQ/Kafka consumer'ları
 mesajlaşma (`consumer`) giriş span'leridir.
 
@@ -239,7 +239,7 @@ worker'ı yok.
 ## Örnekleme {#sampling}
 
 `OPENLOG_SAMPLING_RATIO=p` yeni trace'leri `p` olasılığıyla örnekler, downstream servisler bu karara uyar (parent tabanlı). APM sayıları doğru kalır, çünkü saklanan her span `1/p` ile
-ağırlıklandırılır ([apm.md §4](/contracts/apm)). Anlam Go ajanıyla aynıdır ([kılavuz](/tr/integrations/go#sampling)) ve onun sampler'ından üretilen fixture'lara karşı doğrulanmıştır
+ağırlıklandırılır ([apm.md §4](/tr/contracts/apm)). Anlam Go ajanıyla aynıdır ([kılavuz](/tr/integrations/go#sampling)) ve onun sampler'ından üretilen fixture'lara karşı doğrulanmıştır
 (`agents/node/test/interop/go-sampler-fixtures.json`):
 
 - **Kök span'ler.** `T = (1 − p) · 2^56`. Rastgelelik varsa `ot=rv`, yoksa trace id'nin alt 56 biti. `R ≥ T` olduğunda örneklenir. Örneklenen kök span `sampling.ratio = p` ve `tracestate`

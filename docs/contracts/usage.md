@@ -3,7 +3,7 @@
 Decisions: D-079 (metering), D-080 (plans and quotas), D-081 (per-tenant retention). Operator guide:
 [docs/operations/saas.md](../operations/saas.md). API: [api.md "Usage and plans"](api.md#usage-and-plans), configuration:
 [config.md "Usage, plans and billing"](config.md#usage-plans-and-billing), PostgreSQL tables:
-[postgres.md "Usage, plans and billing"](postgres.md#usage-plans-and-billing-0035_usage_plans).
+[postgres.md "Usage, plans and billing"](postgres.md#usage-plans-and-billing-0035-usage-plans).
 
 ## 1. Modes
 

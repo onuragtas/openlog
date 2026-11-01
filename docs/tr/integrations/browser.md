@@ -5,7 +5,7 @@ Apache-2.0 · `openlog-browser` paketi · bağımlılık yok · gzip'li yaklaş�
 Web uygulamaları için gerçek kullanıcı izleme: Core Web Vitals, sayfa yükleme süreleri, SPA rota değişiklikleri, yakalanmamış
 JavaScript hataları ve backend trace'lerine devam eden `fetch`/`XHR` izleme.
 
-Kontrat: [docs/contracts/rum.md](/contracts/rum).
+Kontrat: [docs/contracts/rum.md](/tr/contracts/rum).
 
 ## Hızlı başlangıç {#quick-start}
 
@@ -41,7 +41,7 @@ buna göre tasarlandı:
 Buraya asla `olk_…` ingest lisans anahtarı koyma. SDK onu reddeder, çünkü o anahtar *gerçekten* gizlidir.
 
 Tehdit modelinin tamamı, yani anahtarını kopyalayan birinin neler yapıp neler yapamayacağı ve nasıl karşılık vereceğin,
-[rum.md §3.5](/contracts/rum) içinde.
+[rum.md §3.5](/tr/contracts/rum) içinde.
 
 ## Özel event'ler ve süreler {#custom-events-and-timings}
 
@@ -66,7 +66,7 @@ SELECT count(*) FROM Span WHERE openlog.rum.custom.name = 'checkout_started' FAC
 ```
 
 API bir ad ve, süre için, bir sayı alır. Rastgele attribute'ları bilerek almaz: sunucu, bir tarayıcı anahtarının neyi yazabileceğine dair
-bir izin listesi tutar ([rum.md §3.3](/contracts/rum)), yani başka her şey burada kabul edilip orada atılırdı.
+bir izin listesi tutar ([rum.md §3.3](/tr/contracts/rum)), yani başka her şey burada kabul edilip orada atılırdı.
 
 ## Seçenekler {#options}
 
@@ -122,8 +122,8 @@ bir sayfanın yaptığı istekten çok daha fazla dosya yüklemesidir; bunu açm
 bu da güncellemeyle kendiliğinden gelecek bir şey değildir. Oturum id'si rastgeledir, sekme başınadır ve süresi dolar; ziyaretçiyle ilgili
 hiçbir şeyden türetilmez, bu yüzden kimseyi ziyaretler arasında tanımlayamaz. Bunu yapan, `analyticsCollection` arkasındaki ziyaretçi id'sidir ve ayrı bir şeydir.
 
-Ayrıntılar ve attribute listesinin tamamı: [rum.md §2](/contracts/rum),
-[semantic-conventions.md §10](/contracts/semantic-conventions).
+Ayrıntılar ve attribute listesinin tamamı: [rum.md §2](/tr/contracts/rum),
+[semantic-conventions.md §10](/tr/contracts/semantic-conventions).
 
 ## API {#api}
 

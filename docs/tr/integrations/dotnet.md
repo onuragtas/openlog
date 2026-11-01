@@ -182,7 +182,7 @@ Linux/macOS üzerinde kontrol eder. IIS Express / IIS kısmı yalnızca Windows'
 doğrular.
 
 **Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır
-([apm.md §2.1](/contracts/apm)). ASP.NET Core endpoint'in route şablonunu server span'ine koyar. `http.route` yalnızca alt
+([apm.md §2.1](/tr/contracts/apm)). ASP.NET Core endpoint'in route şablonunu server span'ine koyar. `http.route` yalnızca alt
 span'lerden birinde varsa (özel routing middleware'i), ajan bu route'ların en uzununu giriş span'ine kopyalar ve export'tan önce
 span'i yeniden adlandırır.
 
@@ -194,7 +194,7 @@ identifier. Redis/Memcached komutları `CMD ? ?` olur. Sorgular 4096 karakterle 
 ## Örnekleme {#sampling}
 
 `OPENLOG_SAMPLING_RATIO=p` yeni trace'leri `p` olasılığıyla örnekler, downstream servisler bu karara uyar (parent tabanlı). APM
-sayıları doğru kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/contracts/apm)). Anlam Go ajanıyla
+sayıları doğru kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/tr/contracts/apm)). Anlam Go ajanıyla
 aynıdır ([kılavuz](/tr/integrations/go#sampling)) ve Go ajanının sampler'ından üretilen fixture'lara karşı doğrulanmıştır
 (`agents/node/test/interop/go-sampler-fixtures.json`):
 

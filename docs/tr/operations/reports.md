@@ -3,7 +3,7 @@
 Zamanlanmış dashboard raporları (api.md "Scheduled reports", D-087) HTML tablolarla e-postalanır. İsteğe bağlı
 `openlog-renderer` servisiyle her widget bunun yerine PNG görsel olarak gösterilir (D-097). Renderer ayrı bir imajdır
 (`ghcr.io/onuragtas/openlog-renderer:<version>`, Alpine + Chromium, açılmış haliyle ≈ 780 MB), böylece ana imaj küçük kalır.
-Yapılandırma: [config.md "Report chart images"](/contracts/config#report-chart-images-openlog-renderer-api-allinone-d-097).
+Yapılandırma: [config.md "Report chart images"](/tr/contracts/config#report-chart-images-openlog-renderer-api-allinone-d-097).
 
 ## Rapor görsellerini nasıl alır {#how-a-report-gets-its-images}
 

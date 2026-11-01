@@ -15,7 +15,7 @@ kimsenin incelemediği bir derlemeyi değiştirirdi (D-124).
   (en son sürüm başına, tarayıcı başına kapatılabilir).
 - **APM → Agent versions** (`/apm/agents`): her servis × ajan × sürüm kombinasyonu durumuyla birlikte, ayrıca "outdated only"
   filtresi ve CSV dışa aktarma.
-- API: `GET /api/v1/apm/agents` ([api.md](/contracts/api) "APM").
+- API: `GET /api/v1/apm/agents` ([api.md](/tr/contracts/api) "APM").
 
 Durumlar: `outdated` = organizasyonun fleet kanalındaki doğrulanmış en yeni release'ten eski (Fleet → policy
 channel; fleet yönetimi yoksa `stable`), `unsupported` = release manifest'indeki `compatibility.oldest_supported_agent`
@@ -38,8 +38,8 @@ dosyayı kurar.
 | Python | `pip install -U "openlog-agent==X.Y.Z"` (pre-release'ler için PEP 440: `X.Y.Zrc1`) |
 | .NET | `dotnet add package OpenLog.Agent --version X.Y.Z` |
 | Go | `go get github.com/onuragtas/openlog/agents/go@vX.Y.Z` ve kullandığın her enstrümantasyon modülü (`.../instrumentation/gin@vX.Y.Z`; gin, echo ve grpc span scope'larından algılanır, chi algılanmaz), ardından `go mod tidy` |
-| Java | `openlog-javaagent-X.Y.Z.jar` dosyasını release'ten indir; infra ajanının yönettiği host'larda jar `java_agent.mode: auto` ile güncel tutulabilir ([java-agent.md](/contracts/java-agent) "Distribution and updates") |
-| PHP | fleet kurulumu (infra ajanı yapılandırmasında `php_agent.mode: auto`) infra ajanının sürümünü izler; paket kurulumlarında release'teki yeni `.deb`/`.rpm`/`.apk` paketini kur ([php-agent.md](/contracts/php-agent) §7) |
+| Java | `openlog-javaagent-X.Y.Z.jar` dosyasını release'ten indir; infra ajanının yönettiği host'larda jar `java_agent.mode: auto` ile güncel tutulabilir ([java-agent.md](/tr/contracts/java-agent) "Distribution and updates") |
+| PHP | fleet kurulumu (infra ajanı yapılandırmasında `php_agent.mode: auto`) infra ajanının sürümünü izler; paket kurulumlarında release'teki yeni `.deb`/`.rpm`/`.apk` paketini kur ([php-agent.md](/tr/contracts/php-agent) §7) |
 
 ## Bağımlılık güncellemelerini otomatikleştirmek {#automating-dependency-updates}
 
@@ -116,7 +116,7 @@ istiyorsan onu kaldır.
   `ADD https://github.com/onuragtas/openlog/releases/download/v${OPENLOG_JAVAAGENT_VERSION}/openlog-javaagent-${OPENLOG_JAVAAGENT_VERSION}.jar ...`)
   ve Renovate'in regex manager'ı onu GitHub release'lerinden güncellesin (`datasourceTemplate: github-releases`,
   `depNameTemplate: onuragtas/openlog`, `extractVersionTemplate: ^v(?<version>.*)$`).
-- **Infra ajanlı host'larda Java**: `java_agent.mode: auto` ([java-agent.md](/contracts/java-agent)
+- **Infra ajanlı host'larda Java**: `java_agent.mode: auto` ([java-agent.md](/tr/contracts/java-agent)
   "Distribution and updates").
 - **PHP**: fleet kurulumunu tercih et (`php_agent.mode: auto`), fleet yönetiminin güncellediği infra ajanıyla birlikte
   ilerler; paket kurulumları işletim sisteminin paket sürecini izler.

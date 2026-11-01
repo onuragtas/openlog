@@ -1,7 +1,7 @@
 # openlog sürümü çıkarmak {#releasing-openlog}
 
 openlog sürümlerinin nasıl derlendiği, imzalandığı ve yayınlandığı, ayrıca testler için yerelde imzalı bir sürümün nasıl
-üretildiği. Bağlayıcı kurallar: [docs/contracts/releases-updates.md](/contracts/releases-updates);
+üretildiği. Bağlayıcı kurallar: [docs/contracts/releases-updates.md](/tr/contracts/releases-updates);
 gerekçe: [docs/plan/09-releases-updates.md](https://github.com/onuragtas/openlog/blob/master/docs/plan/09-releases-updates.md) (D-025…D-029).
 
 Her sürümün backend, image, Helm chart ve ajanlar için **tek bir ürün sürümü** vardır (`vX.Y.Z`, ön sürümler `vX.Y.Z-beta.N`
@@ -28,7 +28,7 @@ gönderebilir.
 | `openlog-infra-agent_<v>_darwin_{amd64,arm64}.tar.gz` ve `.pkg` (`infra-agent-macos` job'u; pkg: `agents/infra/packaging/macos/build-pkg.sh`) | `format=tar.gz` / `pkg` |
 | `openlog-infra-agent_<v>_windows_{amd64,arm64}.zip` ve `.msi` (`infra-agent-windows` job'u; MSI: `agents/infra/packaging/windows/build-msi.ps1`, arm64 MSI derlenir ama kurulum testi yapılmaz) | `format=zip` / `msi` |
 | `openlog_<v>_linux_{amd64,arm64}.tar.gz` (tüm backend binary'leri) | `component=backend` |
-| `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP ajanı: 36 modül, `openlog-php-install`; [php-agent.md](/contracts/php-agent) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
+| `openlog-php-agent_<v>_linux_{amd64,arm64}.{tar.gz,deb,rpm,apk}` (PHP ajanı: 36 modül, `openlog-php-install`; [php-agent.md](/tr/contracts/php-agent) §7.1) | `component=php-agent`, `format=tar.gz` / `deb` / `rpm` / `apk` |
 | `openlog-javaagent-<v>.jar` + `.sha256` (Java ajanı, [aşağıda](#java-agent-jar)) | `component=java-agent`, `os`/`arch` `any`, `format=jar` (`.sha256` manifest'te yok) |
 | `openlog-node-<v>.tgz` + `.sha256` (`openlog-node` paketinin `npm pack` çıktısı, [aşağıda](#language-agent-packages-github-release)) | `component=node-agent`, `os`/`arch` `any`, `format=tgz` |
 | `openlog_agent-<pep440 v>-py3-none-any.whl` + `.sha256` (Python ajanı wheel'i) | `component=python-agent`, `os`/`arch` `any`, `format=whl` |
@@ -302,7 +302,7 @@ Kurulum: [tek seferlik kurulum](#one-time-setup-repository-owner) 7. adım (PyPI
 
 Java ajanı (`agents/java`, D-072) `openlog-javaagent-X.Y.Z.jar` artı `openlog-javaagent-X.Y.Z.jar.sha256` (`sha256sum` biçiminde) olarak
 yayınlanır ve imzalı `manifest.json` içinde bileşen `java-agent`, format `jar`, `os`/`arch` `any` olarak listelenir
-([releases-updates.md §2](/contracts/releases-updates)). Hazırlık commit'i gerekmez. `release.yml` job'u `java-agent-jar`, `image` ve
+([releases-updates.md §2](/tr/contracts/releases-updates)). Hazırlık commit'i gerekmez. `release.yml` job'u `java-agent-jar`, `image` ve
 `php-agent-artifacts` ile paralel, `release`'den önce çalışır:
 - `JAVA_BUILD=local agents/java/scripts/release-jar.sh X.Y.Z dist/java`, `./gradlew -Pversion=X.Y.Z :extension:test :agentJar :agentJarChecksum`
   ile derler (sürüm `telemetry.distro.version` ve jar manifest'indeki `Openlog-Javaagent-Version` özelliği olur) ve `.sha256`'yı kontrol eder;
@@ -337,7 +337,7 @@ Kurulum: [tek seferlik kurulum](#one-time-setup-repository-owner) 8. adım (`NUG
 `helm package --version <v> --app-version <v>` ile `dist/v<v>/openlog-<v>.tgz` ve `openlog-agent-<v>.tgz` olarak paketler; repository'deki
 `Chart.yaml` yer tutucu sürümünü korur. Yerelde `helm` yoksa sürümü sabitlenmiş `HELM_IMAGE` (`alpine/helm`) container'ını çalıştırır; CI helm'i
 `azure/setup-helm` ile kurar ve `RELEASE_REQUIRE_HELM=1` ayarlar. `build-manifest` ikisini de imzalı manifest'e yazar (`helm_charts`, sha256;
-`helm_chart` `openlog` chart'ı olarak kalır, [releases-updates.md](/contracts/releases-updates) §2), `verify --check-artifacts` kontrol eder ve
+`helm_chart` `openlog` chart'ı olarak kalır, [releases-updates.md](/tr/contracts/releases-updates) §2), `verify --check-artifacts` kontrol eder ve
 `release.yml` bunları `dist/v<v>/` içindeki diğer tüm dosyalarla GitHub release'e yükler.
 
 OCI registry (isteğe bağlı): repository *variable*'ı `HELM_OCI_PUSH` = `true` ayarla. `helm-oci` job'u bu durumda yayınlanmış sürümden alınan ve

@@ -2,7 +2,7 @@
 
 **Logs** (`/logs`), **Traces** (`/traces`) ve **Metrics** (`/metrics`) sayfaları, organizasyonun herhangi bir log kaydını, span'ini ve OTLP
 metriğini aynı sorgu oluşturucuyla arar (D-118, D-119, D-122). API:
-[api.md "Fields"](/contracts/api#fields), "Logs", "Traces", "Metrics", [“Saved views”](/contracts/api#saved-views).
+[api.md "Fields"](/tr/contracts/api#fields), "Logs", "Traces", "Metrics", [“Saved views”](/tr/contracts/api#saved-views).
 
 ## Zaman aralığı ve otomatik yenileme {#time-range-and-auto-refresh}
 

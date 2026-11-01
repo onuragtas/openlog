@@ -1,7 +1,7 @@
 # openlog'u SaaS olarak işletmek {#operating-openlog-as-saas}
 
 openlog'u birçok ödeme yapan organizasyon için çalıştırmanın yolu: planlar, kotalar, kullanım, tenant başına retention ve
-faturalama entegrasyonu. Kontrat [docs/contracts/usage.md](/contracts/usage); kararlar D-079–D-081.
+faturalama entegrasyonu. Kontrat [docs/contracts/usage.md](/tr/contracts/usage); kararlar D-079–D-081.
 
 Kendi sunucunda çalışan kurulumların bunların hiçbirine ihtiyacı yok: kullanım ölçümü her zaman açıktır ve Settings → Usage &
 plan sayıları yerleşik `unlimited` planına göre gösterir; hiçbir şey asla reddedilmez.

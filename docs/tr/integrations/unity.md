@@ -5,7 +5,7 @@ Apache-2.0 · `io.github.onuragtas.openlog` paketi · iOS ve Android · bağıml
 Unity oyunları için crash raporlama, ürün analitiği ve hata izleme: native crash'ler, ANR'ler, C# exception'ları, sahneler, özel event'ler, DAU,
 retention ve her sürümün crash-free oranı.
 
-[Mobil protokolü](/contracts/mobile-agent) uygular; Swift, Kotlin ve Dart SDK'ları da aynı protokolün diğer istemcileridir. IL2CPP ve yüksek
+[Mobil protokolü](/tr/contracts/mobile-agent) uygular; Swift, Kotlin ve Dart SDK'ları da aynı protokolün diğer istemcileridir. IL2CPP ve yüksek
 managed stripping ile Unity 6'da test edildi. Reflection kullanmaz, bu yüzden `link.xml` gerektirmez.
 
 ## Hızlı başlangıç {#quick-start}

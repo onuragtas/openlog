@@ -165,6 +165,6 @@ SELECT count(*) FROM Span WHERE openlog.rum.crash.kind != ''
 ## API
 
 `GET /api/v1/rum/crashes?app=` crash'leri gruplara göre listeler, `GET /api/v1/rum/releases?app=` oranları döndürür.
-[API referansına](/contracts/api) bak. Tasarım [kontratta](/contracts/mobile-crash) (İngilizce).
+[API referansına](/tr/contracts/api) bak. Tasarım [kontratta](/tr/contracts/mobile-crash).
 
-Veriyi SDK olmadan kendin gönderiyorsan [mobil protokole](/contracts/mobile-agent) bak.
+Veriyi SDK olmadan kendin gönderiyorsan [mobil protokole](/tr/contracts/mobile-agent) bak.

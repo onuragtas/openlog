@@ -29,7 +29,7 @@ java -javaagent:/opt/openlog/openlog-javaagent-X.Y.Z.jar -jar app.jar
 `config.yaml` içinde (veya Fleet sayfasında) `java_agent.mode: auto` ayarla. Ajan her sürümün imzalı jar'ını
 `/opt/openlog/java-agent/versions/<v>/` altına kurar ve link'i değiştirir. Çalışan uygulamalar yeniden başlatılana kadar kendi
 sürümlerinde kalır ve host sayfasında "restart pending" olarak listelenir. O path'e kendin kopyaladığın bir jar'a dokunulmaz
-(onu sahiplendirmek için [java-agent.md](/contracts/java-agent) §2.2'ye bak).
+(onu sahiplendirmek için [java-agent.md](/tr/contracts/java-agent) §2.2'ye bak).
 
 Her ayar system property de olabilir: `OPENLOG_SERVICE_NAME` ⇔ `-Dopenlog.service.name=checkout`. OpenTelemetry Java'da olduğu
 gibi system property'ler ortam değişkenlerine üstün gelir. Container imajları:
@@ -109,7 +109,7 @@ Entegrasyon testleri (`integration-tests/`) şunları openlog jar'ıyla gerçek 
 Servlet container'ları, JMS, RabbitMQ, MongoDB, Cassandra, Elasticsearch, AWS SDK, OkHttp, Apache HttpClient ve upstream listesinin
 geri kalanı aynı ajanla instrument edilir ama openlog test paketinin parçası değildir.
 
-**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/contracts/apm)).
+**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/tr/contracts/apm)).
 Upstream instrumentation'lar Spring MVC, WebFlux, servlet container üzerinde JAX-RS, Quarkus REST, Vert.x Web, Ktor, Play, Grails,
 Struts ve servlet mapping'leri için HTTP server span'ine `http.route` koyar ve span'i `GET /users/{id}` olarak yeniden adlandırır.
 Route'u olmayan istekler backend'in `url.path` üzerindeki path normalizasyonuyla gruplanır. Upstream ajan 2.31.1'in doğrulanmış
@@ -145,7 +145,7 @@ Upstream'den farklar, net olarak:
 ## Örnekleme {#sampling}
 
 `OPENLOG_SAMPLING_RATIO=p` yeni trace'leri `p` olasılığıyla örnekler ve downstream servisler bu karara uyar (parent tabanlı). APM
-sayıları doğru kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/contracts/apm)). Sampler, Go ajanınınkinin
+sayıları doğru kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/tr/contracts/apm)). Sampler, Go ajanınınkinin
 port'udur. Go sampler'ından üretilen fixture'lara karşı doğrulanmıştır (`agents/node/test/interop/go-sampler-fixtures.json`,
 `SamplerFixturesTest` çalıştırır: bir span ve çocuğunun `traceparent`, `tracestate`, sampled bayrağı ve `sampling.ratio` değerleri):
 
@@ -195,7 +195,7 @@ Container'larda altyapı ajanının runtime dizinini salt okunur mount et
 **Log ↔ trace.** Logback ve Log4j2 için (ayrıca Log4j 1, JBoss LogManager) ajan `trace_id`, `span_id` ve `trace_flags` değerlerini
 MDC'ye / context data'ya koyar, böylece `[trace_id=%X{trace_id} span_id=%X{span_id}]` gibi bir pattern bunları uygulamanın kendi
 çıktısında gösterir. Logback, Log4j2 ve `java.util.logging` kayıtları da trace ve span id'lerini taşıyan OTLP log kayıtları olarak
-export edilir, bu da [log ↔ trace geçişini](/contracts/apm) sağlar (§11).
+export edilir, bu da [log ↔ trace geçişini](/tr/contracts/apm) sağlar (§11).
 
 **Runtime metrikleri** (upstream `runtime-telemetry`, OpenTelemetry semantic convention adları; scope
 `io.opentelemetry.runtime-telemetry-java8`/`-java17`):
@@ -253,7 +253,7 @@ sha256'yı kontrol eder, ya da `.sha256` dosyasıyla karşılaştır. Manifest't
 (`io.github.onuragtas.openlog:openlog-javaagent`, ajanları indiren build araçları için) planlanıyor, henüz yapılmadı.
 
 Altyapı ajanı, host'lardaki jar'ı güncellemek için manifest kaydını kullanır (`java_agent`, D-123,
-[java-agent.md](/contracts/java-agent) §2): altyapı ajanına derlenmiş sürüm anahtarlarıyla doğrulama, root'a ait `versions/<v>/`,
+[java-agent.md](/tr/contracts/java-agent) §2): altyapı ajanına derlenmiş sürüm anahtarlarıyla doğrulama, root'a ait `versions/<v>/`,
 atomik link değişimi, yüklü sürümle JVM envanteri, fleet dalgaları.
 
 ## Geliştirme {#development}

@@ -1,6 +1,6 @@
 # openlog mobil SDK'sı (Dart) {#openlog-mobile-sdk-dart}
 
-Bir mobil uygulamadan ekranlar, hatalar, özel event'ler ve kimlik, OTLP/JSON üzerinden. [mobile-agent.md](/contracts/mobile-agent)
+Bir mobil uygulamadan ekranlar, hatalar, özel event'ler ve kimlik, OTLP/JSON üzerinden. [mobile-agent.md](/tr/contracts/mobile-agent)
 kontratını uygular, fazlasını değil: kontrat o dokümandır, bu ise onun istemcilerinden biridir.
 
 **Saf Dart, bağımlılık yok.** HTTP, zamanlayıcılar ve JSON gerekir, hepsi de Dart SDK'sında var. Flutter'a bağımlı olmak onu hiçbir kazanç
@@ -54,7 +54,7 @@ dayanmaz: anahtar tek bir endpoint'e yetki verir, her veri sunucu tarafında ana
 sınırı anahtar başınadır ve iptal edildiğinde bir dakika içinde geçerli olur.
 
 Uygulama id'sini **uygulama kendisi beyan eder**. Bir derlemeden alınan anahtarın gelişigüzel yeniden kullanılmasını zorlaştırır; ikinci bir
-kimlik doğrulama faktörü değildir ve bu SDK öyleymiş gibi davranmaz. Tehdit modelinin tamamı [rum.md §3.5](/contracts/rum) içinde.
+kimlik doğrulama faktörü değildir ve bu SDK öyleymiş gibi davranmaz. Tehdit modelinin tamamı [rum.md §3.5](/tr/contracts/rum) içinde.
 
 ## Seçenekler {#options}
 

@@ -205,7 +205,7 @@ yine de kişisel veri sayılır.
 | `GET /api/v1/analytics/acquisition` | Referrer veya UTM değerine göre oturumlar |
 | `GET /api/v1/analytics/funnel` | Oturum veya kişi bazında sıralı adımlar |
 
-Ayrıntılar [API referansında](/contracts/api), tasarım ve gerekçeleri [kontratta](/contracts/analytics) (İngilizce).
+Ayrıntılar [API referansında](/tr/contracts/api), tasarım ve gerekçeleri [kontratta](/tr/contracts/analytics).
 
 ## Kapsam dışı
 

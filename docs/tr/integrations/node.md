@@ -125,7 +125,7 @@ kütüphane sadece instrument edilmez.
 Kesin sürüm aralıkları sabitlenmiş instrumentation paketlerinin aralıklarıdır. CI paketi Node.js 20 ve 22 üzerinde express 5, fastify 5,
 koa 3, NestJS 11 ve 12 (ESM, express ve fastify platformları), pg 8, mysql2 3, redis 6, ioredis 6, pino 10 ve winston 3 çalıştırır.
 
-**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/contracts/apm)).
+**Transaction adları.** APM backend'i bir web transaction'ını `<METHOD> <http.route>` olarak adlandırır ([apm.md §2.1](/tr/contracts/apm)).
 Express, Koa ve Fastify eşleşen route'u HTTP server span'ine geçirir. `http.route` değerini yalnızca kendi span'lerine koyan framework'ler
 için (diğer platformlarda NestJS, özel router'lar) ajan, giriş span'inin altında gördüğü en uzun route'u span bitmeden ona kopyalar.
 Route'u olmayan istekler (404'ler, düz `http` sunucuları) backend'in path normalizasyonuyla gruplanır.
@@ -163,7 +163,7 @@ yorumlar silinir, placeholder'lar korunur. MySQL'de `"…"` string'dir, diğerle
 ## Örnekleme {#sampling}
 
 `OPENLOG_SAMPLING_RATIO=p` yeni trace'leri `p` olasılığıyla örnekler, downstream servisler bu karara uyar (parent tabanlı). APM sayıları doğru
-kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/contracts/apm)). Anlam Go ajanıyla aynıdır
+kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır ([apm.md §4](/tr/contracts/apm)). Anlam Go ajanıyla aynıdır
 ([kılavuz](/tr/integrations/go#sampling)) ve Go ajanının sampler'ından üretilen fixture'lara karşı doğrulanmıştır
 (`test/interop/go-sampler-fixtures.json`, `scripts/gen-go-fixtures.sh`):
 
@@ -220,7 +220,7 @@ HTTP instrumentation'ı ayrıca `http.server.request.duration` ve `http.client.r
 ## Profilleme {#profiling}
 
 Ajan her `OPENLOG_PROFILE_INTERVAL` süresinde o aralığı kapsayan bir V8 CPU profili alır ve OTLP/JSON olarak `<endpoint>/v1/profiles` adresine gönderir.
-Orada yavaş bir span'in arkasındaki flame graph'a dönüşür. Kontrat: [profiles.md](/contracts/profiles).
+Orada yavaş bir span'in arkasındaki flame graph'a dönüşür. Kontrat: [profiles.md](/tr/contracts/profiles).
 
 **Varsayılan olarak kapalıdır,** Go ajanının aksine, ve fark maliyetten çok güncellemelerle ilgilidir. Go'da varsayılan açıktır ve kapatma ayarı gerekir,
 çünkü Go süreç başına yalnızca bir CPU profiline izin verir. Node'da böyle bir kilit yok, ama mevcut kurulumlar var: güncelleyen herkes için yeni bir

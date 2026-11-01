@@ -60,7 +60,7 @@ OPENLOG_PROFILING=false go run .
 ```
 
 Ajan her `OPENLOG_PROFILE_INTERVAL` süresi boyunca (varsayılan 60 sn, en az 10 sn) sürecin CPU profilini alır ve OTLP profili
-olarak `/v1/profiles` adresine gönderir ([profiles.md](/contracts/profiles)). Flame graph arayüzde Profiling altında görünür.
+olarak `/v1/profiles` adresine gönderir ([profiles.md](/tr/contracts/profiles)). Flame graph arayüzde Profiling altında görünür.
 `shutdown` açık pencereyi kapatıp içindekileri gönderir, böylece bir deploy öncesindeki son dakikalar kaybolan dakikalar olmaz.
 
 Açmadan önce bilmeye değer iki şey var:
@@ -114,7 +114,7 @@ onunla kapışmak yerine tek bir uyarı yazar ve bir sonraki aralıkta yeniden d
 
 `OPENLOG_SAMPLING_RATIO=p` yeni trace'leri `p` olasılığıyla örnekler. Karar kökte bir kez verilir ve aşağı akıştaki her servis ona
 uyar (parent tabanlı). APM sayıları doğru kalır, çünkü saklanan her span `1/p` ile ağırlıklandırılır
-([apm.md §4](/contracts/apm)).
+([apm.md §4](/tr/contracts/apm)).
 
 Ajan OpenTelemetry'nin
 [tutarlı olasılık örneklemesini](https://opentelemetry.io/docs/specs/otel/trace/tracestate-probability-sampling/) kullanır:
@@ -157,7 +157,7 @@ ayarları.
 ## Makine bağlama {#host-linking}
 
 APM arayüzü, ikisi de aynı `host.id` değerini raporladığında bir servisi bir makineye bağlar. Bu ajan altyapı ajanının çözümleme
-zincirini kullanır ([semantic-conventions.md §1](/contracts/semantic-conventions)), böylece aynı makinede iki ajan da aynı id'yi
+zincirini kullanır ([semantic-conventions.md §1](/tr/contracts/semantic-conventions)), böylece aynı makinede iki ajan da aynı id'yi
 üretir:
 
 1. Çalışan altyapı ajanının `/run/openlog-infra-agent/host-id` içinde yayımladığı id (`OPENLOG_INFRA_RUNTIME_DIR`; önce

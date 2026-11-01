@@ -1,7 +1,7 @@
 # openlog eBPF profiler {#openlog-ebpf-profiler}
 
 Tüm makineyi kapsayan CPU profili: makinedeki her süreç, enstrümante edilmiş olsun olmasın, örneklenir ve OTLP profili olarak
-gönderilir. [ebpf-profiler.md](/contracts/ebpf-profiler) dokümanını uygular: kontrat o dokümandır, burası onun gerçeklemesi.
+gönderilir. [ebpf-profiler.md](/tr/contracts/ebpf-profiler) dokümanını uygular: kontrat o dokümandır, burası onun gerçeklemesi.
 
 **Ayrı bir bileşendir, altyapı ajanının parçası değildir.** Altyapı ajanının sandbox'ı bu işi bilerek yasaklar: systemd unit'i
 `bpf(2)` ve `perf_event_open(2)` çağrılarını filtreler, yalnızca `CAP_DAC_READ_SEARCH` ve `CAP_SYS_PTRACE` yetkilerini taşır,

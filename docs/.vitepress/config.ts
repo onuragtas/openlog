@@ -56,9 +56,9 @@ export default defineConfig({
   srcExclude: ["plan/**", "operations/benchmarks/**", "operations/live-validation-*.md", "node_modules/**"],
   // Runbooks point at a local UI, and those links are meant for whoever is following them.
   ignoreDeadLinks: "localhostLinks",
-  // English is the default and lives at the root, and Turkish has every page of it. The READMEs next to each agent are
-  // included on the English pages, while the Turkish ones are written out. The reference under contracts/ is written for
-  // implementers and stays in English, which the Turkish menu says.
+  // English is the default and lives at the root, and Turkish has every page of it, the reference included, so nobody reading in
+  // Turkish is sent to English halfway through. The READMEs next to each agent are included on the English pages, while the Turkish
+  // ones are written out.
   locales: {
     root: { label: "English", lang: "en" },
     tr: {
@@ -71,7 +71,7 @@ export default defineConfig({
           { text: "Başlangıç", link: "/tr/guide/quickstart" },
           { text: "Entegrasyonlar", link: "/tr/guide/send-data" },
           { text: "Ürün turu", link: "/tr/features" },
-          { text: "Referans (EN)", link: "/contracts/api" },
+          { text: "Referans", link: "/tr/contracts/api" },
         ],
         sidebar: [
           { text: "Başlangıç", items: [
@@ -123,11 +123,28 @@ export default defineConfig({
             { text: "E2E testleri", link: "/tr/operations/e2e" },
             { text: "Sürüm çıkarma", link: "/tr/operations/releasing" },
           ] },
-          { text: "Referans (EN)", collapsed: true, items: [
-            { text: "HTTP API", link: "/contracts/api" },
-            { text: "Yapılandırma", link: "/contracts/config" },
-            { text: "OQL", link: "/contracts/oql" },
-            { text: "Alarmlar", link: "/contracts/alerting" },
+          { text: "Referans", collapsed: true, items: [
+            { text: "HTTP API", link: "/tr/contracts/api" },
+            { text: "Yapılandırma", link: "/tr/contracts/config" },
+            { text: "OQL", link: "/tr/contracts/oql" },
+            { text: "Alarmlar", link: "/tr/contracts/alerting" },
+            { text: "APM", link: "/tr/contracts/apm" },
+            { text: "Tarayıcı ve mobil izleme", link: "/tr/contracts/rum" },
+            { text: "Ürün analitiği", link: "/tr/contracts/analytics" },
+            { text: "Mobil crash", link: "/tr/contracts/mobile-crash" },
+            { text: "Mobil ajan", link: "/tr/contracts/mobile-agent" },
+            { text: "Veritabanı izleme", link: "/tr/contracts/db-monitoring" },
+            { text: "Profilleme", link: "/tr/contracts/profiles" },
+            { text: "eBPF profilleyici", link: "/tr/contracts/ebpf-profiler" },
+            { text: "SLO'lar", link: "/tr/contracts/slo" },
+            { text: "Kullanım", link: "/tr/contracts/usage" },
+            { text: "Maliyet", link: "/tr/contracts/cost" },
+            { text: "Sürümler ve güncellemeler", link: "/tr/contracts/releases-updates" },
+            { text: "Semantik kurallar", link: "/tr/contracts/semantic-conventions" },
+            { text: "PostgreSQL şeması", link: "/tr/contracts/postgres" },
+            { text: "Kafka", link: "/tr/contracts/kafka" },
+            { text: "Java ajanı", link: "/tr/contracts/java-agent" },
+            { text: "PHP ajanı", link: "/tr/contracts/php-agent" },
           ] },
         ],
         editLink: { pattern: `${REPO}/edit/master/docs/:path`, text: "Bu sayfayı GitHub'da düzenle" },

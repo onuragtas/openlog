@@ -37,7 +37,7 @@ export OTEL_EXPORTER_OTLP_HEADERS=openlog-license-key=<olk_ anahtarın>
 ```
 
 openlog ajanları buna ek olarak framework'leri otomatik izler ve servisi çalıştığı makineye bağlar.
-[Semantic conventions](/contracts/semantic-conventions) sayfası openlog'un tanıdığı alanları listeler.
+[Semantic conventions](/tr/contracts/semantic-conventions) sayfası openlog'un tanıdığı alanları listeler.
 
 ## Parçaları birbirine bağla
 

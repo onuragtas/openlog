@@ -1,16 +1,13 @@
 # Contract: Product analytics (D-150)
 
-**Status: partly built.** Done: the key setting, ingest rules and tables (§1, §3 to §5), the browser and mobile SDKs and
-the endpoints of §6, the OQL event type and erasure (§7). User guide:
-[Product analytics](../guide/product-analytics.md). Related: [rum.md](rum.md),
-[mobile-agent.md](mobile-agent.md), [mobile-crash.md](mobile-crash.md).
+**Status: built.** See §6 for the endpoints.
 
 Who uses the application, where they came from, what they do and whether they come back — from web and mobile
 applications, over longer than the 7-day trace retention.
 
 **Analytics is not a parallel stack either.** The SDKs keep sending the OTLP spans of [rum.md](rum.md); there is
 no second endpoint and no second SDK. What is new is a persistent identity (§1), a little more attribution on the
-landing page view (§3), and three tables that outlive the spans (§5).
+landing page view (§3), and four tables that outlive the spans (§5).
 
 **Not here, deliberately:** push messaging, remote configuration, A/B testing, session replay, region or city.
 
@@ -130,7 +127,7 @@ zero is shown in the UI.
 
 ## 5. Storage
 
-ClickHouse `0102_analytics.sql`, PostgreSQL `0104_analytics_mode.sql`. All three tables are written by materialized
+ClickHouse `0102_analytics.sql`, PostgreSQL `0104_analytics_mode.sql`. All three of its tables are written by materialized
 views on `spans_local`, filtered on the forced mode attribute, so a key in `off` mode costs nothing.
 
 **The views must be created new.** `rum_sessions` cannot be altered (rum.md §3.7), and nothing here touches it.
@@ -250,5 +247,5 @@ be trusted with a delete on a public key. The application's backend has to call 
 ## 10. Decided
 
 - **Billing.** The §5 rows are free: they are a copy of data already counted as spans, and are not a metered signal.
-- **Retention.** 90 days for §5.1 and 13 months for §5.2 and §5.3, fixed as §5.4 describes.
+- **Retention.** 90 days for §5.1 and 13 months for §5.2 and §5.3, fixed as §5.5 describes.
 - **Identity.** On by default for new keys and new SDKs, off on existing keys until the operator turns it on (§1.1).

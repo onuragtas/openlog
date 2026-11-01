@@ -2,8 +2,8 @@
 
 openlog organizasyonları kimlik sağlayıcıları (IdP) üzerinden **OpenID Connect** veya **SAML 2.0** ile giriş yapabilir, e-posta alan adlarını
 sahiplenebilir, IdP gruplarını rollere eşleyebilir, single sign-on'u **zorunlu kılabilir** ve IdP'nin üyeleri **SCIM 2.0** ile **provision** etmesini
-sağlayabilir. Kontratlar: [api.md](/contracts/api) "Single sign-on" ve "SCIM", [postgres.md](/contracts/postgres) "Single sign-on and SCIM",
-[config.md](/contracts/config); kararlar D-077 (SSO), D-078 (SCIM), D-088 (birden fazla bağlantı, single logout, şifreli assertion'lar, metadata yenileme)
+sağlayabilir. Kontratlar: [api.md](/tr/contracts/api) "Single sign-on" ve "SCIM", [postgres.md](/tr/contracts/postgres) "Single sign-on and SCIM",
+[config.md](/tr/contracts/config); kararlar D-077 (SSO), D-078 (SCIM), D-088 (birden fazla bağlantı, single logout, şifreli assertion'lar, metadata yenileme)
 ve D-089 (sahiplenilen alan adları, SCIM e-posta değişiklikleri).
 
 Her şey organizasyon başına **Settings → Single sign-on** altında ayarlanır (yöneticiler; zorunlu kılma: owner'lar).

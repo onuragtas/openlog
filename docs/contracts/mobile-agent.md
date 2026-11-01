@@ -134,6 +134,5 @@ Retry `429` and `503` with backoff; never retry `401` or `403` — nothing about
 ## 7. Not in this contract yet
 
 - **Crash reporting** is [mobile-crash.md](mobile-crash.md).
-- **Symbolication.** Browser stacks are un-minified with uploaded source maps ([rum.md](rum.md) §8); dSYM
-  and ProGuard mapping have no equivalent yet.
+- **Symbolication.** Browser stacks are un-minified with uploaded source maps ([rum.md](rum.md) §8), and mobile stacks with uploaded R8 mappings and native symbols ([mobile-crash.md](mobile-crash.md) §3).
 - **Attestation.** Play Integrity and App Attest are the upgrade path for §1, deliberately not claimed here.

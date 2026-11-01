@@ -27,7 +27,7 @@ thing needs no documentation: say so and stop.
 | A new or changed environment variable | `docs/contracts/config.md`, `deploy/compose/.env.example`, `deploy/compose/docker-compose.yml`, `deploy/helm/openlog/values.yaml` |
 | An endpoint or a field in a response | `docs/contracts/openapi.yaml`, then `npm run gen:api` in `web` and `dart run tool/gen_api.dart` in `mobile`; `docs/contracts/api.md` |
 | A new field a console reads | Optional in `openapi.yaml`: the store console talks to older servers |
-| Behaviour of a feature with a contract | That contract in `docs/contracts/`, including its status line and any "not built yet" that is now false |
+| Behaviour of a feature with a contract | That contract in `docs/contracts/` and `docs/tr/contracts/`, including its status line and any "not built yet" that is now false |
 | A design decision, or a choice against what a contract proposed | A new row in `docs/plan/02-decisions.md` (Turkish, `D-NNN`) and the contract's reasoning |
 | What a user sets up or sees | The page under `docs/`, in every site language |
 | An SDK option, capability or limit | That SDK's `agents/<name>/README.md`, which `docs/integrations/` includes, its written-out page under `docs/tr/integrations/`, and its row in the guide. If the same thing applies to other SDKs, each of them too: `ls agents` |
@@ -47,14 +47,14 @@ Also grep for the name of whatever changed. A sentence saying a thing does not e
 ## 3. Write it
 
 - **Audience.** Guides are for someone integrating openlog: what to do, with commands that work. Contracts are for someone changing
-  openlog: what it does and why.
+  openlog: what it does and why. A page linked from Turkish goes to its Turkish page (`/tr/...`), so a reader never changes language halfway.
 - **Languages.** Complete in each one, never English now and the rest later:
 
   | Where | Languages | Source of truth |
   |---|---|---|
-  | The site, except `docs/contracts/` and `docs/plan/` | English (default), Turkish | `locales` in `docs/.vitepress/config.ts` |
+  | The site, except `docs/plan/` | English (default), Turkish | `locales` in `docs/.vitepress/config.ts` |
   | The console | English, Turkish | `web/src/i18n/locales/` |
-  | Contracts, READMEs, code comments | English | |
+  | READMEs, code comments | English, with a Turkish page under `docs/tr/integrations/` for each SDK | |
   | `docs/plan/02-decisions.md`, commit messages | Turkish | |
 
   A translation says the same things with the same commands, in natural language rather than word for word, and keeps product terms such as `crash` as
