@@ -39,7 +39,7 @@ export function resolveLink(href: string, source: string): string {
   const path = url.pathname.slice(1);
   const hash = url.hash;
   const excluded = /^docs\/operations\/(benchmarks\/|live-validation-)/.test(path);
-  if (!excluded && (/^docs\/(contracts|operations|guide)\/.+\.md$/.test(path) || path === "docs/features.md")) return `/${path.slice("docs/".length)}${hash}`;
+  if (!excluded && (/^docs\/(contracts|operations|guide|tr\/guide)\/.+\.md$/.test(path) || path === "docs/features.md")) return `/${path.slice("docs/".length)}${hash}`;
   const integration = path.endsWith("/README.md") ? INTEGRATIONS[path.slice(0, -"/README.md".length)] : undefined;
   if (integration) return `/integrations/${integration}${hash}`;
   return `${REPO}/blob/master/${path}${hash}`;
@@ -55,6 +55,93 @@ export default defineConfig({
   srcExclude: ["plan/**", "operations/benchmarks/**", "operations/live-validation-*.md", "node_modules/**"],
   // Runbooks point at a local UI, and those links are meant for whoever is following them.
   ignoreDeadLinks: "localhostLinks",
+  // English is the default and lives at the root. Turkish covers the pages people read first: the integration guides are
+  // included from the READMEs next to each agent and the reference is written for implementers, so both stay in English
+  // rather than become a second copy to keep up to date. The Turkish menu says which pages those are.
+  locales: {
+    root: { label: "English", lang: "en" },
+    tr: {
+      label: "Türkçe",
+      lang: "tr",
+      link: "/tr/",
+      description: "Açık kaynak gözlemlenebilirlik: altyapı, APM, loglar, tarayıcı ve mobil izleme ve alarmlar.",
+      themeConfig: {
+        nav: [
+          { text: "Başlangıç", link: "/tr/guide/quickstart" },
+          { text: "Entegrasyonlar", link: "/tr/guide/send-data" },
+          { text: "Ürün turu (EN)", link: "/features" },
+          { text: "Referans (EN)", link: "/contracts/api" },
+        ],
+        sidebar: [
+          {
+            text: "Başlangıç",
+            items: [
+              { text: "Hızlı başlangıç", link: "/tr/guide/quickstart" },
+              { text: "Entegrasyon seç", link: "/tr/guide/send-data" },
+              { text: "Ürün turu (EN)", link: "/features" },
+            ],
+          },
+          {
+            text: "Web ve mobil uygulamalar",
+            items: [
+              { text: "Ürün analitiği", link: "/tr/guide/product-analytics" },
+              { text: "Crash raporlama", link: "/tr/guide/crash-reporting" },
+              { text: "Tarayıcı (EN)", link: "/integrations/browser" },
+              { text: "iOS, Swift (EN)", link: "/integrations/ios" },
+              { text: "Android, Kotlin (EN)", link: "/integrations/android" },
+              { text: "Flutter, Dart (EN)", link: "/integrations/flutter" },
+            ],
+          },
+          {
+            text: "Backend APM (EN)",
+            items: [
+              { text: "Go", link: "/integrations/go" },
+              { text: "Node.js", link: "/integrations/node" },
+              { text: "Python", link: "/integrations/python" },
+              { text: "Java", link: "/integrations/java" },
+              { text: ".NET", link: "/integrations/dotnet" },
+              { text: "PHP", link: "/integrations/php" },
+            ],
+          },
+          {
+            text: "Sunucular ve kümeler (EN)",
+            items: [
+              { text: "Altyapı ajanı", link: "/integrations/infra" },
+              { text: "Tüm makine profilleyici", link: "/integrations/ebpf" },
+              { text: "Kubernetes", link: "/operations/kubernetes" },
+            ],
+          },
+          {
+            text: "Referans (EN)",
+            collapsed: true,
+            items: [
+              { text: "HTTP API", link: "/contracts/api" },
+              { text: "Yapılandırma", link: "/contracts/config" },
+              { text: "OQL", link: "/contracts/oql" },
+              { text: "Alarmlar", link: "/contracts/alerting" },
+              { text: "Güncelleme", link: "/operations/upgrading" },
+            ],
+          },
+        ],
+        editLink: { pattern: `${REPO}/edit/master/docs/:path`, text: "Bu sayfayı GitHub'da düzenle" },
+        outline: { label: "Bu sayfada" },
+        docFooter: { prev: "Önceki", next: "Sonraki" },
+        lastUpdated: { text: "Son güncelleme" },
+        darkModeSwitchLabel: "Görünüm",
+        lightModeSwitchTitle: "Açık temaya geç",
+        darkModeSwitchTitle: "Koyu temaya geç",
+        sidebarMenuLabel: "Menü",
+        returnToTopLabel: "Başa dön",
+        langMenuLabel: "Dil değiştir",
+        notFound: {
+          title: "SAYFA BULUNAMADI",
+          quote: "Aradığın sayfa taşınmış veya hiç var olmamış olabilir.",
+          linkLabel: "ana sayfaya dön",
+          linkText: "Ana sayfaya dön",
+        },
+      },
+    },
+  },
   markdown: {
     // These documents write placeholders such as <uuid> and <server> in running text. They are text, not elements.
     html: false,
@@ -84,7 +171,25 @@ export default defineConfig({
       { text: "Reference", link: "/contracts/api" },
     ],
     socialLinks: [{ icon: "github", link: REPO }],
-    search: { provider: "local" },
+    search: {
+      provider: "local",
+      options: {
+        locales: {
+          tr: {
+            translations: {
+              button: { buttonText: "Ara", buttonAriaLabel: "Ara" },
+              modal: {
+                displayDetails: "Ayrıntıları göster",
+                resetButtonTitle: "Aramayı temizle",
+                backButtonTitle: "Aramayı kapat",
+                noResultsText: "Sonuç bulunamadı:",
+                footer: { selectText: "seç", navigateText: "gezin", closeText: "kapat" },
+              },
+            },
+          },
+        },
+      },
+    },
     editLink: { pattern: `${REPO}/edit/master/docs/:path`, text: "Edit this page on GitHub" },
     sidebar: [
       {
