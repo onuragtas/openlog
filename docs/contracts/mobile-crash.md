@@ -53,7 +53,9 @@ would stop working silently.
 wrong hides the crash, or worse, hangs the application at the moment it was going down. MetricKit has the operating
 system do the capture, and costs the SDK only a system framework import behind `#if canImport(MetricKit)`.
 
-**The costs of MetricKit, stated.** It needs iOS 14 or newer, and delivery can be later on older releases. It carries
+**The costs of MetricKit, stated.** It needs iOS 14 or newer, and delivery can be later on older releases. It names the build number (`CFBundleVersion`) and not the version a
+report goes by, so the two can only be matched for the build running now. An earlier build is taken to be the version the last session ran, and a build number that never changes, as
+with Unity's default `0`, attributes an old crash to the new version. It carries
 no session id, so the SDK keeps the last session and version on disk and attaches them on a best-effort basis; a
 crash it cannot match gets `session.id` of a new one-span session and is flagged by `openlog.rum.crash.session_unknown`.
 An uncaught Objective-C exception is seen twice, by the handler and by MetricKit: the session counts once, and the error inbox
@@ -102,8 +104,8 @@ nothing, because where an image loads changes each launch.
   uses, so no SDK carries a protobuf library. `rel_pc` of the crashing thread is the offset, and it is an ELF virtual address.
   At API 30 there is none, and the report has no stack.
 - **iOS:** MetricKit's call stack tree, flattened to the attributed thread. The root is the innermost frame, and `subFrames` hold callers.
-  `offsetIntoBinaryTextSegment` is relative to `__TEXT`, so the table is too. **This shape is taken from Apple's documentation and has only
-  been tested on hand-written reports:** a tree that can't be read is sent as it came.
+  `offsetIntoBinaryTextSegment` is relative to `__TEXT`, so the table is too. Checked against real reports from an iPhone on iOS 26. A tree that can't be read is sent as
+  it came.
 - **ANR:** the system's thread dump, text, from the `"main"` thread on. It opens with memory figures and an event log, which would spend the
   stack limit. Its native lines are not symbolicated. Its Java frames are retraced like any other.
 
@@ -174,8 +176,9 @@ migration are not in it, and counts past a few thousand are estimates.
   and the newest stack. It reads spans, so it reaches 7 days. The workflow stays in the APM inbox.
 - The **Releases** tab shows the crash-free and error-free rates side by side.
 - OQL: `SELECT count(*) FROM Span WHERE openlog.rum.crash.kind != ''` is alertable with no new rule type.
-- Each crash names what to upload (`missing_symbols`). A frame the device named and a `.dylib` are the system's and are left out, but the
-  system frameworks of iOS, which MetricKit does not name, can't be told apart and are listed.
+- Each crash names what to upload (`missing_symbols`). A frame the device named and a `.dylib` are the system's and are left out. iOS frameworks look just like the application
+  in a MetricKit report, so once symbols resolved anything the other images are taken to be the system's. An application's second framework with no symbols then goes unlisted, though
+  its frames still read as addresses. With nothing resolved, all of them are listed.
 
 ## 7. Order of work
 

@@ -153,7 +153,7 @@ final class CrashDiagnostics: NSObject, MXMetricManagerSubscriber {
                     signal: crash.signal?.int32Value,
                     reason: crash.terminationReason ?? "",
                     stack: flattenCallStackTree(crash.callStackTree.jsonRepresentation()),
-                    version: crash.metaData.applicationBuildVersion,
+                    version: sdk?.version(ofBuild: crash.metaData.applicationBuildVersion) ?? crash.metaData.applicationBuildVersion,
                     at: payload.timeStampEnd
                 )
             }

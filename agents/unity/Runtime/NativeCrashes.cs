@@ -36,7 +36,7 @@ namespace OpenLogUnity
                 {
                     var r = JsonUtility.FromJson<MetricKitCrash>(File.ReadAllText(f));
                     client.RecordEarlierCrash("signal", SignalName(r.signal), string.IsNullOrEmpty(r.reason) ? SignalName(r.signal) : r.reason,
-                        NativeStack.FromMetricKit(r.stack), r.version, r.at_ms);
+                        NativeStack.FromMetricKit(r.stack), r.same_build ? r.version : client.Previous?.Version ?? r.version, r.at_ms);
                     File.Delete(f);
                     found = true;
                 }
@@ -72,6 +72,7 @@ namespace OpenLogUnity
             public string reason;
             public string stack;
             public string version;
+            public bool same_build;
             public long at_ms;
         }
 

@@ -302,4 +302,4 @@ and plain `http` applications with `--require`/`--import` against an OTLP captur
 resource, headers, SIGTERM flush, ingest outage). The NestJS 12 suite needs Node.js 20+ and the separately pinned app
 in `test/apps/nest12` (`npm run test:apps:install`, i.e. `npm ci --prefix test/apps/nest12`); without it the suite is
 skipped with that hint. The release flow is described in
-[releasing.md](../../docs/operations/releasing.md#nodejs-agent-package).
+[releasing.md](../../docs/operations/releasing.md#node-js-agent-package).

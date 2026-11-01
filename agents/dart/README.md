@@ -86,8 +86,8 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 **No native crashes.** Uncaught Dart errors are reported through `recordFatal`: see [Crash reporting](../../docs/guide/crash-reporting.md). A crash of the Flutter engine or a plugin needs the Swift or Kotlin SDK in the host application.
 
-**No symbolication.** Browser stacks are un-minified with uploaded source maps; dSYM and ProGuard mappings
-have no equivalent yet.
+**Dart stacks stay obfuscated in a release build.** Flutter's `--split-debug-info` symbols are not supported. The native side of an app is:
+[upload its dSYMs and R8 mapping](../../docs/guide/crash-reporting.md#read-your-stacks) when the host app runs the iOS or Android SDK.
 
 **No attestation.** Play Integrity and App Attest are the upgrade path for the application allowlist, and
 are deliberately not claimed.

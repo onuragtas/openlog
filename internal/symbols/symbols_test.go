@@ -131,6 +131,23 @@ func TestAsksOnlyForSymbolsSomeoneCanUpload(t *testing.T) {
 	}
 }
 
+func TestIOSFrameworksAreNotAskedForOnceTheApplicationResolved(t *testing.T) {
+	const app = "A1B2C3D4-E5F6-0718-A1B2-C3D4E5F60718"
+	stack := "#00 UnityFramework " + app + " +0x1090\n#01 UIKitCore AA09C382-A5A1-38B0-8CF4-C8476216104F +0x10"
+	with := Symbolicate(stack, Resolver{Image: func(id string) *Table {
+		if id == NormalizeImageID(app) {
+			return table()
+		}
+		return nil
+	}})
+	if len(with.Missing) != 0 {
+		t.Errorf("asked for the system's symbols: %v", with.Missing)
+	}
+	if without := Symbolicate(stack, Resolver{}); len(without.Missing) != 2 {
+		t.Errorf("with nothing resolved either could be the application's: %v", without.Missing)
+	}
+}
+
 func TestAFrameSymbolsResolvedOutranksOneTheDeviceNamed(t *testing.T) {
 	const id = "a1b2c3d4e5f60718a1b2c3d4e5f60718"
 	r := Symbolicate("#00 libc.so ffffffffffffffffffffffffffffffff +0x50 abort\n#01 libgame.so "+id+" +0x1090", Resolver{Image: func(got string) *Table {

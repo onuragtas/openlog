@@ -169,4 +169,12 @@ final class CrashTests: XCTestCase {
         XCTAssertEqual(((encoded[0]["value"] as? [String: Any])?["stringValue"] as? String)?.count, 9000)
         XCTAssertEqual(((encoded[1]["value"] as? [String: Any])?["stringValue"] as? String)?.count, Limits.maxAttrValueBytes)
     }
+
+    func testABuildNumberIsReportedAsTheVersionOfThatBuild() throws {
+        let first = try start(version: "1.2.3")
+        XCTAssertEqual(first.version(ofBuild: "41", currentBuild: "41"), "1.2.3")
+        OpenLog.reset()
+        let second = try start(version: "1.2.4")
+        XCTAssertEqual(second.version(ofBuild: "41", currentBuild: "42"), "1.2.3", "an earlier build is what the last session ran")
+    }
 }

@@ -4,8 +4,8 @@ Uygulamanı kaç kişinin kullandığını, geri gelip gelmediklerini, ne yaptı
 kullanıcılar, retention, funnel, event'ler ve trafik kaynakları. Google Analytics veya Firebase Analytics kullandıysan aynı
 konuları kapsar, üstelik kendi sunucunda çalışır.
 
-[Tarayıcı](/integrations/browser), [iOS](/integrations/ios), [Android](/integrations/android) ve
-[Flutter](/integrations/flutter) ve [Unity](/integrations/unity) SDK'ları üzerinde çalışır, başka bir şey kurman gerekmez.
+[Tarayıcı](/tr/integrations/browser), [iOS](/tr/integrations/ios), [Android](/tr/integrations/android) ve
+[Flutter](/tr/integrations/flutter) ve [Unity](/tr/integrations/unity) SDK'ları üzerinde çalışır, başka bir şey kurman gerekmez.
 
 Sonuçlar uygulama bazında, **Browser** altındaki **Analytics** sekmesinde görünür.
 

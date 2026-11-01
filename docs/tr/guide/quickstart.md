@@ -56,7 +56,7 @@ Dilini [entegrasyonlardan](./send-data.md) seç. Örneğin Node.js ajanı kod de
 npm install openlog-node
 ```
 
-Sonra uygulamayı ajanla başlatmak için [hızlı başlangıcını](/integrations/node#quick-start) izle.
+Sonra uygulamayı ajanla başlatmak için [hızlı başlangıcını](/tr/integrations/node#quick-start) izle.
 
 Uygulaman zaten OpenTelemetry kullanıyorsa openlog ajanına gerek yok, sunucuyu göstermen yeterli:
 
@@ -85,8 +85,8 @@ oluşturabilir ve veri gelene kadar bekler.
 
 ## Sonra
 
-- [Bir web sitesini veya mobil uygulamayı izle](/integrations/browser)
+- [Bir web sitesini veya mobil uygulamayı izle](/tr/integrations/browser)
 - [DAU, retention ve funnel ölç](./product-analytics.md)
 - [Crash'leri raporla](./crash-reporting.md)
-- [Ürünün neler yaptığına ekran ekran bak](/features) (İngilizce)
-- [openlog'u güncel tut](/operations/upgrading) (İngilizce)
+- [Ürünün neler yaptığına ekran ekran bak](/tr/features)
+- [openlog'u güncel tut](/tr/operations/upgrading)

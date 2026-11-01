@@ -97,7 +97,7 @@ done
 
 ## 5-9. Load, scaling, chaos, teardown
 
-Follow the [k3d runbook](k3d-dev-cluster.md#5-port-forward). kind-specific notes:
+Follow the [k3d runbook](k3d-dev-cluster.md#_5-port-forward). kind-specific notes:
 
 - Consumer lag: Strimzi 1.x creates no Service for the Kafka exporter; it listens on 9404
   (`kubectl -n openlog port-forward deploy/openlog-kafka-exporter 9308:9404`, then

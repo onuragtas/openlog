@@ -169,6 +169,7 @@ func Symbolicate(stack string, r Resolver) Result {
 	mappingAsked := false
 	sawObfuscated := false
 	named := ""
+	var unnamedMachO []string
 	for i, line := range lines {
 		if f := nativeFrameRe.FindStringSubmatch(line); f != nil {
 			id := NormalizeImageID(f[3])
@@ -182,7 +183,12 @@ func Symbolicate(stack string, r Resolver) Result {
 				// no frame is named. Listing those would bury the one line someone can act on.
 				if !missing[id] && f[5] == "" && !strings.HasSuffix(f[2], ".dylib") {
 					missing[id] = true
-					res.Missing = append(res.Missing, f[2]+" "+id)
+					entry := f[2] + " " + id
+					if strings.Contains(f[3], "-") {
+						unnamedMachO = append(unnamedMachO, entry)
+					} else {
+						res.Missing = append(res.Missing, entry)
+					}
 				}
 				if named == "" {
 					named = f[5]
@@ -231,6 +237,11 @@ func Symbolicate(stack string, r Resolver) Result {
 	}
 	if res.Frame == "" {
 		res.Frame = named
+	}
+	// MetricKit names no frame and iOS frameworks have no telling suffix, so UIKitCore looks just like the application. Once
+	// symbols resolved anything, the application's image is known, and the rest are taken to be the system's.
+	if res.Resolved == 0 {
+		res.Missing = append(res.Missing, unnamedMachO...)
 	}
 	res.MissingMapping = sawObfuscated && mapping == nil
 	res.Stack = strings.Join(lines, "\n")

@@ -96,7 +96,7 @@ server-side from the key, so an application cannot inflate its own traffic by cl
 
 **No out-of-memory reports.** Exceptions, signals and traps are reported when `captureCrashes` is on: see [Crash reporting](../../docs/guide/crash-reporting.md).
 
-**No symbolication.** Browser stacks are un-minified with uploaded source maps; dSYM has no equivalent yet.
+**To read native stacks, upload your dSYMs** as part of the release build: see [Read your stacks](../../docs/guide/crash-reporting.md#read-your-stacks). Swift function names stay in their mangled form.
 
 **No attestation.** App Attest is the upgrade path for the application allowlist, and is deliberately not
 claimed.

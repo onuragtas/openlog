@@ -1,7 +1,7 @@
 # Crash raporlama
 
-Mobil uygulamanda neyin, hangi sürümde çöktüğünü ve kaç oturumu etkilediğini gör. [iOS](/integrations/ios),
-[Android](/integrations/android) ve [Flutter](/integrations/flutter) SDK'ları üzerinde çalışır.
+Mobil uygulamanda neyin, hangi sürümde çöktüğünü ve kaç oturumu etkilediğini gör. [iOS](/tr/integrations/ios),
+[Android](/tr/integrations/android) ve [Flutter](/tr/integrations/flutter) SDK'ları üzerinde çalışır.
 
 Sonuçlar uygulama bazında **Browser** altında görünür: **Crashes** sekmesi neyin çöktüğünü listeler, **Releases** sekmesi her sürümün
 crash-free oranını gösterir. Bir crash aynı zamanda normal bir hatadır, bu yüzden atama ve çözme işlemleri APM hata kutusunda yapılır.
@@ -15,10 +15,10 @@ eder: her zaman ardından çağrılır, yani başka bir crash aracıyla yan yana
 |---|---|---|
 | iOS, macOS | Yakalanmamış Objective-C exception'ları. iOS 14 ve macOS 12 ve sonrasında MetricKit ile sinyaller, Mach exception'ları ve Swift trap'leri | Bellek yetersizliği |
 | Android | Yakalanmamış JVM exception'ları. `androidContext` ile Android 11 ve sonrasında NDK crash'leri, ANR'ler ve ön planda bellek yetersizliği, Android 12'den itibaren native stack ile | Android 11 altında yalnızca JVM exception'ları |
-| Unity | Android 11 ve sonrasında native crash, ANR ve bellek yetersizliği, iOS 14 ve sonrasında native crash. Bkz. [Unity kılavuzu](/integrations/unity) | C# exception'ları crash değil hata sayılır |
+| Unity | Android 11 ve sonrasında native crash, ANR ve bellek yetersizliği, iOS 14 ve sonrasında native crash. Bkz. [Unity kılavuzu](/tr/integrations/unity) | C# exception'ları crash değil hata sayılır |
 | Flutter | Aşağıdaki gibi bağladığın yakalanmamış Dart hataları | Flutter motorunun veya bir eklentinin crash'i, ana uygulamada iOS veya Android SDK'sı da çalışmıyorsa |
 
-Release derlemelerinin stack'leri karıştırılmış isimlerle veya adres olarak gelir. Okumak için [sembollerini yükle](#stack-lerini-oku).
+Release derlemelerinin stack'leri karıştırılmış isimlerle veya adres olarak gelir. Okumak için [sembollerini yükle](#read-your-stacks).
 
 ## Kurulum
 
@@ -85,7 +85,7 @@ PlatformDispatcher.instance.onError = (error, stack) {
 };
 ```
 
-## Stack'lerini oku
+## Stack'lerini oku {#read-your-stacks}
 
 Release derlemesi Android'de `a.b.c`, native kodda ise bir kütüphane ve offset raporlar. `openlog-symbols` bunları fonksiyon, dosya ve
 satır adlarına çeviren dosyaları yükler. Release derlemenin son adımı olarak ekle: semboller tek bir derlemeye aittir ve sonradan

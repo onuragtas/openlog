@@ -123,7 +123,7 @@ Static asset timing (scripts, stylesheets, images, fonts) is available but **off
 because a page loads far more assets than it makes requests, so switching it on multiplies what an
 installation stores and is billed for — not something to inherit from an upgrade. The
 session id is random, per tab, and expires; it is never derived from anything about the visitor, so it
-cannot identify anyone across visits.
+cannot identify anyone across visits. The visitor id behind `analyticsCollection` is what does that, and it is separate.
 
 Details and the full attribute list: [rum.md §2](../../docs/contracts/rum.md),
 [semantic-conventions.md §10](../../docs/contracts/semantic-conventions.md).

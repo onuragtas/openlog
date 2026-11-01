@@ -12,18 +12,18 @@ hero:
       text: Entegrasyon seç
       link: /tr/guide/send-data
     - theme: alt
-      text: Ürün turu (İngilizce)
-      link: /features
+      text: Ürün turu
+      link: /tr/features
 features:
   - title: Sunucular ve container'lar
     details: Her makineye tek ajan. Metrikler, envanter, loglar ve nginx, Redis, MySQL, PostgreSQL gibi entegrasyonlar.
-    link: /integrations/infra
+    link: /tr/integrations/infra
   - title: Backend APM
     details: Go, Node.js, Python, Java, .NET ve PHP ajanları. Herhangi bir OpenTelemetry SDK'sı da çalışır.
     link: /tr/guide/send-data
   - title: Web ve mobil
     details: Tarayıcı, iOS, Android ve Flutter için Core Web Vitals, hatalar, oturumlar ve tıklamadan veritabanına kadar tek trace.
-    link: /integrations/browser
+    link: /tr/integrations/browser
   - title: Crash raporlama
     details: Mobil uygulamanda neyin, hangi sürümde çöktüğü ve kaç oturumu etkilediği. Her sürüm için crash-free oranı.
     link: /tr/guide/crash-reporting

@@ -40,8 +40,8 @@ key is the root of trust for auto-update**: anybody holding it can push code to 
 | `ghcr.io/onuragtas/openlog:<v>` (not a file) | `images.openlog` = `…@sha256:<digest>` |
 | `manifest.json`, `manifest.json.sig` | signed |
 | `index.json`, `index.json.sig` | signed; all releases, newest first |
-| `install.sh` | not in the manifest (bootstrap, see [install.sh trust model](#installsh)) |
-| `install-server.sh` | not in the manifest (server bootstrap, see [install-server.sh](#install-serversh)) |
+| `install.sh` | not in the manifest (bootstrap, see [install.sh trust model](#install-sh)) |
+| `install-server.sh` | not in the manifest (server bootstrap, see [install-server.sh](#install-server-sh)) |
 
 PHP agent artifacts are built by `agents/php/packaging/build-artifacts.sh VERSION DIR` (Docker; one architecture per
 run). `release.yml` runs it in the `php-agent-artifacts` jobs on native `ubuntu-24.04` (amd64) and `ubuntu-24.04-arm`
@@ -178,7 +178,7 @@ Commit with `[skip release]` in the message so the preparation push is not relea
    them (best effort).
 
 6. `node-agent-npm` – after the GitHub release is published, publishes the `openlog-node-<v>.tgz` built by
-   `node-agent-package` (the release asset) as `openlog-node@<v>` to npm (see [Node.js agent package](#nodejs-agent-package)).
+   `node-agent-package` (the release asset) as `openlog-node@<v>` to npm (see [Node.js agent package](#node-js-agent-package)).
 
 - `python-agent-pypi` – after the GitHub release is published, publishes the wheel and sdist built by
   `python-agent-package` (the release assets) as `openlog-agent==<v>` to PyPI with trusted publishing (see

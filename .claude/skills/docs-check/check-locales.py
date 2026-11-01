@@ -41,6 +41,8 @@ def pages() -> list[Path]:
 def shape(path: Path) -> tuple[int, int]:
     """Headings and code blocks, which a translation keeps even when every sentence differs."""
     text = path.read_text()
+    # An English integration page is one line that includes a README, and what counts is what it renders.
+    text = re.sub(r"<!--@include: (.+?)-->", lambda m: (path.parent / m.group(1)).read_text(), text)
     fences = len(re.findall(r"^\s*```", text, re.M)) // 2
     prose = re.sub(r"^\s*```.*?^\s*```", "", text, flags=re.M | re.S)
     return len(re.findall(r"^#{1,4} ", prose, re.M)), fences

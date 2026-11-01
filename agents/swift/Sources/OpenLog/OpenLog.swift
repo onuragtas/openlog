@@ -124,6 +124,13 @@ public final class OpenLog {
 
     /// A crash the operating system recorded about an earlier launch. It carries no session, so it takes the one that
     /// launch ended in, if the build matches. It cannot be sampled against that session, so it follows this one.
+    /// MetricKit names the build number, while a report goes by the version the application declared. They can only be matched
+    /// for the build that is running now, and any other is taken to be the one the last session ran.
+    func version(ofBuild build: String, currentBuild: String? = Bundle.main.infoDictionary?["CFBundleVersion"] as? String) -> String {
+        if build == currentBuild, !version.isEmpty { return version }
+        return previousSession?.version ?? build
+    }
+
     func record(signal: Int32?, reason: String, stack: String, version crashed: String, at: Date) {
         guard session.shouldSend else { return }
         let known = previousSession.flatMap { $0.version == crashed ? $0.id : nil }

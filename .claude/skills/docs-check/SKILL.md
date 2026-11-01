@@ -30,7 +30,7 @@ thing needs no documentation: say so and stop.
 | Behaviour of a feature with a contract | That contract in `docs/contracts/`, including its status line and any "not built yet" that is now false |
 | A design decision, or a choice against what a contract proposed | A new row in `docs/plan/02-decisions.md` (Turkish, `D-NNN`) and the contract's reasoning |
 | What a user sets up or sees | The page under `docs/`, in every site language |
-| An SDK option, capability or limit | That SDK's `agents/<name>/README.md`, which `docs/integrations/` includes, its page in every site language, and its row in the guide. If the same thing applies to other SDKs, each of them too: `ls agents` |
+| An SDK option, capability or limit | That SDK's `agents/<name>/README.md`, which `docs/integrations/` includes, its written-out page under `docs/tr/integrations/`, and its row in the guide. If the same thing applies to other SDKs, each of them too: `ls agents` |
 | A new SDK, page or contract | The sidebar in `docs/.vitepress/config.ts`, in every site language |
 | A screen in the console | Every catalog in `web/src/i18n/locales/` |
 | A new table | `internal/migrate/ttl.go` and the storage section of its contract |

@@ -56,9 +56,9 @@ export default defineConfig({
   srcExclude: ["plan/**", "operations/benchmarks/**", "operations/live-validation-*.md", "node_modules/**"],
   // Runbooks point at a local UI, and those links are meant for whoever is following them.
   ignoreDeadLinks: "localhostLinks",
-  // English is the default and lives at the root. Turkish covers the pages people read first: the integration guides are
-  // included from the READMEs next to each agent and the reference is written for implementers, so both stay in English
-  // rather than become a second copy to keep up to date. The Turkish menu says which pages those are.
+  // English is the default and lives at the root, and Turkish has every page of it. The READMEs next to each agent are
+  // included on the English pages, while the Turkish ones are written out. The reference under contracts/ is written for
+  // implementers and stays in English, which the Turkish menu says.
   locales: {
     root: { label: "English", lang: "en" },
     tr: {
@@ -70,60 +70,65 @@ export default defineConfig({
         nav: [
           { text: "Başlangıç", link: "/tr/guide/quickstart" },
           { text: "Entegrasyonlar", link: "/tr/guide/send-data" },
-          { text: "Ürün turu (EN)", link: "/features" },
+          { text: "Ürün turu", link: "/tr/features" },
           { text: "Referans (EN)", link: "/contracts/api" },
         ],
         sidebar: [
-          {
-            text: "Başlangıç",
-            items: [
-              { text: "Hızlı başlangıç", link: "/tr/guide/quickstart" },
-              { text: "Entegrasyon seç", link: "/tr/guide/send-data" },
-              { text: "Ürün turu (EN)", link: "/features" },
-            ],
-          },
-          {
-            text: "Web ve mobil uygulamalar",
-            items: [
-              { text: "Ürün analitiği", link: "/tr/guide/product-analytics" },
-              { text: "Crash raporlama", link: "/tr/guide/crash-reporting" },
-              { text: "Tarayıcı (EN)", link: "/integrations/browser" },
-              { text: "iOS, Swift (EN)", link: "/integrations/ios" },
-              { text: "Android, Kotlin (EN)", link: "/integrations/android" },
-              { text: "Flutter, Dart (EN)", link: "/integrations/flutter" },
-              { text: "Unity (EN)", link: "/integrations/unity" },
-            ],
-          },
-          {
-            text: "Backend APM (EN)",
-            items: [
-              { text: "Go", link: "/integrations/go" },
-              { text: "Node.js", link: "/integrations/node" },
-              { text: "Python", link: "/integrations/python" },
-              { text: "Java", link: "/integrations/java" },
-              { text: ".NET", link: "/integrations/dotnet" },
-              { text: "PHP", link: "/integrations/php" },
-            ],
-          },
-          {
-            text: "Sunucular ve kümeler (EN)",
-            items: [
-              { text: "Altyapı ajanı", link: "/integrations/infra" },
-              { text: "Tüm makine profilleyici", link: "/integrations/ebpf" },
-              { text: "Kubernetes", link: "/operations/kubernetes" },
-            ],
-          },
-          {
-            text: "Referans (EN)",
-            collapsed: true,
-            items: [
-              { text: "HTTP API", link: "/contracts/api" },
-              { text: "Yapılandırma", link: "/contracts/config" },
-              { text: "OQL", link: "/contracts/oql" },
-              { text: "Alarmlar", link: "/contracts/alerting" },
-              { text: "Güncelleme", link: "/operations/upgrading" },
-            ],
-          },
+          { text: "Başlangıç", items: [
+            { text: "Hızlı başlangıç", link: "/tr/guide/quickstart" },
+            { text: "Entegrasyon seç", link: "/tr/guide/send-data" },
+            { text: "Ürün turu", link: "/tr/features" },
+          ] },
+          { text: "Web ve mobil uygulamalar", items: [
+            { text: "Ürün analitiği", link: "/tr/guide/product-analytics" },
+            { text: "Crash raporlama", link: "/tr/guide/crash-reporting" },
+            { text: "Tarayıcı", link: "/tr/integrations/browser" },
+            { text: "iOS, Swift", link: "/tr/integrations/ios" },
+            { text: "Android, Kotlin", link: "/tr/integrations/android" },
+            { text: "Flutter, Dart", link: "/tr/integrations/flutter" },
+            { text: "Unity", link: "/tr/integrations/unity" },
+          ] },
+          { text: "Backend APM", items: [
+            { text: "Go", link: "/tr/integrations/go" },
+            { text: "Node.js", link: "/tr/integrations/node" },
+            { text: "Python", link: "/tr/integrations/python" },
+            { text: "Java", link: "/tr/integrations/java" },
+            { text: ".NET", link: "/tr/integrations/dotnet" },
+            { text: "PHP", link: "/tr/integrations/php" },
+          ] },
+          { text: "Sunucular ve kümeler", items: [
+            { text: "Altyapı ajanı", link: "/tr/integrations/infra" },
+            { text: "Tüm makine profilleyici", link: "/tr/integrations/ebpf" },
+            { text: "Kubernetes", link: "/tr/operations/kubernetes" },
+          ] },
+          { text: "Operasyon", collapsed: true, items: [
+            { text: "Güncelleme", link: "/tr/operations/upgrading" },
+            { text: "Ajan güncellemeleri", link: "/tr/operations/agent-updates" },
+            { text: "Ölçekleme", link: "/tr/operations/scaling" },
+            { text: "Disk alanı", link: "/tr/operations/disk-space" },
+            { text: "Katmanlı depolama", link: "/tr/operations/tiered-storage" },
+            { text: "Tail sampling", link: "/tr/operations/tail-sampling" },
+            { text: "SSO ve SCIM", link: "/tr/operations/sso" },
+            { text: "Raporlar", link: "/tr/operations/reports" },
+            { text: "Terraform", link: "/tr/operations/terraform" },
+            { text: "MCP sunucusu", link: "/tr/operations/mcp" },
+            { text: "Barındırılan (SaaS) mod", link: "/tr/operations/saas" },
+            { text: "Explorer", link: "/tr/operations/explorer" },
+          ] },
+          { text: "Geliştirme", collapsed: true, items: [
+            { text: "Yerel demo", link: "/tr/operations/local-stack-demo" },
+            { text: "k3d kümesi", link: "/tr/operations/k3d-dev-cluster" },
+            { text: "kind kümesi", link: "/tr/operations/kind-dev-cluster" },
+            { text: "CI", link: "/tr/operations/ci" },
+            { text: "E2E testleri", link: "/tr/operations/e2e" },
+            { text: "Sürüm çıkarma", link: "/tr/operations/releasing" },
+          ] },
+          { text: "Referans (EN)", collapsed: true, items: [
+            { text: "HTTP API", link: "/contracts/api" },
+            { text: "Yapılandırma", link: "/contracts/config" },
+            { text: "OQL", link: "/contracts/oql" },
+            { text: "Alarmlar", link: "/contracts/alerting" },
+          ] },
         ],
         editLink: { pattern: `${REPO}/edit/master/docs/:path`, text: "Bu sayfayı GitHub'da düzenle" },
         outline: { label: "Bu sayfada" },

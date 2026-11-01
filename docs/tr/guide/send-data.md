@@ -1,32 +1,31 @@
 # Entegrasyon seç
 
-Görmek istediğin şeyden başla. Aşağıdaki her kılavuzun kendi hızlı başlangıcı var. Entegrasyon kılavuzları şimdilik
-İngilizce.
+Görmek istediğin şeyden başla. Aşağıdaki her kılavuzun kendi hızlı başlangıcı var.
 
 ## Neyi izliyorsun?
 
 | Görmek istediğin | Kullanacağın | Anahtar |
 |---|---|---|
-| Bir makinenin CPU, bellek, disk, log ve servisleri | [Altyapı ajanı](/integrations/infra) | Lisans |
-| Bir sürecin neden CPU kullandığı, süreci değiştirmeden | Altyapı ajanıyla gelen [tüm makine profilleyici](/integrations/ebpf) | Lisans |
+| Bir makinenin CPU, bellek, disk, log ve servisleri | [Altyapı ajanı](/tr/integrations/infra) | Lisans |
+| Bir sürecin neden CPU kullandığı, süreci değiştirmeden | Altyapı ajanıyla gelen [tüm makine profilleyici](/tr/integrations/ebpf) | Lisans |
 | Backend'deki yavaş istekler ve hatalar | Bir [APM ajanı](#backend-apm) | Lisans |
-| Web sitesinde sayfa hızı, hatalar ve oturumlar | [Tarayıcı SDK'sı](/integrations/browser) | Tarayıcı |
-| Mobil uygulamada ekranlar, hatalar ve event'ler | [iOS](/integrations/ios), [Android](/integrations/android) veya [Flutter](/integrations/flutter) | Mobil |
-| Unity oyununda crash'ler, event'ler ve oyuncular | [Unity SDK'sı](/integrations/unity) | Mobil |
+| Web sitesinde sayfa hızı, hatalar ve oturumlar | [Tarayıcı SDK'sı](/tr/integrations/browser) | Tarayıcı |
+| Mobil uygulamada ekranlar, hatalar ve event'ler | [iOS](/tr/integrations/ios), [Android](/tr/integrations/android) veya [Flutter](/tr/integrations/flutter) | Mobil |
+| Unity oyununda crash'ler, event'ler ve oyuncular | [Unity SDK'sı](/tr/integrations/unity) | Mobil |
 | Mobil uygulamada crash'ler, sürüm bazında | Mobil SDK üzerinde [crash raporlama](./crash-reporting.md) | Mobil |
 | Günlük kullanıcılar, retention ve funnel | Tarayıcı veya mobil SDK üzerinde [ürün analitiği](./product-analytics.md) | Tarayıcı veya mobil |
-| Bir Kubernetes kümesi | [Kubernetes](/operations/kubernetes) | Lisans |
+| Bir Kubernetes kümesi | [Kubernetes](/tr/operations/kubernetes) | Lisans |
 
 ## Backend APM
 
 | Dil | Kılavuz | Kod değişikliği | Kurulum |
 |---|---|---|---|
-| Go | [Go ajanı](/integrations/go) | Başlangıçta birkaç satır | `go get github.com/onuragtas/openlog/agents/go` |
-| Node.js | [Node.js ajanı](/integrations/node) | Yok | `npm install openlog-node` |
-| Python | [Python ajanı](/integrations/python) | Yok | `pip install openlog-agent` |
-| Java | [Java ajanı](/integrations/java) | Yok, `-javaagent` olarak çalışır | Jar'ı sürümden indir |
-| .NET | [.NET ajanı](/integrations/dotnet) | Kılavuza bak | `dotnet add package OpenLog.Agent` |
-| PHP | [PHP eklentisi](/integrations/php) | Yok, C eklentisidir | Kılavuza bak |
+| Go | [Go ajanı](/tr/integrations/go) | Başlangıçta birkaç satır | `go get github.com/onuragtas/openlog/agents/go` |
+| Node.js | [Node.js ajanı](/tr/integrations/node) | Yok | `npm install openlog-node` |
+| Python | [Python ajanı](/tr/integrations/python) | Yok | `pip install openlog-agent` |
+| Java | [Java ajanı](/tr/integrations/java) | Yok, `-javaagent` olarak çalışır | Jar'ı sürümden indir |
+| .NET | [.NET ajanı](/tr/integrations/dotnet) | Kılavuza bak | `dotnet add package OpenLog.Agent` |
+| PHP | [PHP eklentisi](/tr/integrations/php) | Yok, C eklentisidir | Kılavuza bak |
 
 ### Zaten OpenTelemetry mi kullanıyorsun?
 
@@ -46,7 +45,7 @@ Entegrasyonlar birlikte çalışır. Kurmaya değer bağlantılar şunlar:
 
 - **Tarayıcıdan backend'e.** Tarayıcı SDK'sı aynı origin'e giden isteklere W3C `traceparent` başlığı ekler, böylece tek bir trace
   tıklamadan veritabanına kadar uzanır. Başka origin'lere giden istekler için
-  [tarayıcı kılavuzunda](/integrations/browser#options) anlatılan `propagateTraceHeaders` gerekir.
+  [tarayıcı kılavuzunda](/tr/integrations/browser#options) anlatılan `propagateTraceHeaders` gerekir.
 - **Uygulamadan makineye.** Altyapı ajanı da çalışan bir makinede APM ajanı çalıştırmak, servisi makineye bağlar. Her ajan
   kılavuzunda "Host linking" bölümü var.
 

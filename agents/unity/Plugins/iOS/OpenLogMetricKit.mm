@@ -19,11 +19,17 @@ API_AVAILABLE(ios(14.0))
         for (MXCrashDiagnostic *crash in payload.crashDiagnostics) {
             NSData *tree = [crash.callStackTree JSONRepresentation];
             NSString *stack = tree ? [[NSString alloc] initWithData:tree encoding:NSUTF8StringEncoding] : @"";
+            // MetricKit names the build number, while a report goes by the version the player sees. They can only be matched
+            // for the build that is running now, and for any other C# falls back on the last session.
+            NSDictionary *info = [[NSBundle mainBundle] infoDictionary];
+            BOOL sameBuild = [crash.metaData.applicationBuildVersion isEqualToString:info[@"CFBundleVersion"]];
+            NSString *version = sameBuild ? info[@"CFBundleShortVersionString"] : crash.metaData.applicationBuildVersion;
             NSDictionary *report = @{
                 @"signal" : crash.signal ?: @0,
                 @"reason" : crash.terminationReason ?: @"",
                 @"stack" : stack ?: @"",
-                @"version" : crash.metaData.applicationBuildVersion ?: @"",
+                @"version" : version ?: @"",
+                @"same_build" : @(sameBuild),
                 @"at_ms" : @((long long)(payload.timeStampEnd.timeIntervalSince1970 * 1000)),
             };
             NSData *json = [NSJSONSerialization dataWithJSONObject:report options:0 error:nil];

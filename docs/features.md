@@ -234,8 +234,8 @@ Real user monitoring: page views, sessions and errors per application. The SDK i
 
 **Core Web Vitals** (LCP, INP, CLS, FCP, TTFB) scored on the p75 against the published thresholds, which are
 constants here, not settings — a number that means the same thing everywhere is the point of the programme.
-A session is a **visit, not a person**: a random, per-tab id that expires, which is what makes it
-collectable without a consent banner.
+A session is a **visit, not a person**: a random, per-tab id that expires. Recognising someone across visits is the separate visitor id
+behind DAU and retention, which is on by default and [may need consent](/guide/product-analytics#_4-decide-about-consent).
 
 ### Pages
 
@@ -260,7 +260,7 @@ Uncaught exceptions and native crashes from the mobile SDKs, with the crash-free
 DAU, WAU, MAU, new users, retention by cohort, events and traffic sources for each application, with funnels through
 the API. See [Product analytics](guide/product-analytics.md).
 
-Mobile SDKs for iOS (Swift), Android (Kotlin/JVM) and Flutter (Dart) report screens, errors, custom events
+Mobile SDKs for iOS (Swift), Android (Kotlin/JVM), Flutter (Dart) and Unity report screens, errors, custom events
 and identity through the same pipeline; a mobile key is scoped by an application allowlist rather than an
 origin, since a mobile app has none.
 
