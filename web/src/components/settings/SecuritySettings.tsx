@@ -34,7 +34,7 @@ export function SecuritySettings() {
   const isSession = me?.auth === "session";
   const minLength = useQuery(authConfigQuery()).data?.password_min_length ?? 8;
   const sessions = useQuery({ ...sessionsQuery(), enabled: isSession });
-  const list = useLocalList(sessions.data, SESSION_COLUMNS, "last_active", "desc");
+  const list = useLocalList(sessions.data, SESSION_COLUMNS, "last_active", "desc", 50, "SecuritySettings");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");

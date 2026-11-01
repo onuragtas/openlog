@@ -154,7 +154,7 @@ function Breakdown({ testId, nameLabel, rows, columns, resetKey }: { testId: str
     });
     return out as Record<BreakdownSort, (r: BreakdownRow) => string | number | undefined>;
   }, [columns]);
-  const list = useLocalList<BreakdownRow, BreakdownSort>(rows, read, "value0", "desc");
+  const list = useLocalList<BreakdownRow, BreakdownSort>(rows, read, "value0", "desc", 50, "RumAnalyticsTab");
   const { toFirstPage } = list;
   // Another dimension or period is another list, and its first page is the one that exists.
   useEffect(toFirstPage, [resetKey, toFirstPage]);

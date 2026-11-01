@@ -94,7 +94,7 @@ const CALLER_SORTS: Record<CallerSort, (c: DbCaller) => string | number | null> 
 function Callers({ callers }: { callers: DbCaller[] }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useLocalList(callers, CALLER_SORTS, "calls", "desc");
+  const list = useLocalList(callers, CALLER_SORTS, "calls", "desc", 50, "DbQueryDetail");
   if (callers.length === 0) return <p className="text-sm text-muted-foreground">{t("db.query.noCallers")}</p>;
   return (
     <>

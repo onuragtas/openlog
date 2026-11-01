@@ -178,7 +178,7 @@ export function ServiceMap({ data, focusId, onOpenService, height = 520, path, l
     }),
     [names],
   );
-  const connections = useLocalList<ApmMapEdge, ConnectionSort>(data.edges, connectionSort, "throughput", "desc");
+  const connections = useLocalList<ApmMapEdge, ConnectionSort>(data.edges, connectionSort, "throughput", "desc", 50, "ServiceMap.connections");
 
   // Saved layout of this key (re-read when the key changes, e.g. another scope or user).
   const [layout, setLayout] = useState<{ key: string | undefined; positions: SavedLayout }>(() => ({ key: layoutKey, positions: layoutKey ? loadLayout(layoutKey) : {} }));

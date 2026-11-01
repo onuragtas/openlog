@@ -20,8 +20,8 @@ export function CostsView({ range }: { range: RangeSpec }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const summary = useQuery(costSummaryQuery(range));
-  const hostList = useListState<CostHostSort>("cost");
-  const serviceList = useListState<CostServiceSort>("cost");
+  const hostList = useListState<CostHostSort>("cost", "desc", 50, "costs.hostList");
+  const serviceList = useListState<CostServiceSort>("cost", "desc", 50, "costs.serviceList");
   const hosts = useQuery(costHostsQuery(range, hostList.state));
   const services = useQuery(costServicesQuery(range, serviceList.state));
   const trend = useQuery(costTrendQuery(range));

@@ -42,7 +42,7 @@ export function PrometheusTargetsCard() {
   const q = useQuery(prometheusTargetsQuery());
   const now = useNow();
   const down = useMemo(() => q.data?.targets.filter((x) => !x.up).length ?? 0, [q.data]);
-  const list = useLocalList(q.data?.targets, TARGET_READ, "state", "asc");
+  const list = useLocalList(q.data?.targets, TARGET_READ, "state", "asc", 50, "PrometheusTargets");
   const notFound = q.isError && (q.error as { status?: number }).status === 404;
   // Nothing while loading either: most tenants scrape nothing, and a card that flashes and vanishes is noise.
   if (q.isPending || notFound || (q.isSuccess && q.data.targets.length === 0)) return null;

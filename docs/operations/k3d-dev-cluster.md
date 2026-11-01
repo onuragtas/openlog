@@ -178,7 +178,7 @@ Watch these while scaling (Prometheus or plain `curl` on the admin ports):
 ```bash
 # consumer lag per topic (total)
 curl -s localhost:9308/metrics | grep '^kafka_consumergroup_lag{' | grep openlog-processor \
-  | awk -F'topic="' '{split($2,a,"\""); s[a[1]]+=$NF} END {for (t in s) print t, s[t]}'
+  | awk '{split($0,a,"topic=\""); split(a[2],b,"\""); s[b[1]]+=$NF} END {for (t in s) print t, s[t]}'
 
 # rows stored per second (run twice, 10s apart)
 kubectl -n openlog exec chi-openlog-openlog-0-0-0 -- clickhouse-client -q \

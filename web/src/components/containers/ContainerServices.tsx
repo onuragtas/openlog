@@ -26,7 +26,7 @@ export function ContainerServices({ containerId, range }: { containerId: string;
   const locale = i18n.resolvedLanguage ?? "en";
   const now = useNow();
   const q = useQuery(containerServicesQuery(containerId, range));
-  const list = useLocalList(q.data, SERVICE_COLUMNS, "throughput", "desc");
+  const list = useLocalList(q.data, SERVICE_COLUMNS, "throughput", "desc", 50, "ContainerServices");
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;
   if (q.data.length === 0) {

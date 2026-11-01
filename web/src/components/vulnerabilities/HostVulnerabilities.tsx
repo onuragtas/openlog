@@ -11,7 +11,7 @@ import { advisoryLabel, formatScore, severityBadgeVariant, upgradeText } from "@
 
 export function HostVulnerabilities({ hostId, onOpen }: { hostId: string; onOpen?: (vulnId: string) => void }) {
   const { t } = useTranslation();
-  const list = useListState<VulnFindingSort>("severity", "asc");
+  const list = useListState<VulnFindingSort>("severity", "asc", 50, "HostVulnerabilities");
   const q = useQuery(hostVulnerabilitiesQuery(hostId, list.state));
 
   if (q.isPending) return <LoadingState />;

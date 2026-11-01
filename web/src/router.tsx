@@ -123,10 +123,12 @@ const embeddedLogsSearch = (s: Record<string, unknown>): EmbeddedLogsSearch => (
 /** Search params of every route: the time range and the auto-refresh interval (lib/auto-refresh.ts). */
 export interface RootSearch extends RangeSpec {
   refresh?: RefreshInterval;
+  /** The sort and page of the lists on this page (lib/list.ts). */
+  list?: string;
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  validateSearch: (search: Record<string, unknown>): RootSearch => ({ ...validateRangeSearch(search), refresh: parseRefreshInterval(search.refresh) }),
+  validateSearch: (search: Record<string, unknown>): RootSearch => ({ ...validateRangeSearch(search), refresh: parseRefreshInterval(search.refresh), list: typeof search.list === "string" ? search.list : undefined }),
   // Links build `{ range, from, to }` explicitly; `refresh` is carried along unless a navigation sets it.
   search: { middlewares: [retainSearchParams(["refresh"])] },
   component: Outlet,

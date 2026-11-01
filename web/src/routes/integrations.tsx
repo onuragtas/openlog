@@ -731,7 +731,7 @@ const INTEGRATION_READ: Record<IntegrationSort, (r: IntegrationRow) => string> =
 /** Rows built in the browser out of one inventory read, so this is where they sort and page. */
 export function IntegrationsTable({ rows, resetKey }: { rows: IntegrationRow[]; resetKey: string }) {
   const { t } = useTranslation();
-  const list = useLocalList(rows, INTEGRATION_READ, "host", "asc");
+  const list = useLocalList(rows, INTEGRATION_READ, "host", "asc", 50, "integrations");
   const { toFirstPage } = list;
   // A filter changes what the pages hold, so staying on page five of it would usually show nothing.
   useEffect(toFirstPage, [resetKey, toFirstPage]);

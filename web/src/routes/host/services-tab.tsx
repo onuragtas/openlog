@@ -175,7 +175,7 @@ function SystemServices({ hostId }: { hostId: string }) {
   const { t } = useTranslation();
   const query = useQuery(inventoryQuery(hostId));
   const items = useMemo(() => (query.data?.items ?? []).filter((it) => SYSTEM_SERVICE_CATEGORIES.includes(it.category)), [query.data]);
-  const list = useLocalList(items, SYSTEM_SERVICE_COLUMNS, "name");
+  const list = useLocalList(items, SYSTEM_SERVICE_COLUMNS, "name", "asc", 50, "servicestab");
   if (items.length === 0) return null;
   return (
     <section aria-labelledby="system-services-title" className="mt-6" data-testid="system-services">

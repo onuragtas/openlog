@@ -15,7 +15,7 @@ export function DatabasesTab({ scope, range, sort, onSort }: { scope: ServiceSco
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   // The URL holds the column, so a shared link opens on it, and the rest of the sort and the page stay on this screen.
-  const list = useListState<DbSort>(sort, sort === "statement" || sort === "database" ? "asc" : "desc");
+  const list = useListState<DbSort>(sort, sort === "statement" || sort === "database" ? "asc" : "desc", 50, "DatabasesTab");
   const q = useQuery(apmDatabasesQuery(scope, range, list.state));
   const { toFirstPage } = list;
   // Another range is another list, so page five of it would usually show nothing.

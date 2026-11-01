@@ -27,7 +27,7 @@ export function SsoScimTokens({ enabled }: { enabled: boolean }) {
   const qc = useQueryClient();
   const id = useId();
   const tokens = useQuery({ ...scimTokensQuery(), enabled });
-  const list = useLocalList(tokens.data?.tokens, TOKEN_COLUMNS, "name");
+  const list = useLocalList(tokens.data?.tokens, TOKEN_COLUMNS, "name", "asc", 50, "SsoScimTokens");
   const [name, setName] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
   const create = useMutation({

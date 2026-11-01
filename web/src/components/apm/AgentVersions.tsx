@@ -179,7 +179,7 @@ export function AgentVersionsTable({ rows, renderService }: { rows: AgentVersion
   const { t, i18n } = useTranslation();
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useLocalList<AgentVersionRow, AgentVersionSort>(rows, AGENT_VERSION_SORT, "service", "asc");
+  const list = useLocalList<AgentVersionRow, AgentVersionSort>(rows, AGENT_VERSION_SORT, "service", "asc", 50, "AgentVersions");
   const { toFirstPage } = list;
   // The page's filters hand over other rows, so page five of them would usually show nothing.
   useEffect(toFirstPage, [rows, toFirstPage]);

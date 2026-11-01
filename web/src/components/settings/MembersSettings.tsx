@@ -66,8 +66,8 @@ export function MembersSettings() {
   const canInvite = perms.can("invitations.manage");
   const members = useQuery(membersQuery());
   const invitations = useQuery({ ...invitationsQuery(), enabled: can(role, "invitations.manage") });
-  const memberList = useLocalList(members.data, MEMBER_COLUMNS, "member");
-  const invitationList = useLocalList(invitations.data, INVITATION_COLUMNS, "expires");
+  const memberList = useLocalList(members.data, MEMBER_COLUMNS, "member", "asc", 50, "MembersSettings.memberList");
+  const invitationList = useLocalList(invitations.data, INVITATION_COLUMNS, "expires", "asc", 50, "MembersSettings.invitationList");
   const emailEnabled = useQuery(authConfigQuery()).data?.email_enabled === true;
 
   const [email, setEmail] = useState("");

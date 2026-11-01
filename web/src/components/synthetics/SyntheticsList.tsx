@@ -37,7 +37,7 @@ export function SyntheticsList({ onOpen, onNew, canWrite = false }: SyntheticsLi
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(syntheticChecksQuery());
-  const list = useLocalList(q.data?.checks, CHECK_COLUMNS, "name");
+  const list = useLocalList(q.data?.checks, CHECK_COLUMNS, "name", "asc", 50, "SyntheticsList");
 
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;

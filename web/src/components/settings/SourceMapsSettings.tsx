@@ -32,7 +32,7 @@ export function SourceMapsSettings() {
   const perms = usePermissions();
   const canManage = perms.writable && perms.can("source_maps.manage");
   const maps = useQuery(sourceMapsQuery());
-  const list = useLocalList(maps.data, MAP_COLUMNS, "uploaded", "desc");
+  const list = useLocalList(maps.data, MAP_COLUMNS, "uploaded", "desc", 50, "SourceMapsSettings");
   const fileInput = useRef<HTMLInputElement>(null);
   const [app, setApp] = useState("");
   const [file, setFile] = useState<File | null>(null);

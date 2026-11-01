@@ -95,7 +95,7 @@ export interface TransactionsTabProps {
 export function TransactionsTab({ scope, range, sort, selected, onSort, onSelect, onShowTraces }: TransactionsTabProps) {
   const { t } = useTranslation();
   // The URL holds the column, so a shared link opens on it, and the rest of the sort and the page stay on this screen.
-  const list = useListState<TransactionSort>(sort, sort === "name" ? "asc" : "desc");
+  const list = useListState<TransactionSort>(sort, sort === "name" ? "asc" : "desc", 50, "TransactionsTab");
   const q = useQuery(apmTransactionsQuery(scope, range, list.state));
   const { toFirstPage } = list;
   // Another range is another list, so page five of it would usually show nothing.

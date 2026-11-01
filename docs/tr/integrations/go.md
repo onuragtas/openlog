@@ -3,7 +3,7 @@
 Apache-2.0 · modül `github.com/onuragtas/openlog/agents/go` · Go 1.26+
 
 Bu, OpenTelemetry Go SDK'sının ince bir dağıtımıdır (D-033). Tek bir çağrı trace'leri, metrikleri (Go runtime metrikleri dahil) ve
-logları OTLP üzerinden openlog'a gönderir, sürekli CPU profillerini de gönderebilir (isteğe bağlı, aşağıya bak). Resource,
+logları OTLP üzerinden openlog'a gönderir, sürekli CPU profillerini de gönderir (varsayılan olarak açık, aşağıya bak). Resource,
 openlog altyapı ajanıyla aynı `host.id` değerini taşır, böylece bir servis üzerinde çalıştığı makineye bağlanır.
 
 ## Hızlı başlangıç {#quick-start}
@@ -66,7 +66,7 @@ olarak `/v1/profiles` adresine gönderir ([profiles.md](/contracts/profiles)). F
 Açmadan önce bilmeye değer iki şey var:
 
 - **Sürecinde CPU harcar.** Runtime, stack kaydetmek için çalışan her thread'i saniyede yaklaşık yüz kez keser. Runtime metrikleri
-  varsayılan olarak açıkken bunun isteğe bağlı olmasının nedeni bu.
+  Bu senin için önemliyse `OPENLOG_PROFILING=false` ile kapat.
 - **Yalnızca HTTP.** OTLP profil sinyalinin henüz gRPC istemcisi yok, bu yüzden `OPENLOG_PROTOCOL=grpc` ile profiler, gRPC konuşan
   bir porta göndermek yerine kapalı kalır ve bunu söyleyen tek satırlık bir log yazar.
 

@@ -44,7 +44,7 @@ export function AppDbQueries({ range, q, onSearch }: { range: RangeSpec; q: stri
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const searchId = useId();
-  const list = useListState<AppDbSort>("time");
+  const list = useListState<AppDbSort>("time", "desc", 50, "AppDbQueries");
   const [open, setOpen] = useState<string | null>(null);
   const queries = useQuery(appDbQueriesQuery(range, list.state, q));
   const { toFirstPage } = list;

@@ -22,7 +22,7 @@ export interface VulnerabilitiesListProps {
 export function VulnerabilitiesList({ severity, onSeverity, onOpen }: VulnerabilitiesListProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useListState<VulnSort>("severity", "asc");
+  const list = useListState<VulnSort>("severity", "asc", 50, "VulnerabilitiesList");
   const q = useQuery(vulnerabilitiesQuery(severity, list.state));
   const { toFirstPage } = list;
   // Another severity is another list, so page three of this one means nothing there.

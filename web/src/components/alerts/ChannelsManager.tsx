@@ -316,7 +316,7 @@ export function ChannelsManager() {
     }),
     [t],
   );
-  const list = useLocalList(q.data?.channels, columns, "name");
+  const list = useLocalList(q.data?.channels, columns, "name", "asc", 50, "ChannelsManager");
   const [editing, setEditing] = useState<AlertChannel | "new" | null>(null);
   const [generated, setGenerated] = useState<string | null>(null);
   return (

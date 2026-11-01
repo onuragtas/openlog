@@ -92,7 +92,7 @@ export function RulesList() {
     }),
     [t],
   );
-  const list = useLocalList(rules.data, columns, "name");
+  const list = useLocalList(rules.data, columns, "name", "asc", 50, "RulesList");
   const channelTypes = new Map((channels.data?.channels ?? []).map((c) => [c.id, { name: c.name, type: c.type }] as const));
   return (
     <div className="flex flex-col gap-3">

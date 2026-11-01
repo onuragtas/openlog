@@ -112,7 +112,7 @@ its version with `-version`.
    optional: required reviewers, deployment tags `v*`) and set the repository *variable* `PYPI_PUBLISH` = `true`.
    Without the variable, `release.yml` skips the PyPI job with a warning and everything else is released. (The name
    `openlog` is taken on PyPI by an unrelated project, hence `openlog-agent`.)
-7. **NuGet (.NET agent `OpenLog.Agent`, optional):** sign in to nuget.org and create an API key (Account → API Keys)
+8. **NuGet (.NET agent `OpenLog.Agent`, optional):** sign in to nuget.org and create an API key (Account → API Keys)
    with the scope *Push new packages and package versions*, glob pattern `OpenLog.Agent` and an expiry of at most
    365 days (the first push creates the package under that account; optionally request the `OpenLog.` ID prefix
    reservation). Store it as the repository *secret* `NUGET_API_KEY`. Without the secret, `release.yml` skips the
@@ -349,7 +349,7 @@ keeps resolving the latest stable version. NuGet versions are immutable: a re-ru
 broken version is unlisted or deprecated on nuget.org and fixed by the next release. Between releases,
 `agents/dotnet/Directory.Build.props` keeps the last released version.
 
-Setup: [one-time setup](#one-time-setup-repository-owner) step 7 (`NUGET_API_KEY`). Local check of the package:
+Setup: [one-time setup](#one-time-setup-repository-owner) step 8 (`NUGET_API_KEY`). Local check of the package:
 `make -C agents/dotnet pack VERSION=X.Y.Z` (the CI job `dotnet-agent` packs on every run).
 
 ### Helm charts

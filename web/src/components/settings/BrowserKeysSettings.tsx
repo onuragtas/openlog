@@ -238,7 +238,7 @@ export function BrowserKeysSettings() {
   const perms = usePermissions();
   const canManage = perms.writable && perms.can("browser_keys.manage");
   const keys = useQuery(browserKeysQuery());
-  const list = useLocalList(keys.data, KEY_COLUMNS, "name");
+  const list = useLocalList(keys.data, KEY_COLUMNS, "name", "asc", 50, "BrowserKeysSettings");
   const [draft, setDraft] = useState<Draft>(newDraft);
   const [editing, setEditing] = useState<{ id: string; draft: Draft } | null>(null);
   const [created, setCreated] = useState<{ name: string; key: string } | null>(null);

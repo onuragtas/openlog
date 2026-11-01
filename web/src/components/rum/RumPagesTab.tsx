@@ -34,7 +34,7 @@ export function RumPagesTab({
   onFacets: (facets: RumFacets) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const list = useListState<RumPageSort>(initialSort);
+  const list = useListState<RumPageSort>(initialSort, "desc", 50, "RumPagesTab");
   const pages = useQuery(rumPagesQuery(range, app, list.state, environment, facets));
   const { toFirstPage } = list;
   // A new filter or window changes what the pages hold, so staying on page five of it would usually show nothing.

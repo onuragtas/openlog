@@ -36,7 +36,7 @@ export function RumSessionsTab({
   onUser: (userId?: string) => void;
 }) {
   const { t, i18n } = useTranslation();
-  const list = useListState<RumSessionSort>("started");
+  const list = useListState<RumSessionSort>("started", "desc", 50, "RumSessionsTab");
   const sessions = useQuery(rumSessionsQuery(range, app, list.state, environment, facets, userId));
   const { toFirstPage } = list;
   // Another filter or window, or one person's visits instead of everyone's, is another list.

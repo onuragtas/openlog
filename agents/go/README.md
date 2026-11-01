@@ -3,7 +3,7 @@
 Apache-2.0 · module `github.com/onuragtas/openlog/agents/go` · Go 1.26+
 
 This is a thin distribution of the OpenTelemetry Go SDK (D-033). One call sends traces, metrics (including Go runtime
-metrics) and logs to openlog over OTLP, and can also send continuous CPU profiles (opt-in, see below). The resource
+metrics) and logs to openlog over OTLP, and sends continuous CPU profiles (on by default, see below). The resource
 carries the same `host.id` as the openlog infra agent, so a service is linked to the host it runs on.
 
 ## Quick start
@@ -64,10 +64,10 @@ sends it to `/v1/profiles` as OTLP profiles ([profiles.md](../../docs/contracts/
 under Profiling in the UI. `shutdown` ends the open window and exports what it holds, so the last minutes before a
 deploy are not the ones that go missing.
 
-Two things are worth knowing before enabling it:
+Two things are worth knowing about it:
 
 - **It costs CPU in your process.** The runtime interrupts every running thread about a hundred times a second to
-  record a stack. That is why this is opt-in while runtime metrics are on by default.
+  record a stack. Turn it off with `OPENLOG_PROFILING=false` if that matters to you.
 - **HTTP only.** The OTLP profiles signal has no gRPC client yet, so with `OPENLOG_PROTOCOL=grpc` the profiler stays
   off and logs one line saying so, rather than posting to a port that speaks gRPC.
 

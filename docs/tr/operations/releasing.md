@@ -108,7 +108,7 @@ github.com/onuragtas/openlog/internal/release.trustedKeys=$OPENLOG_RELEASE_PUBLI
    GitHub'da `pypi` environment'ını oluştur (Settings → Environments; isteğe bağlı: zorunlu reviewer'lar, deployment tag'leri `v*`)
    ve repository *variable*'ı `PYPI_PUBLISH` = `true` ayarla. Variable olmadan `release.yml` PyPI job'unu uyarıyla atlar ve geri
    kalan her şey yayınlanır. (`openlog` adı PyPI'da alakasız bir projeye ait, `openlog-agent` olması bundan.)
-7. **NuGet (.NET ajanı `OpenLog.Agent`, isteğe bağlı):** nuget.org'a giriş yap ve bir API key oluştur (Account → API Keys):
+8. **NuGet (.NET ajanı `OpenLog.Agent`, isteğe bağlı):** nuget.org'a giriş yap ve bir API key oluştur (Account → API Keys):
    scope *Push new packages and package versions*, glob pattern `OpenLog.Agent` ve en fazla 365 gün son kullanma süresi (ilk push
    paketi o hesap altında oluşturur; istersen `OpenLog.` ID önek rezervasyonu talep et). Repository *secret*'ı `NUGET_API_KEY`
    olarak sakla. Secret olmadan `release.yml` NuGet job'unu uyarıyla atlar ve geri kalan her şey yayınlanır. Anahtarı süresi
@@ -328,7 +328,7 @@ Jar ile yerel sürüm: `make release-php-agent` gibi, `make release-local VERSIO
 atlar, bozuk bir sürüm nuget.org'da unlist veya deprecate edilir ve sonraki sürümde düzeltilir. Sürümler arasında
 `agents/dotnet/Directory.Build.props` son yayınlanan sürümü tutar.
 
-Kurulum: [tek seferlik kurulum](#one-time-setup-repository-owner) 7. adım (`NUGET_API_KEY`). Paketin yerel kontrolü:
+Kurulum: [tek seferlik kurulum](#one-time-setup-repository-owner) 8. adım (`NUGET_API_KEY`). Paketin yerel kontrolü:
 `make -C agents/dotnet pack VERSION=X.Y.Z` (CI job'u `dotnet-agent` her çalışmada paketler).
 
 ### Helm chart'ları {#helm-charts}

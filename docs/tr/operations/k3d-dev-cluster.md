@@ -173,7 +173,7 @@ logları okumadan biterse `kubectl -n openlog logs loadgen | tail -1` son satır
 ```bash
 # topic başına consumer lag (toplam)
 curl -s localhost:9308/metrics | grep '^kafka_consumergroup_lag{' | grep openlog-processor \
-  | awk -F'topic="' '{split($2,a,"\""); s[a[1]]+=$NF} END {for (t in s) print t, s[t]}'
+  | awk '{split($0,a,"topic=\""); split(a[2],b,"\""); s[b[1]]+=$NF} END {for (t in s) print t, s[t]}'
 
 # saniyede saklanan satır (10 sn arayla iki kez çalıştır)
 kubectl -n openlog exec chi-openlog-openlog-0-0-0 -- clickhouse-client -q \

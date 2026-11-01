@@ -34,7 +34,7 @@ export function LicenseKeysSettings() {
   const qc = useQueryClient();
   const canManage = usePermissions().can("license_keys.manage");
   const keys = useQuery(licenseKeysQuery());
-  const list = useLocalList(keys.data, KEY_COLUMNS, "created", "desc");
+  const list = useLocalList(keys.data, KEY_COLUMNS, "created", "desc", 50, "LicenseKeysSettings");
   const [name, setName] = useState("");
   const [useOwn, setUseOwn] = useState(false);
   // An imported value lives only in this state until the key is created.

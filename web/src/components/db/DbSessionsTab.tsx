@@ -93,7 +93,7 @@ export function DbSessionsTab({ instance, onOpenQuery }: { instance: string; onO
   const { t, i18n } = useTranslation();
   const q = useQuery(dbSessionsQuery(instance));
   const forest = useMemo(() => blockingForest(q.data?.sessions ?? []), [q.data?.sessions]);
-  const others = useLocalList(forest.others, OTHER_SORTS, "duration", "desc");
+  const others = useLocalList(forest.others, OTHER_SORTS, "duration", "desc", 50, "DbSessionsTab.others");
   const { toFirstPage } = others;
   const past = others.state.offset > 0 && others.state.offset >= others.total;
   // This refreshes every few seconds and sessions end, so the page being read can stop existing.

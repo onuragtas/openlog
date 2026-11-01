@@ -37,7 +37,7 @@ export function JobsList({ onOpen, onNew, canWrite = false }: JobsListProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(jobMonitorsQuery());
-  const list = useLocalList(q.data?.monitors, MONITOR_COLUMNS, "name");
+  const list = useLocalList(q.data?.monitors, MONITOR_COLUMNS, "name", "asc", 50, "JobsList");
 
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;

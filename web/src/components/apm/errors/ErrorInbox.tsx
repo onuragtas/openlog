@@ -58,7 +58,7 @@ export function ErrorInbox({ range, scope, orgFilter, filters, onFilters, select
   const orgWide = !scope;
   const { canWrite, members } = useErrorWorkflow();
   // The URL holds the column, so a shared link opens on it, and the rest of the sort and the page stay on this screen.
-  const list = useListState<ErrorSort>(filters.sort, TEXT_SORTS.includes(filters.sort) ? "asc" : "desc");
+  const list = useListState<ErrorSort>(filters.sort, TEXT_SORTS.includes(filters.sort) ? "asc" : "desc", 50, "ErrorInbox");
   const { toFirstPage } = list;
   // New filters are a new list, so page five of it would usually show nothing.
   useEffect(toFirstPage, [filters.status, filters.assignee, filters.q, range.range, range.from, range.to, orgFilter?.service, orgFilter?.namespace, orgFilter?.environment, toFirstPage]);

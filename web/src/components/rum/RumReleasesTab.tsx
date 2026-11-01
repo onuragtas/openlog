@@ -35,7 +35,7 @@ function CrashFree({ release }: { release: RumRelease }) {
 
 export function RumReleasesTab({ range, app, environment }: { range: RangeSpec; app: string; environment?: string }) {
   const { t, i18n } = useTranslation();
-  const list = useListState<RumReleaseSort>("last_seen");
+  const list = useListState<RumReleaseSort>("last_seen", "desc", 50, "RumReleasesTab");
   const releases = useQuery(rumReleasesQuery(range, app, list.state, environment));
   const { toFirstPage } = list;
   useEffect(toFirstPage, [app, environment, range.range, range.from, range.to, toFirstPage]);

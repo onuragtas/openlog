@@ -47,7 +47,7 @@ function ProfileServices({ search }: { search: ProfilesSearch }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const now = useNow();
-  const list = useListState<ProfileServiceSort>("samples");
+  const list = useListState<ProfileServiceSort>("samples", "desc", 50, "profiles");
   const services = useQuery(profileServicesQuery(rangeOf(search), list.state));
 
   if (services.isPending) return <LoadingState />;

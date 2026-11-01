@@ -10,6 +10,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   server.resetHandlers();
   cleanup();
+  // A list keeps its sort in the address (lib/list.ts), and the next test must not start on it.
+  window.history.replaceState(null, "", window.location.pathname);
   localStorage.clear();
   clearAuthState();
   resetMockAccounts();

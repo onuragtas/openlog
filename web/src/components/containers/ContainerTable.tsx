@@ -151,7 +151,7 @@ export function ContainerTable({ containers, showHost = true, showCompose = true
 /** One page of the containers at a time, sorted and cut by the server. */
 export function PagedContainers({ range, filters, empty, showHost = true }: { range: RangeSpec; filters: ContainerFilters; empty: ReactNode; showHost?: boolean }) {
   const { t } = useTranslation();
-  const list = useListState<ContainerSort>("name", "asc");
+  const list = useListState<ContainerSort>("name", "asc", 50, "ContainerTable");
   const q = useQuery(containersQuery(range, filters, list.state));
   const { toFirstPage } = list;
   const filterKey = JSON.stringify(filters);

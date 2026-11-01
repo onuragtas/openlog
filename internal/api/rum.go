@@ -489,6 +489,21 @@ func rumPageLCPSelect(sc *query.Scope, f rumFilter, routes []string, from, to ti
 		Where("route IN ({v_routes:Array(String)})").Param("v_routes", routes).GroupBy("route").Limit(len(routes))
 }
 
+// rumPageErrorsSelect counts the errors of the routes on a page. The page view rollup has no errors, and the vitals one is no better
+// place for them, so these come from the spans: they reach the 7 days of trace retention, where a page's views reach 30.
+func rumPageErrorsSelect(sc *query.Scope, f rumFilter, routes []string, from, to time.Time) *query.Select {
+	q := spanRange(sc.From(query.Spans).Columns("attributes[{a_route:String}] AS e_route", "sum(sample_weight) AS e_count"), from, to).
+		Param("a_route", rum.AttrRoute).Param("a_event", rum.AttrEvent).Param("e_event", rum.EventError).
+		Where("service_name = {r_app:String}").Param("r_app", f.app).
+		Where("attributes[{a_event:String}] = {e_event:String}").
+		Where("e_route IN ({e_routes:Array(String)})").Param("e_routes", routes).
+		GroupBy("e_route").Limit(len(routes))
+	if f.env != nil {
+		q.Where("deployment_environment = {r_env:String}").Param("r_env", *f.env)
+	}
+	return q
+}
+
 // rumPages lists the routes of an application: how often they were viewed and how slow they were.
 func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
 	f, err := parseRUMFilter(r, true)
@@ -559,6 +574,27 @@ func (s *Server) rumPages(w http.ResponseWriter, r *http.Request, sc *query.Scop
 		}
 		for i := range pages {
 			pages[i].LCPP75 = lcp[pages[i].Route]
+		}
+		erows, err := sc.Query(r.Context(), rumPageErrorsSelect(sc, f, routes, from, to))
+		if err != nil {
+			return err
+		}
+		errors := map[string]float64{}
+		for erows.Next() {
+			var route string
+			var n float64
+			if err := erows.Scan(&route, &n); err != nil {
+				erows.Close()
+				return err
+			}
+			errors[route] = n
+		}
+		erows.Close()
+		if err := erows.Err(); err != nil {
+			return err
+		}
+		for i := range pages {
+			pages[i].Errors = errors[pages[i].Route]
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"pages": pages, "has_more": more})

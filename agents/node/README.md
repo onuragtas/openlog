@@ -114,8 +114,8 @@ simply not instrumented.
 | `nestjs` | `@nestjs/core` | 4 – 11 (OTel); 12 via openlog, see [NestJS 12](#nestjs-12) | 4 – 11: request context and handler spans, route. 12: server span named by the express/fastify route; optional `OpenLogNestInterceptor` adds `nestjs.controller`/`nestjs.callback` and names routes without a platform instrumentation; no Nest handler spans |
 | `pg` | `pg`, `pg-pool` | 8.x | CLIENT spans, `db.query.text` sanitized |
 | `mysql2` | `mysql2` | 1.4 – 3 | CLIENT spans, values masked + sanitized |
-| `redis` | `redis`, `@redis/client` | 2 – 5 | CLIENT spans, `db.query.text` = `GET ?` |
-| `ioredis` | `ioredis` | 2 – 5 | CLIENT spans, `HSET ? ? ?` |
+| `redis` | `redis`, `@redis/client` | 2 – 6 | CLIENT spans, `db.query.text` = `GET ?` |
+| `ioredis` | `ioredis` | 2 – 6 | CLIENT spans, `HSET ? ? ?` |
 | `mongodb` | `mongodb` | 3.3 – 7 | CLIENT spans, statement values replaced by `?` |
 | `graphql` | `graphql` | 14 – 16 | parse/validate/execute spans (trivial resolvers skipped) |
 | `grpc` | `@grpc/grpc-js` | 1.x | SERVER/CLIENT spans (`rpc.*`) |

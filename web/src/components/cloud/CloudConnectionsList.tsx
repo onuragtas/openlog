@@ -38,7 +38,7 @@ export function CloudConnectionsList({ onOpen, onNew, canManage = false }: Cloud
     }),
     [t],
   );
-  const list = useLocalList(q.data?.connections, columns, "name");
+  const list = useLocalList(q.data?.connections, columns, "name", "asc", 50, "CloudConnectionsList");
 
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;

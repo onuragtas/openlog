@@ -32,7 +32,7 @@ export function DbQueriesTab({
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const searchId = useId();
-  const list = useListState<DbQuerySort>(initialSort, initialSort === "statement" ? "asc" : "desc");
+  const list = useListState<DbQuerySort>(initialSort, initialSort === "statement" ? "asc" : "desc", 50, "DbQueriesTab");
   const res = useQuery(dbQueriesQuery({ instance, range, list: list.state, q }));
   const { toFirstPage } = list;
   // A new search or window changes what the pages hold, so staying on page five of it would usually show nothing.

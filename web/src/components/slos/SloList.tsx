@@ -35,7 +35,7 @@ export function SloList({ onOpen, onNew, canWrite = false }: SloListProps) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(slosQuery());
-  const list = useLocalList(q.data?.slos, SLO_COLUMNS, "name");
+  const list = useLocalList(q.data?.slos, SLO_COLUMNS, "name", "asc", 50, "SloList");
 
   if (q.isPending) return <LoadingState />;
   if (q.isError) return <ErrorState error={q.error} onRetry={() => void q.refetch()} />;

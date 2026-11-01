@@ -55,7 +55,7 @@ export function DeploymentsCard({ scope, range, onOpenErrorGroup }: { scope: Ser
   const locale = i18n.resolvedLanguage ?? "en";
   const q = useQuery(apmDeploymentsQuery(scope, range));
   const [compare, setCompare] = useState<ApmDeployment | null>(null);
-  const list = useLocalList<ApmDeployment, DeploymentSort>(q.data?.deployments ?? NO_DEPLOYMENTS, DEPLOYMENT_SORT, "time", "desc");
+  const list = useLocalList<ApmDeployment, DeploymentSort>(q.data?.deployments ?? NO_DEPLOYMENTS, DEPLOYMENT_SORT, "time", "desc", 50, "Deployments");
   const keyOf = (d: ApmDeployment) => `${d.t}|${d.service_namespace}|${d.environment}|${d.version}`;
 
   return (

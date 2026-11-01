@@ -30,7 +30,7 @@ export function HostsPage() {
   const q = search.q ?? "";
   // Searched on the server, since the page holds only some of the hosts.
   const debounced = useDebounced(q, 250);
-  const list = useListState<HostSort>("name", "asc");
+  const list = useListState<HostSort>("name", "asc", 50, "hosts");
   const query = useQuery(hostListQuery(list.state, debounced));
   const { toFirstPage } = list;
   useEffect(toFirstPage, [debounced, toFirstPage]);

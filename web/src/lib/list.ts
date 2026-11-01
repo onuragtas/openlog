@@ -11,8 +11,54 @@ export interface ListState<S extends string> {
 
 export const PAGE_SIZES = [25, 50, 100, 250];
 
-export function useListState<S extends string>(initialSort: S, initialDir: SortDir = "desc", initialLimit = 50) {
-  const [state, setState] = useState<ListState<S>>({ sort: initialSort, dir: initialDir, limit: initialLimit, offset: 0 });
+const URL_PARAM = "list";
+
+/** Every list on a page shares one parameter of the address: `name~sort~dir~limit~offset`, joined by `|`. Lists at their defaults are left out. */
+function readUrlLists(): Map<string, string[]> {
+  const lists = new Map<string, string[]>();
+  for (const entry of (new URLSearchParams(window.location.search).get(URL_PARAM) ?? "").split("|")) {
+    const [name, ...rest] = entry.split("~");
+    if (name && rest.length === 4) lists.set(name, rest);
+  }
+  return lists;
+}
+
+function writeUrlList(name: string, value: string[] | null) {
+  const lists = readUrlLists();
+  if (value) lists.set(name, value);
+  else lists.delete(name);
+  const url = new URL(window.location.href);
+  const encoded = [...lists].map(([n, v]) => [n, ...v].join("~")).join("|");
+  if (encoded) url.searchParams.set(URL_PARAM, encoded);
+  else url.searchParams.delete(URL_PARAM);
+  if (url.href !== window.location.href) window.history.replaceState(window.history.state, "", url);
+}
+
+/**
+ * The state of a list, kept in the address so a link opens the same page in the same order. A value that came from a shared link is only
+ * trusted as far as its shape: a sort the list no longer has is refused by the server, and the error says so.
+ */
+function initialListState<S extends string>(urlKey: string | undefined, sort: S, dir: SortDir, limit: number): ListState<S> {
+  const saved = urlKey ? readUrlLists().get(urlKey) : undefined;
+  if (!saved) return { sort, dir, limit, offset: 0 };
+  const [savedSort, savedDir, savedLimit, savedOffset] = saved;
+  const n = Number(savedLimit);
+  const o = Number(savedOffset);
+  return {
+    sort: (savedSort || sort) as S,
+    dir: savedDir === "asc" || savedDir === "desc" ? savedDir : dir,
+    limit: PAGE_SIZES.includes(n) ? n : limit,
+    offset: Number.isInteger(o) && o > 0 ? o : 0,
+  };
+}
+
+export function useListState<S extends string>(initialSort: S, initialDir: SortDir = "desc", initialLimit = 50, urlKey?: string) {
+  const [state, setState] = useState<ListState<S>>(() => initialListState(urlKey, initialSort, initialDir, initialLimit));
+  useEffect(() => {
+    if (!urlKey) return;
+    const isDefault = state.sort === initialSort && state.dir === initialDir && state.limit === initialLimit && state.offset === 0;
+    writeUrlList(urlKey, isDefault ? null : [state.sort, state.dir, String(state.limit), String(state.offset)]);
+  }, [urlKey, state, initialSort, initialDir, initialLimit]);
   // A new order is a new list, so page three of the old one means nothing.
   const onSort = useCallback((sort: S, dir: SortDir) => setState((s) => ({ ...s, sort, dir, offset: 0 })), []);
   const setOffset = useCallback((offset: number) => setState((s) => ({ ...s, offset: Math.max(0, offset) })), []);
@@ -34,8 +80,8 @@ export function timeOf(value: string | null | undefined): number | null {
  * Sorting and paging of rows that have all been fetched, for a list short enough that the browser holds every row: a list of API
  * keys is not going to outgrow a page of the server's. Anything that can must use useListState and let the server do it.
  */
-export function useLocalList<T, S extends string>(rows: readonly T[] | undefined, read: Record<S, (row: T) => string | number | null | undefined>, initialSort: NoInfer<S>, initialDir: SortDir = "asc", initialLimit = 50) {
-  const list = useListState<S>(initialSort, initialDir, initialLimit);
+export function useLocalList<T, S extends string>(rows: readonly T[] | undefined, read: Record<S, (row: T) => string | number | null | undefined>, initialSort: NoInfer<S>, initialDir: SortDir = "asc", initialLimit = 50, urlKey?: string) {
+  const list = useListState<S>(initialSort, initialDir, initialLimit, urlKey);
   const { sort, dir, limit, offset } = list.state;
   const sorted = useMemo(() => {
     const value = read[sort];

@@ -14,7 +14,7 @@ more recent range, [config.md](config.md) "ClickHouse read-only user and per-ten
 
 A list that can outgrow a page takes `sort`, `dir` (`asc` or `desc`), `limit` and `offset`, and answers with `has_more`. Sorting happens on the server, because a browser can only sort the page it was sent. `sort` is one of the
 names that list documents, and anything else is `400`: the name selects a column and never reaches a statement. Each column has a natural direction when `dir` is absent. There is no total, because counting a grouped list means reading all of it: `has_more` is known by asking for one row more
-than a page. `offset` stops at 100000, since ClickHouse reads and discards everything before it, and past that a filter is the better tool. Logs and traces page with a `cursor` instead, because they change while being read. A row can repeat or be skipped between pages when new data arrives.
+than a page. `offset` stops at 100000, since ClickHouse reads and discards everything before it, and past that a filter is the better tool. Logs and traces page with a `cursor` instead, because they change while being read. A row can repeat or be skipped between pages when new data arrives. The console keeps a list's sort and page in the address, in one `list` parameter, so a link opens the same view.
 
 ## Authentication
 
@@ -1846,7 +1846,7 @@ disappearing.
 
 ### `GET /api/v1/rum/pages?app=&environment=&sort=&dir=&limit=&offset=&from=&to=`
 `{"pages": [{"route", "views", "avg_ms", "p50_ms", "p75_ms", "p95_ms", "max_ms", "ttfb_avg_ms", "lcp_p75",
-"errors"}], "has_more"}`. `sort` is `views` (default), `slowest` (by total time consumed, like APM's "most time
+"errors"}], "has_more"}`. `errors` comes from the spans, so it reaches the 7 days of trace retention while views reach 30. `sort` is `views` (default), `slowest` (by total time consumed, like APM's "most time
 consuming"), `avg`, `ttfb` or `route`. The percentiles and `lcp_p75` can't be sorted on: they are worked out after the page is
 read. `limit` ≤ 1000. `route` is the normalized route ([rum.md](rum.md) §4), never a raw URL: the query
 string and fragment never reach storage.

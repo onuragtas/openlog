@@ -1,9 +1,9 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, renderHook, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ListPager } from "@/components/ListPager";
 import { SortableHead, Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
-import { timeOf, useLocalList } from "./list";
+import { timeOf, useListState, useLocalList } from "./list";
 
 interface Row {
   id: string;
@@ -112,5 +112,25 @@ describe("timeOf", () => {
     expect(timeOf(null)).toBeNull();
     expect(timeOf("")).toBeNull();
     expect(timeOf("not a time")).toBeNull();
+  });
+
+  it("keeps a list's sort and page in the address, and reads them back", () => {
+    const { result, unmount } = renderHook(() => useListState<"time" | "name">("time", "desc", 50, "queries"));
+    expect(window.location.search).toBe("");
+    act(() => result.current.head.onSort("name", "asc"));
+    act(() => result.current.setOffset(50));
+    expect(new URLSearchParams(window.location.search).get("list")).toBe("queries~name~asc~50~50");
+    unmount();
+    const opened = renderHook(() => useListState<"time" | "name">("time", "desc", 50, "queries"));
+    expect(opened.result.current.state).toEqual({ sort: "name", dir: "asc", limit: 50, offset: 50 });
+    // Back at its defaults, the list leaves the address clean.
+    act(() => opened.result.current.head.onSort("time", "desc"));
+    expect(window.location.search).toBe("");
+  });
+
+  it("ignores a page size from a link that it does not offer", () => {
+    window.history.replaceState(null, "", "/?list=queries~name~sideways~99999~-5");
+    const { result } = renderHook(() => useListState<"time" | "name">("time", "desc", 50, "queries"));
+    expect(result.current.state).toEqual({ sort: "name", dir: "desc", limit: 50, offset: 0 });
   });
 });

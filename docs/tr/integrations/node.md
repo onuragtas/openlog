@@ -112,8 +112,8 @@ kütüphane sadece instrument edilmez.
 | `nestjs` | `@nestjs/core` | 4 – 11 (OTel); 12 openlog üzerinden, bkz. [NestJS 12](#nestjs-12) | 4 – 11: istek context'i ve handler span'leri, route. 12: express/fastify route'uyla adlandırılan server span'i; isteğe bağlı `OpenLogNestInterceptor` `nestjs.controller`/`nestjs.callback` ekler ve platform instrumentation'ı olmayan route'ları adlandırır; Nest handler span'i yok |
 | `pg` | `pg`, `pg-pool` | 8.x | CLIENT span'leri, sanitize edilmiş `db.query.text` |
 | `mysql2` | `mysql2` | 1.4 – 3 | CLIENT span'leri, değerler maskelenir + sanitize edilir |
-| `redis` | `redis`, `@redis/client` | 2 – 5 | CLIENT span'leri, `db.query.text` = `GET ?` |
-| `ioredis` | `ioredis` | 2 – 5 | CLIENT span'leri, `HSET ? ? ?` |
+| `redis` | `redis`, `@redis/client` | 2 – 6 | CLIENT span'leri, `db.query.text` = `GET ?` |
+| `ioredis` | `ioredis` | 2 – 6 | CLIENT span'leri, `HSET ? ? ?` |
 | `mongodb` | `mongodb` | 3.3 – 7 | CLIENT span'leri, sorgu değerleri `?` ile değiştirilir |
 | `graphql` | `graphql` | 14 – 16 | parse/validate/execute span'leri (önemsiz resolver'lar atlanır) |
 | `grpc` | `@grpc/grpc-js` | 1.x | SERVER/CLIENT span'leri (`rpc.*`) |

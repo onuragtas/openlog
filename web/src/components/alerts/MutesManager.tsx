@@ -419,7 +419,7 @@ export function MutesManager() {
     }),
     [now],
   );
-  const list = useLocalList(mutes.data, columns, "status");
+  const list = useLocalList(mutes.data, columns, "status", "asc", 50, "MutesManager");
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AlertMute | "new" | null>(null);
   const remove = useMutation({ mutationFn: (id: string) => deleteAlertMute(id), onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["alerts"] }) });

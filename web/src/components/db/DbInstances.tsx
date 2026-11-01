@@ -18,7 +18,7 @@ export function DbInstances({ range, onOpen }: { range: RangeSpec; onOpen: (i: D
   const locale = i18n.resolvedLanguage ?? "en";
   const now = useNow();
   // Starts on total time, which has no column of its own: it is what "heaviest" has always meant here.
-  const list = useListState<DbInstanceSort>("time");
+  const list = useListState<DbInstanceSort>("time", "desc", 50, "DbInstances");
   const q = useQuery(dbInstancesPageQuery(range, list.state));
   const { toFirstPage } = list;
   useEffect(toFirstPage, [range.range, range.from, range.to, toFirstPage]);

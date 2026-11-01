@@ -85,7 +85,7 @@ export function ApmServicesView({ range, q, env, onQ, onEnv }: { range: RangeSpe
   const ids = { q: useId(), env: useId() };
   const now = useNow();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useListState<ServiceSort>("name", "asc");
+  const list = useListState<ServiceSort>("name", "asc", 50, "apm");
   const settledQ = useDebounced(q, SEARCH_DELAY_MS);
   const page = useQuery(apmServicesPageQuery(range, list.state, { q: settledQ, environment: env }));
   // Agent version badges (D-124): no upgrade instructions needed here, so no registry checks.

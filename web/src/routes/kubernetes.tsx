@@ -246,7 +246,7 @@ function useFirstPageOn(filters: object, toFirstPage: () => void) {
 }
 
 export function WorkloadsList({ range, filters, emptyText, showCluster }: { range: RangeSpec; filters: WorkloadFilters; emptyText: string; showCluster: boolean }) {
-  const list = useListState<WorkloadSort>("name", "asc");
+  const list = useListState<WorkloadSort>("name", "asc", 50, "kubernetes");
   const q = useQuery(kubernetesWorkloadsQuery(range, filters, list.state));
   useFirstPageOn(filters, list.toFirstPage);
   return (
@@ -268,7 +268,7 @@ export function WorkloadsList({ range, filters, emptyText, showCluster }: { rang
 }
 
 export function PodsList({ range, filters, emptyText, showCluster }: { range: RangeSpec; filters: PodFilters; emptyText: string; showCluster: boolean }) {
-  const list = useListState<PodSort>("name", "asc");
+  const list = useListState<PodSort>("name", "asc", 50, "kubernetes");
   const q = useQuery(kubernetesPodsQuery(range, filters, list.state));
   useFirstPageOn(filters, list.toFirstPage);
   return (
@@ -291,7 +291,7 @@ export function PodsList({ range, filters, emptyText, showCluster }: { range: Ra
 
 /** `bare` is for a place that already has its own frame and says nothing of how many there are, like the cluster overview's section. */
 export function NodesList({ range, filters, emptyText, showCluster, bare }: { range: RangeSpec; filters: { clusterUid?: string; q?: string }; emptyText: string; showCluster: boolean; bare?: boolean }) {
-  const list = useListState<NodeSort>("name", "asc");
+  const list = useListState<NodeSort>("name", "asc", 50, "kubernetes");
   const q = useQuery(kubernetesNodesQuery(range, filters, list.state));
   useFirstPageOn(filters, list.toFirstPage);
   const body = q.isPending ? (

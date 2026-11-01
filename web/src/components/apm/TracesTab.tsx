@@ -38,7 +38,7 @@ export function TracesTab({ scope, range, filters, onChange }: { scope: ServiceS
   const ids = { txn: useId(), min: useId(), max: useId(), attr: useId(), err: useId() };
   const [draft, setDraft] = useState<TraceFilters>(filters);
   // The URL holds the column, so "show the slowest traces" of a transaction can open on it. The rest of the sort and the page stay here.
-  const list = useListState<TraceSort>(filters.qsort ?? "timestamp");
+  const list = useListState<TraceSort>(filters.qsort ?? "timestamp", "desc", 50, "TracesTab");
   const { toFirstPage } = list;
   // Another range is another list, so page five of it would usually show nothing. New filters remount this tab (routes/apm.tsx).
   useEffect(toFirstPage, [range.range, range.from, range.to, toFirstPage]);

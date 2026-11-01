@@ -46,7 +46,7 @@ export function ApiKeysSettings() {
   const canCreateWriting = perms.can("api_keys.create_writing");
   const canRevokeAny = perms.can("api_keys.revoke_any");
   const keys = useQuery(apiKeysQuery());
-  const list = useLocalList(keys.data, KEY_COLUMNS, "name");
+  const list = useLocalList(keys.data, KEY_COLUMNS, "name", "asc", 50, "ApiKeysSettings");
   const [name, setName] = useState("");
   const [role, setRole] = useState<ApiKeyRole>("viewer");
   const [expiry, setExpiry] = useState<Expiry>("d90");

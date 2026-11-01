@@ -20,7 +20,7 @@ import type { RangeSpec } from "@/lib/time";
 function Waits({ instance, range }: { instance: string; range: RangeSpec }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useListState<DbWaitSort>("samples");
+  const list = useListState<DbWaitSort>("samples", "desc", 50, "DbActivityTab");
   const q = useQuery(dbActivityWaitsQuery(instance, range, list.state));
   const { toFirstPage } = list;
   useEffect(toFirstPage, [instance, range.range, range.from, range.to, toFirstPage]);
@@ -58,7 +58,7 @@ function Waits({ instance, range }: { instance: string; range: RangeSpec }) {
 function TopQueries({ instance, range, onOpenQuery }: { instance: string; range: RangeSpec; onOpenQuery: (fingerprint: string) => void }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.resolvedLanguage ?? "en";
-  const list = useListState<DbActivityQuerySort>("samples");
+  const list = useListState<DbActivityQuerySort>("samples", "desc", 50, "DbActivityTab");
   const q = useQuery(dbActivityQueriesQuery(instance, range, list.state));
   const { toFirstPage } = list;
   useEffect(toFirstPage, [instance, range.range, range.from, range.to, toFirstPage]);

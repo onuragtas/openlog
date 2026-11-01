@@ -137,7 +137,7 @@ const POD_READ: Record<PodSort, (p: KubernetesPod) => string | number | null> = 
 
 /** The detail of a workload answers all of its pods at once, stats included, so here they sort and page in the browser. */
 function WorkloadPods({ pods }: { pods: KubernetesPod[] }) {
-  const list = useLocalList(pods, POD_READ, "name", "asc");
+  const list = useLocalList(pods, POD_READ, "name", "asc", 50, "kubernetesdetail");
   return (
     <>
       <PodTable pods={list.visible} showWorkload={false} showCluster={false} head={list.head} />

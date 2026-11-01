@@ -15,7 +15,7 @@ will never run makes the whole repository harder to work in.
 
 ## Status
 
-Not yet runnable. What exists and is tested:
+It has run on a real host, as "Installing it" below tells. What exists and is tested:
 
 - `internal/otlpprofiles` — aggregated stacks to an OTLP profiles payload, with the shared dictionary.
 - `internal/attribute` — which service a sample is stored under: the infra agent's published discovery map
@@ -46,10 +46,8 @@ Not yet runnable. What exists and is tested:
 The binary builds for linux/amd64, linux/arm64, darwin and windows. Off Linux, `sampler.New` refuses
 rather than returning a sampler that produces nothing.
 
-**None of the kernel-facing code has ever run.** It compiles for both Linux architectures and its pure
-parts are tested, but the program has not been through a verifier and the perf attach has not been
-attempted, because this repository has no privileged Linux CI job and a development Mac cannot load BPF.
-The first run on a real host is where `New` either works or says exactly which capability or
+**The kernel-facing code has no CI.** It compiles for both Linux architectures and its pure parts are tested, but this repository has no privileged Linux
+job and a development Mac cannot load BPF, so a change to it is only proven on a real host. That is where `New` either works or says exactly which capability or
 `perf_event_paranoid` setting is in the way.
 
 That shapes how the whole component is written: everything that does not touch the kernel sits behind an
@@ -94,7 +92,7 @@ into errors instead: someone who asked for it by name is owed a failure, not a s
 
 **No Helm chart.** There is no DaemonSet for Kubernetes yet.
 
-The rest of this section used to say none of it had ever run. That stopped being true on 2026-09-22, on a
+It first ran on 2026-09-22, on a
 Debian host: nfpm builds the packages in every release, the unit was loaded by systemd, and the BPF
 program passed the kernel verifier. The evidence for the last one is where the failure landed — New()
 creates the maps, binds them and calls ebpf.NewProgram *before* opening perf events, and the host failed
