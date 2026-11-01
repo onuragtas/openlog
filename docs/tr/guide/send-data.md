@@ -12,6 +12,7 @@ Görmek istediğin şeyden başla. Aşağıdaki her kılavuzun kendi hızlı ba�
 | Backend'deki yavaş istekler ve hatalar | Bir [APM ajanı](#backend-apm) | Lisans |
 | Web sitesinde sayfa hızı, hatalar ve oturumlar | [Tarayıcı SDK'sı](/integrations/browser) | Tarayıcı |
 | Mobil uygulamada ekranlar, hatalar ve event'ler | [iOS](/integrations/ios), [Android](/integrations/android) veya [Flutter](/integrations/flutter) | Mobil |
+| Unity oyununda crash'ler, event'ler ve oyuncular | [Unity SDK'sı](/integrations/unity) | Mobil |
 | Mobil uygulamada crash'ler, sürüm bazında | Mobil SDK üzerinde [crash raporlama](./crash-reporting.md) | Mobil |
 | Günlük kullanıcılar, retention ve funnel | Tarayıcı veya mobil SDK üzerinde [ürün analitiği](./product-analytics.md) | Tarayıcı veya mobil |
 | Bir Kubernetes kümesi | [Kubernetes](/operations/kubernetes) | Lisans |

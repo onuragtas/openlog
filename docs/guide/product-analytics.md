@@ -5,7 +5,7 @@ new users, retention, funnels, events and traffic sources. If you have used Goog
 covers the same ground, on your own server.
 
 It runs on top of the [browser](/integrations/browser), [iOS](/integrations/ios), [Android](/integrations/android) and
-[Flutter](/integrations/flutter) SDKs, so there is nothing else to install.
+[Flutter](/integrations/flutter) and [Unity](/integrations/unity) SDKs, so there is nothing else to install.
 
 Results appear per application, in the **Analytics** tab under **Browser**.
 

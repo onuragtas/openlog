@@ -1,0 +1,9 @@
+{
+  "name": "io.github.onuragtas.openlog",
+  "version": "0.1.0",
+  "displayName": "openlog",
+  "description": "Crash reporting, product analytics and error monitoring for Unity games on iOS and Android.",
+  "unity": "2021.3",
+  "author": { "name": "openlog", "url": "https://onuragtas.github.io/openlog/" },
+  "license": "Apache-2.0"
+}

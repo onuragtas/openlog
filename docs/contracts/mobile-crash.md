@@ -47,6 +47,8 @@ would stop working silently.
 | Android | `ApplicationExitInfo` (API 30+) read at next launch | native signals, ANR, low-memory kills | Second step |
 | Swift | MetricKit `MXCrashDiagnostic`, delivered by the system | signals, Mach exceptions, Swift traps | ✅ |
 | Swift | `NSSetUncaughtExceptionHandler` | Objective-C exceptions, for name and reason | ✅ |
+| Unity, Android | `ApplicationExitInfo` (API 30+) through JNI, read at next launch | native crashes, ANR, foreground low-memory kills | ✅ |
+| Unity, iOS | MetricKit through a small Objective-C plugin | signals, Mach exceptions | ✅ |
 | Dart/Flutter | `recordFatal` wired to `FlutterError.onError` and `PlatformDispatcher.onError` | Dart exceptions | ✅ |
 
 **Why not our own signal handler.** A signal handler may only call async-signal-safe functions, and getting that

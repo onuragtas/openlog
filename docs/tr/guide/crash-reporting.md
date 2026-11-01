@@ -15,6 +15,7 @@ eder: her zaman ardından çağrılır, yani başka bir crash aracıyla yan yana
 |---|---|---|
 | iOS, macOS | Yakalanmamış Objective-C exception'ları. iOS 14 ve macOS 12 ve sonrasında MetricKit ile sinyaller, Mach exception'ları ve Swift trap'leri | Bellek yetersizliği |
 | Android | Yakalanmamış JVM exception'ları | **NDK crash'leri ve ANR'ler** |
+| Unity | Android 11 ve sonrasında native crash, ANR ve bellek yetersizliği, iOS 14 ve sonrasında native crash. Bkz. [Unity kılavuzu](/integrations/unity) | C# exception'ları crash değil hata sayılır |
 | Flutter | Aşağıdaki gibi bağladığın yakalanmamış Dart hataları | Flutter motorunun veya bir eklentinin crash'i, ana uygulamada iOS veya Android SDK'sı da çalışmıyorsa |
 
 ::: warning Stack'ler henüz okunur hale getirilmiyor

@@ -15,6 +15,7 @@ const INTEGRATIONS: Record<string, string> = {
   "agents/swift": "ios",
   "agents/kotlin": "android",
   "agents/dart": "flutter",
+  "agents/unity": "unity",
   "agents/go": "go",
   "agents/node": "node",
   "agents/python": "python",
@@ -90,6 +91,7 @@ export default defineConfig({
               { text: "iOS, Swift (EN)", link: "/integrations/ios" },
               { text: "Android, Kotlin (EN)", link: "/integrations/android" },
               { text: "Flutter, Dart (EN)", link: "/integrations/flutter" },
+              { text: "Unity (EN)", link: "/integrations/unity" },
             ],
           },
           {
@@ -207,6 +209,7 @@ export default defineConfig({
           { text: "iOS (Swift)", link: "/integrations/ios" },
           { text: "Android (Kotlin)", link: "/integrations/android" },
           { text: "Flutter (Dart)", link: "/integrations/flutter" },
+          { text: "Unity", link: "/integrations/unity" },
           { text: "Product analytics", link: "/guide/product-analytics" },
           { text: "Crash reporting", link: "/guide/crash-reporting" },
         ],

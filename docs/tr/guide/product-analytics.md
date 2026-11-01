@@ -5,7 +5,7 @@ kullanıcılar, retention, funnel, event'ler ve trafik kaynakları. Google Analy
 konuları kapsar, üstelik kendi sunucunda çalışır.
 
 [Tarayıcı](/integrations/browser), [iOS](/integrations/ios), [Android](/integrations/android) ve
-[Flutter](/integrations/flutter) SDK'ları üzerinde çalışır, başka bir şey kurman gerekmez.
+[Flutter](/integrations/flutter) ve [Unity](/integrations/unity) SDK'ları üzerinde çalışır, başka bir şey kurman gerekmez.
 
 Sonuçlar uygulama bazında, **Browser** altındaki **Analytics** sekmesinde görünür.
 

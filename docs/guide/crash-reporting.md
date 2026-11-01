@@ -16,6 +16,7 @@ working: it is always called afterwards, so this can run next to another crash t
 |---|---|---|
 | iOS, macOS | Uncaught Objective-C exceptions. Signals, Mach exceptions and Swift traps through MetricKit, on iOS 14 and macOS 12 or later | Running out of memory |
 | Android | Uncaught JVM exceptions | **NDK crashes and ANRs** |
+| Unity | Native crashes, ANRs and out-of-memory kills on Android 11 and later, native crashes on iOS 14 and later. See [the Unity guide](/integrations/unity) | C# exceptions are errors and not crashes |
 | Flutter | Uncaught Dart errors, once you wire them as below | A crash of the Flutter engine or a plugin, unless the host app also runs the iOS or Android SDK |
 
 ::: warning Stacks are not symbolicated yet

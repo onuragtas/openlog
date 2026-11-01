@@ -11,6 +11,7 @@ Start from what you want to see. Each guide below has its own quick start.
 | Slow requests and errors in a backend | An [APM agent](#backend-apm) | License key |
 | Page speed, errors and sessions in a website | [Browser SDK](/integrations/browser) | Browser key |
 | Screens, errors and events in a mobile app | [iOS](/integrations/ios), [Android](/integrations/android) or [Flutter](/integrations/flutter) | Mobile key |
+| Crashes, events and players in a Unity game | [Unity SDK](/integrations/unity) | Mobile key |
 | Crashes in a mobile app, by version | [Crash reporting](./crash-reporting.md), on top of the mobile SDK | Mobile key |
 | Daily users, retention and funnels | [Product analytics](./product-analytics.md), on top of the browser or mobile SDK | Browser or mobile key |
 | A Kubernetes cluster | [Kubernetes](/operations/kubernetes) | License key |
