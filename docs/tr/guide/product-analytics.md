@@ -137,6 +137,30 @@ curl -X POST https://apm.resoft.org/api/v1/analytics/erase \
 `202` ve bir kimlik döner, `GET /api/v1/analytics/erase/{id}` durumu bildirir. Silme kısa süre sonra arka planda gerçekleşir. Span'lerdeki
 ham kimliği bu silmez: o, 7 günlük trace saklama süresiyle birlikte kendiliğinden silinir.
 
+## Kitleni gör
+
+**Analytics** sekmesindeki **Kitle** tablosu oturumları ve kişileri ülkeye, cihaz türüne, cihaz modeline, işletim sistemine, tarayıcıya ve uygulama sürümüne göre
+gösterir. Cihaz türü, işletim sistemi, tarayıcı ve sürüm kurulum gerektirmez, cihaz modeli ise mobil SDK'lardan gelir.
+
+**Ülke için sunucunda tek bir ayar gerekir,** çünkü openlog konum verisiyle birlikte gelmez. Önünde Cloudflare gibi bir CDN varsa yazdığı başlığın adını ver:
+
+```sh
+OPENLOG_RUM_GEO_HEADER=CF-IPCountry
+```
+
+Yoksa bir ülke veritabanı ver. [DB-IP'nin ücretsiz ülke veritabanı](https://db-ip.com/db/download/ip-to-country-lite) çalışır ve veriyi gösterdiğin yerde DB-IP'ye bağlantı
+vermeni ister. GeoLite2-Country de çalışır.
+
+```sh
+# .env dosyanda. Compose bu klasörü `geoip` biriminde tutar.
+OPENLOG_RUM_GEOIP_DB=/var/lib/openlog/geoip/country.mmdb
+# Ingest'in önünde nginx veya yük dengeleyici varsa, yoksa her ziyaretçi onun adresinden gelmiş görünür:
+OPENLOG_RUM_TRUSTED_PROXIES=10.0.0.0/8
+```
+
+Ayarı ekledikten sonra bir kez yeniden başlat. Sonrasında yeni sürüm çıktığında dosyayı değiştirmen yeterli. **Yalnızca ülke saklanır.** Adres istek işlenirken kullanılır; saklanmaz, loglanmaz, span'e yazılmaz.
+O an için yine de kişisel veridir, gizlilik politikanda bu tür işlemleri listeliyorsan belirt. Ülkeler bu ayarı yaptığın andan itibaren görünmeye başlar, önceki oturumlar bilinmiyor kalır.
+
 ## Sayılar nasıl çalışır
 
 - **Kullanıcı, cihazdır.** Telefon ve laptop kullanan biri iki kişi sayılır. Hesaplar cihazlar arasında birleştirilmez.
@@ -176,5 +200,6 @@ Ayrıntılar [API referansında](/contracts/api), tasarım ve gerekçeleri [kont
 
 - Push bildirimleri, remote config ve A/B testi
 - Session replay
-- Bölge veya şehir. Ülke bilgisi için ingest'in önünde `OPENLOG_RUM_GEO_HEADER` ile tanımlı bir CDN veya proxy gerekir
+- Bölge veya şehir. Yalnızca ülke çözülür
+- Cihaz adları: model, cihazın bildirdiği gibi görünür, örneğin `iPhone15,2`
 - Mobilde kurulum kaynağı takibi. UTM ve referrer yalnızca web'de var

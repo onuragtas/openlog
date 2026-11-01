@@ -95,17 +95,19 @@ yeniden üretilemez.
 Bu, uygulamandaki `olb_…` anahtarı değildir; o herkese açıktır ve yalnızca veri gönderebilir.
 
 ```sh
-go install github.com/onuragtas/openlog/cmd/openlog-symbols@latest
+# Go gerekir. Bir kez derle, binary'yi CI araçlarının yanında tut.
+git clone --depth 1 https://github.com/onuragtas/openlog && (cd openlog && go build -o ../openlog-symbols ./cmd/openlog-symbols)
+
 export OPENLOG_API_KEY=ola_…
 
 # iOS: derlemenin dSYM'leri
-openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam build/MyApp.xcarchive/dSYMs
+./openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam build/MyApp.xcarchive/dSYMs
 
 # Android ve Unity: native kütüphaneler veya Unity'nin symbols.zip dosyasının açıldığı klasör
-openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam app/build/intermediates/merged_native_libs
+./openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam app/build/intermediates/merged_native_libs
 
 # Android: R8 mapping'i, uygulamanın raporladığı sürümle aynı olmalı
-openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam -version 4.2.1 app/build/outputs/mapping/release/mapping.txt
+./openlog-symbols upload -endpoint https://apm.resoft.org -app uygulamam -version 4.2.1 app/build/outputs/mapping/release/mapping.txt
 ```
 
 `-app`, mobil anahtarındaki uygulama adıdır. Komutu bütün bir klasöre yöneltebilirsin: binary'leri kendisi bulur, aynı kütüphane hem

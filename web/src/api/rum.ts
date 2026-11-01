@@ -50,6 +50,16 @@ export const analyticsEventsQuery = (app: string, environment?: string) =>
     enabled: app !== "",
   });
 
+export type AnalyticsAudienceBy = "country" | "device" | "model" | "os" | "browser" | "version";
+
+export const analyticsAudienceQuery = (app: string, by: AnalyticsAudienceBy, environment?: string) =>
+  queryOptions({
+    queryKey: ["analytics", "audience", app, environment ?? "", by],
+    queryFn: async ({ signal }) => unwrap(await api.GET("/api/v1/analytics/audience", { params: { query: { app, environment, by } }, signal })),
+    enabled: app !== "",
+    placeholderData: keepPreviousData,
+  });
+
 export type AnalyticsSourceBy = "referrer" | "source" | "medium" | "campaign";
 
 export const analyticsAcquisitionQuery = (app: string, by: AnalyticsSourceBy, environment?: string) =>

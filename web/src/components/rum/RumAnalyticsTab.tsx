@@ -9,6 +9,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   analyticsAcquisitionQuery,
+  analyticsAudienceQuery,
+  type AnalyticsAudienceBy,
   analyticsActivityQuery,
   analyticsEventsQuery,
   analyticsRetentionQuery,
@@ -189,6 +191,63 @@ function AcquisitionSection({ app, environment }: { app: string; environment?: s
   );
 }
 
+const AUDIENCE_BYS: AnalyticsAudienceBy[] = ["country", "device", "model", "os", "browser", "version"];
+
+/** A country's name in the reader's language, from the browser's own data. A code it does not know stays a code. */
+function countryName(code: string, language: string): string {
+  try {
+    return new Intl.DisplayNames([language], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+function AudienceSection({ app, environment }: { app: string; environment?: string }) {
+  const { t, i18n } = useTranslation();
+  const [by, setBy] = useState<AnalyticsAudienceBy>("country");
+  const audience = useQuery(analyticsAudienceQuery(app, by, environment));
+  const name = (value: string) => {
+    if (value === "") return t("rum.analytics.unknown");
+    return by === "country" ? countryName(value, i18n.language) : value;
+  };
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-sm font-medium">{t("rum.analytics.audience")}</h2>
+        <div className="flex items-center gap-2">
+          <Label htmlFor="analytics-audience-by" className="text-xs text-muted-foreground">
+            {t("rum.analytics.sourceByLabel")}
+          </Label>
+          <NativeSelect id="analytics-audience-by" className="w-36" value={by} onChange={(e) => setBy(e.target.value as AnalyticsAudienceBy)}>
+            {AUDIENCE_BYS.map((b) => (
+              <option key={b} value={b}>
+                {t(`rum.analytics.audienceBy.${b}`)}
+              </option>
+            ))}
+          </NativeSelect>
+        </div>
+      </div>
+      {audience.isPending ? (
+        <LoadingState />
+      ) : audience.isError ? (
+        <ErrorState error={audience.error} onRetry={() => void audience.refetch()} />
+      ) : (
+        <>
+          <Breakdown
+            testId="analytics-audience"
+            nameLabel={t(`rum.analytics.audienceBy.${by}`)}
+            columns={[t("rum.analytics.sessions"), t("rum.analytics.users")]}
+            rows={audience.data.rows.map((r) => ({ name: name(r.value), values: [r.sessions, r.users] }))}
+          />
+          {by === "country" && audience.data.rows.length > 0 && audience.data.rows.every((r) => r.value === "") && (
+            <p className="text-xs text-muted-foreground">{t("rum.analytics.noCountry")}</p>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
 export function RumAnalyticsTab({ app, environment }: { app: string; environment?: string }) {
   const { t, i18n } = useTranslation();
   const [grain, setGrain] = useState<AnalyticsGrain>("week");
@@ -261,6 +320,7 @@ export function RumAnalyticsTab({ app, environment }: { app: string; environment
       <div className="grid gap-4 xl:grid-cols-2">
         <EventsSection app={app} environment={environment} />
         <AcquisitionSection app={app} environment={environment} />
+        <AudienceSection app={app} environment={environment} />
       </div>
     </div>
   );

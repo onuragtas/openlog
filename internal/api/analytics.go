@@ -38,6 +38,7 @@ func (s *Server) analyticsRoutes(mux *http.ServeMux) {
 	route("GET /api/v1/analytics/overview", s.analyticsOverview)
 	route("GET /api/v1/analytics/events", s.analyticsEvents)
 	route("GET /api/v1/analytics/acquisition", s.analyticsAcquisition)
+	route("GET /api/v1/analytics/audience", s.analyticsAudience)
 	route("GET /api/v1/analytics/funnel", s.analyticsFunnel)
 }
 

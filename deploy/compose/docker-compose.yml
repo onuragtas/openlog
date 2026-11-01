@@ -411,6 +411,9 @@ services:
       # Real user monitoring (docs/contracts/rum.md, D-136): POST /v1/rum and the RUM screens.
       OPENLOG_RUM_ENABLED: ${OPENLOG_RUM_ENABLED:-}
       OPENLOG_RUM_GEO_HEADER: ${OPENLOG_RUM_GEO_HEADER:-}
+      # A country database of your own, put in the volume `geoip`, and the proxies believed about X-Forwarded-For.
+      OPENLOG_RUM_GEOIP_DB: ${OPENLOG_RUM_GEOIP_DB:-}
+      OPENLOG_RUM_TRUSTED_PROXIES: ${OPENLOG_RUM_TRUSTED_PROXIES:-}
       # Source maps that un-minify browser stacks (rum.md §8), in the volume `source-maps` below. They used to
       # default to the container's /tmp, where every recreation lost them, and a lost map means browser stacks
       # stay minified until someone uploads it again. Point them at an S3 bucket to share across replicas.
@@ -452,6 +455,7 @@ services:
       - data-exports:/var/lib/openlog/exports
       # Uploaded source maps (OPENLOG_SOURCE_MAPS_LOCAL_PATH); kept across container recreation.
       - source-maps:/var/lib/openlog/sourcemaps
+      - geoip:/var/lib/openlog/geoip
     ports:
       - "${OPENLOG_OTLP_GRPC_PORT:-4317}:4317"
       - "${OPENLOG_OTLP_HTTP_PORT:-4318}:4318"
@@ -663,3 +667,4 @@ volumes:
   minio-data:
   data-exports:
   source-maps:
+  geoip:

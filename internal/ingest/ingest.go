@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/onuragtas/openlog/internal/config"
 	"github.com/onuragtas/openlog/internal/queue"
+	"github.com/onuragtas/openlog/internal/rum"
 	"github.com/onuragtas/openlog/internal/tenant"
 	"github.com/onuragtas/openlog/internal/version"
 )
@@ -60,6 +62,9 @@ type Service struct {
 	rum RUMKeys
 	// rumGeoHeader names the header a trusted proxy writes the visitor's country into; "" records none.
 	rumGeoHeader string
+	// rumGeoIP answers the country from the address when no header did; nil resolves nothing.
+	rumGeoIP       *rum.GeoIP
+	rumTrustedHops []netip.Prefix
 }
 
 // SetHTTPRoutes adds routes to the OTLP/HTTP listener (e.g. /v1/openlog/agent/sync). Must be

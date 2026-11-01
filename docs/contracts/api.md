@@ -1884,6 +1884,11 @@ At most 90 days, like the three below.
 together, `name` in each row is a value of that parameter of that event. `(other)` holds what is past the key's bound on
 distinct event names ([analytics.md](analytics.md) §4). `users` is 0 unless the key is in `visitors` mode.
 
+### `GET /api/v1/analytics/audience?app=&environment=&by=&from=&to=`
+`{"by", "rows": [{"value", "sessions", "users"}]}`, most sessions first, at most 200 rows and 90 days. `by` is `country` (the default), `device`, `model`, `os`,
+`browser` or `version`. A session counts once, under its first event. An empty `value` means nobody reported it: `country` needs a header or a database
+([rum.md](rum.md) §3.7), and `model` comes from the mobile SDKs only.
+
 ### `GET /api/v1/analytics/acquisition?app=&environment=&by=&from=&to=`
 `{"by", "sources": [{"value", "sessions", "users"}]}`. `by` is `referrer` (default), `source`, `medium` or `campaign`.
 An empty `value` is a direct visit.

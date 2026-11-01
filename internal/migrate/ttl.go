@@ -69,6 +69,7 @@ var TTLTables = []TTLTable{
 	{"analytics_events_local", "analytics", "toDateTime(timestamp)", 90},
 	{"analytics_actors_local", "analytics", "toDateTime(last_seen)", 395},
 	{"analytics_actor_days_local", "analytics", "toDateTime(day)", 395},
+	{"analytics_device_models_1d_local", "analytics", "toDateTime(day)", 90},
 	// Profiles get their own class rather than borrowing traces: per-tenant retention (D-081) widens a class
 	// as a whole, and a profile is the widest row openlog stores — a tenant that lengthens its trace
 	// retention must not silently multiply its profiling bill too.

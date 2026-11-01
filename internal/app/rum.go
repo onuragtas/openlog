@@ -31,9 +31,30 @@ func startRUMIngest(ctx context.Context, cfg config.Config, pool *pgxpool.Pool, 
 		Hasher: KeyHasher(cfg), Registerer: reg, Log: log,
 	})
 	svc.SetRUMGeoHeader(cfg.RUM.GeoHeader)
+	setRUMGeoIP(cfg, svc, log)
 	svc.SetRUM(keys)
 	done := make(chan struct{})
 	go func() { defer close(done); keys.Run(ctx) }()
 	log.Info("real user monitoring ingest enabled", "path", "/v1/rum", "geo_header", cfg.RUM.GeoHeader)
 	return func() { <-done }
+}
+
+// setRUMGeoIP opens the country database. A problem with it is reported and costs the country, never the data:
+// ingest must not refuse to start, or stop accepting spans, over a field on them.
+func setRUMGeoIP(cfg config.Config, svc *ingest.Service, log *slog.Logger) {
+	trusted, err := rum.ParseTrustedProxies(cfg.RUM.TrustedProxies)
+	if err != nil {
+		log.Error("OPENLOG_RUM_TRUSTED_PROXIES ignored: no country will be resolved", "err", err)
+		return
+	}
+	if cfg.RUM.GeoIPDB == "" {
+		return
+	}
+	db, err := rum.OpenGeoIP(cfg.RUM.GeoIPDB, log)
+	if err != nil {
+		log.Error("OPENLOG_RUM_GEOIP_DB cannot be used: no country will be resolved", "err", err)
+		return
+	}
+	svc.SetRUMGeoIP(db, trusted)
+	log.Info("resolving visitor countries from a database; addresses are not stored", "path", cfg.RUM.GeoIPDB, "trusted_proxies", len(trusted))
 }

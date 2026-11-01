@@ -84,9 +84,9 @@ FROM alpine:3.22
 # wget (busybox) is used by container health checks.
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 openlog && adduser -S -D -H -u 10001 -G openlog openlog \
-    # Mount points of the Compose volumes `data-exports` and `source-maps`: a new or empty named volume takes this owner, so
-    # the non-root process can write archives, source maps and crash symbols.
-    && mkdir -p /var/lib/openlog/exports /var/lib/openlog/sourcemaps && chown -R 10001:10001 /var/lib/openlog
+    # Mount points of the Compose volumes `data-exports`, `source-maps` and `geoip`: a new or empty named volume takes this
+    # owner, so the non-root process can write archives, source maps and crash symbols, and an operator's copy can be replaced.
+    && mkdir -p /var/lib/openlog/exports /var/lib/openlog/sourcemaps /var/lib/openlog/geoip && chown -R 10001:10001 /var/lib/openlog
 COPY --from=build /out/ /usr/local/bin/
 USER 10001:10001
 EXPOSE 4317 4318 8080 9464

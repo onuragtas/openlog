@@ -96,17 +96,19 @@ build and can't be recreated later.
 once. This is not the `olb_…` key from your app, which is public and can only send data.
 
 ```sh
-go install github.com/onuragtas/openlog/cmd/openlog-symbols@latest
+# Needs Go. Build it once, and keep the binary with your CI tools.
+git clone --depth 1 https://github.com/onuragtas/openlog && (cd openlog && go build -o ../openlog-symbols ./cmd/openlog-symbols)
+
 export OPENLOG_API_KEY=ola_…
 
 # iOS: the dSYMs of the build
-openlog-symbols upload -endpoint https://apm.resoft.org -app my-app build/MyApp.xcarchive/dSYMs
+./openlog-symbols upload -endpoint https://apm.resoft.org -app my-app build/MyApp.xcarchive/dSYMs
 
 # Android and Unity: native libraries, or the folder Unity's symbols.zip extracts to
-openlog-symbols upload -endpoint https://apm.resoft.org -app my-app app/build/intermediates/merged_native_libs
+./openlog-symbols upload -endpoint https://apm.resoft.org -app my-app app/build/intermediates/merged_native_libs
 
 # Android: the R8 mapping, which needs the same version the app reports
-openlog-symbols upload -endpoint https://apm.resoft.org -app my-app -version 4.2.1 app/build/outputs/mapping/release/mapping.txt
+./openlog-symbols upload -endpoint https://apm.resoft.org -app my-app -version 4.2.1 app/build/outputs/mapping/release/mapping.txt
 ```
 
 `-app` is the application name on your mobile key. Point the command at a whole folder: it finds the binaries, and when the same

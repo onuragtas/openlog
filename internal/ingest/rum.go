@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -46,6 +47,11 @@ type RUMKeys interface {
 // SetRUMGeoHeader names the header a trusted proxy writes the visitor's country into
 // (OPENLOG_RUM_GEO_HEADER). Empty — the default — records no country at all. Must be called before Run.
 func (s *Service) SetRUMGeoHeader(name string) { s.rumGeoHeader = name }
+
+// SetRUMGeoIP resolves the country from the address when no trusted header declared one. Must be called before Run.
+func (s *Service) SetRUMGeoIP(db *rum.GeoIP, trusted []netip.Prefix) {
+	s.rumGeoIP, s.rumTrustedHops = db, trusted
+}
 
 // SetRUM enables POST /v1/rum. Must be called before Run.
 func (s *Service) SetRUM(k RUMKeys) {
@@ -144,6 +150,10 @@ func (s *Service) rumScope(r *http.Request) rum.Scope {
 	}
 	if s.rumGeoHeader != "" {
 		sc.Country = rum.ParseCountry(r.Header.Get(s.rumGeoHeader))
+	}
+	if sc.Country == "" && s.rumGeoIP != nil {
+		// The address is used here and goes no further: only the country is on the span.
+		sc.Country = s.rumGeoIP.Country(rum.ClientAddr(r.RemoteAddr, r.Header.Values("X-Forwarded-For"), s.rumTrustedHops))
 	}
 	return sc
 }

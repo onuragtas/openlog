@@ -31,6 +31,18 @@ var analyticsDimensions = map[string]string{
 	"campaign": "utm_campaign",
 }
 
+// analyticsAudienceDimensions maps the `by` of /audience to its column. Closed for the same reason. The model is not among
+// them because it has a table of its own.
+var analyticsAudienceDimensions = map[string]string{
+	"country": "country",
+	"device":  "device_type",
+	"os":      "os_name",
+	"browser": "browser_name",
+	"version": "version",
+}
+
+const analyticsAudienceModel = "model"
+
 // analyticsEventRange narrows a read of analytics_events to one application and a range.
 func analyticsEventRange(q *query.Select, f rumFilter, from, to time.Time) *query.Select {
 	return applyActorDays(q, f).
@@ -80,6 +92,27 @@ func analyticsAcquisitionSelect(sc *query.Scope, f rumFilter, column string, fro
 		GroupBy("session_id")
 	return sc.FromSub(sessions).
 		Columns("v_key", "sum(w) AS v_sessions", "uniqExactIf(a, a != 0) * avg(w) AS v_users").
+		GroupBy("v_key").OrderBy("v_sessions DESC").Limit(analyticsMaxBreakdown)
+}
+
+// analyticsAudienceSelect returns sessions and people by what they ran on. A session counts once, under its first event, so
+// someone who crossed a border or updated in the middle of one is not two sessions. A person on two devices is one person
+// under each, which is why the people of a list do not add up to the total.
+func analyticsAudienceSelect(sc *query.Scope, f rumFilter, column string, from, to time.Time) *query.Select {
+	sessions := analyticsEventRange(sc.From(query.AnalyticsEvents), f, from, to).
+		Columns("session_id", "toString(argMin("+column+", timestamp)) AS v_key", "max(weight) AS w", "any(actor_hash) AS a").
+		GroupBy("session_id")
+	return sc.FromSub(sessions).
+		Columns("v_key", "sum(w) AS v_sessions", "uniqExactIf(a, a != 0) * avg(w) AS v_users").
+		GroupBy("v_key").OrderBy("v_sessions DESC").Limit(analyticsMaxBreakdown)
+}
+
+// analyticsAudienceModelSelect is the same answer from the per-day rollup. Past a few thousand these are estimates.
+func analyticsAudienceModelSelect(sc *query.Scope, f rumFilter, from, to time.Time) *query.Select {
+	return applyActorDays(sc.From(query.AnalyticsDeviceModels), f).
+		Columns("toString(model) AS v_key", "uniqCombined64Merge(sessions) * max(weight) AS v_sessions", "uniqCombined64Merge(actors) * max(weight) AS v_users").
+		Where("day >= toDate(fromUnixTimestamp64Milli({t_from:Int64})) AND day <= toDate(fromUnixTimestamp64Milli({t_to:Int64}))").
+		Param("t_from", from.UnixMilli()).Param("t_to", to.UnixMilli()).
 		GroupBy("v_key").OrderBy("v_sessions DESC").Limit(analyticsMaxBreakdown)
 }
 
@@ -136,6 +169,51 @@ func (s *Server) analyticsOverview(w http.ResponseWriter, r *http.Request, sc *q
 		"days": days, "collecting": len(days) > 0,
 		"totals": map[string]float64{"page_views": views, "events": events, "sessions": sessions},
 	})
+	return nil
+}
+
+// analyticsAudience serves GET /api/v1/analytics/audience.
+func (s *Server) analyticsAudience(w http.ResponseWriter, r *http.Request, sc *query.Scope) error {
+	noStore(w)
+	f, err := parseRUMFilter(r, true)
+	if err != nil {
+		return err
+	}
+	by := r.URL.Query().Get("by")
+	if by == "" {
+		by = "country"
+	}
+	column, ok := analyticsAudienceDimensions[by]
+	if !ok && by != analyticsAudienceModel {
+		return badRequest("by must be country, device, model, os, browser or version")
+	}
+	from, to, err := s.analyticsRange(r, analyticsMaxEventsRange)
+	if err != nil {
+		return err
+	}
+	q := analyticsAudienceSelect
+	selected := func() *query.Select { return q(sc, f, column, from, to) }
+	if by == analyticsAudienceModel {
+		selected = func() *query.Select { return analyticsAudienceModelSelect(sc, f, from, to) }
+	}
+	rows, err := sc.Query(r.Context(), selected())
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	out := []map[string]any{}
+	for rows.Next() {
+		var key string
+		var sessions, users float64
+		if err := rows.Scan(&key, &sessions, &users); err != nil {
+			return err
+		}
+		out = append(out, map[string]any{"value": key, "sessions": sessions, "users": users})
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"by": by, "rows": out})
 	return nil
 }
 

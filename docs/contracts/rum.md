@@ -375,15 +375,20 @@ tell an account id from an e-mail address, so the discipline has to live in the 
 never identifies anyone carries no `user.id` at all, rather than an empty one: "signed out" and "identified
 as nothing" must not look alike.
 
-**Country.** There is no GeoIP database here, and that is deliberate — one would mean a data file to ship,
-license and keep fresh, and an address to resolve. Instead the country arrives already resolved, in a header
-a CDN or proxy in front of ingest wrote, named by `OPENLOG_RUM_GEO_HEADER` (`CF-IPCountry` behind
-Cloudflare). **No visitor address is ever stored**, and none reaches openlog's own code. The trust argument
-is short: anything openlog is fronted by can be trusted to write that header exactly as far as it can be
-trusted to forward the request at all. An installation that names no header records no country — an honest
-blank rather than a guess — and a header openlog was not told to trust is ignored even when it is present.
-Values that are not two ASCII letters are discarded, as are the CDN placeholders `XX` (no answer) and `T1`
-(Tor): both would otherwise sit at the top of every geography breakdown dressed as countries.
+**Country.** It arrives in one of two ways, and **no visitor address is ever stored** by either.
+
+1. **A header** a CDN or proxy in front of ingest wrote, named by `OPENLOG_RUM_GEO_HEADER` (`CF-IPCountry` behind Cloudflare). The trust
+   argument is short: anything openlog is fronted by can be trusted to write that header exactly as far as it can be trusted to forward the
+   request at all. A header openlog was not told to trust is ignored even when it is present.
+2. **A database** the operator supplies, named by `OPENLOG_RUM_GEOIP_DB`, used when no header answered. It is an MMDB file in the GeoLite2-Country
+   shape, which DB-IP's country database shares. The address is looked up in memory while the request is handled and only the country goes
+   on the span. openlog ships no data file and accepts no licence, so a default installation resolves nothing. Behind a proxy the address comes from
+   `X-Forwarded-For`, believed only as far as `OPENLOG_RUM_TRUSTED_PROXIES` vouches for it, read from the right, because a client can write
+   anything to the left. A replaced file is picked up within a minute, and a broken one leaves the one in use.
+
+An installation with neither records no country, an honest blank rather than a guess. Values that are not two ASCII letters are discarded, as are the CDN
+placeholders `XX` (no answer) and `T1` (Tor): both would otherwise sit at the top of every geography breakdown dressed as countries. Region and city
+are not resolved, deliberately: a country is what a product decision uses, and a city narrows a person down.
 
 **Retention, stated rather than discovered.** Both live on spans, not on the session rollup, so both reach
 back only as far as the **7-day trace retention** — not the 30 days of `rum_sessions`. `rum_sessions_local`
@@ -522,7 +527,7 @@ Deliberately left for later, with the shape they would take:
   applied at read time, so a browser stack reads in the developer's own files. The keying follows from §3.3
   — a RUM span carries no build identifier, but the content hash in `main.3f2a1b9c.js` names one build
   exactly, and the fingerprint strips it from the group key so groups stay stable across deploys.
-- **Geography and network.** ~~Not in this slice.~~ Country: done, without a GeoIP database. openlog
+- **Geography and network.** ~~Not in this slice.~~ Country: done, from a proxy's header or a database the operator supplies. openlog
   resolves no addresses itself — it reads an already-resolved ISO 3166-1 alpha-2 code from the header named
   by `OPENLOG_RUM_GEO_HEADER` and **never stores a visitor address** (§3.7). Unset, or with no proxy writing
   it, the field stays empty. Region and city are still absent, and so is `connection.effectiveType`.

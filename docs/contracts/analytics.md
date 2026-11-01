@@ -157,7 +157,13 @@ returning after three months would count as a new user.
 `tenant_id, app, deployment_environment, day, actor_hash, weight (max), events (sum)`. Retention reads this and
 never the events, so a 12-month cohort chart does not scan 12 months of events.
 
-### 5.4 Retention class
+### 5.4 `analytics_device_models_1d` — 90 days
+
+`tenant_id, app, deployment_environment, day, model, sessions, actors, weight`, from the resource's `device.model.identifier`, so mobile SDKs only.
+§5.1 has no model, and its view cannot be altered. `sessions` and `actors` are `uniqCombined64` sketches and hold no personal data, so erasure
+(§7) has nothing to find here. Past a few thousand they are estimates.
+
+### 5.5 Retention class
 
 A new storage class `analytics` in `internal/migrate.TTLTables` with **fixed** retention, for the reason `rum` has
 its own class (rum.md §5): borrowing another would let a per-tenant setting silently widen how long personal data
@@ -181,6 +187,7 @@ OQL gains the event type `AnalyticsEvent`, which makes every question below aler
 | `GET /overview` | sessions, events, users, new users, series | users: `visitors` |
 | `GET /events` | event names with count, users and trend; `?name=` adds a breakdown by one param | |
 | `GET /acquisition` | sessions and users by referrer host, UTM source, medium, campaign | |
+| `GET /audience?by=country\|device\|model\|os\|browser\|version` | sessions and users by what they ran on and where; a session counts once, under its first event | |
 | `GET /retention?grain=day\|week\|month` | cohorts by `first_seen`, percentage returning per period | `visitors` |
 | `GET /funnel?step=&step=&window=&by=session\|user` | as rum.md §2.8, over §5.1, up to 90 days | `by=user`: `visitors` |
 | `GET /activity` | DAU, WAU, MAU, new users and stickiness per day | `visitors` |

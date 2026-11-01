@@ -139,6 +139,31 @@ curl -X POST https://openlog.example.com/api/v1/analytics/erase \
 It answers `202` with an id, and `GET /api/v1/analytics/erase/{id}` reports the status. Deletion runs in the background
 shortly after. The raw id on spans is not deleted by this: it expires with the 7-day trace retention.
 
+## See your audience
+
+The **Audience** table on the **Analytics** tab shows sessions and people by country, device type, device model, operating system, browser and
+app version. Device type, OS, browser and version need no setup, and the device model comes from the mobile SDKs.
+
+**Country needs one setting on your server,** because openlog ships no location data. If a CDN such as Cloudflare is in front of it, name the header it writes:
+
+```sh
+OPENLOG_RUM_GEO_HEADER=CF-IPCountry
+```
+
+Otherwise, give it a country database. [DB-IP's free country database](https://db-ip.com/db/download/ip-to-country-lite) works and asks for a link back to DB-IP
+wherever you show the data. GeoLite2-Country works as well.
+
+```sh
+# In your .env. The Compose file keeps this folder in the volume `geoip`.
+OPENLOG_RUM_GEOIP_DB=/var/lib/openlog/geoip/country.mmdb
+# If nginx or a load balancer is in front of ingest, or every visitor looks like it:
+OPENLOG_RUM_TRUSTED_PROXIES=10.0.0.0/8
+```
+
+Restart once after adding the setting. After that, replace the file whenever a new one comes out, with no restart. **Only the country is kept.** The address is used while the request is handled and isn't stored,
+logged or put on a span. It is still personal data for that moment, so mention it in your privacy policy if yours lists such things. Countries start appearing from
+the moment you set this, and earlier sessions stay unknown.
+
 ## How the numbers work
 
 - **A user is a device.** Someone on a phone and a laptop counts twice. Accounts are not merged across devices.
@@ -179,5 +204,6 @@ reasoning.
 
 - Push notifications, remote configuration and A/B testing
 - Session replay
-- Region or city. Country needs a CDN or proxy in front of ingest, through `OPENLOG_RUM_GEO_HEADER`
+- Region or city. Only the country is resolved
+- Device names: the model appears as the device reports it, such as `iPhone15,2`
 - Install attribution on mobile. UTM and referrer are web only

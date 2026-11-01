@@ -98,6 +98,8 @@ var (
 	AnalyticsEvents    = Table{"analytics_events"}
 	AnalyticsActors    = Table{"analytics_actors"}
 	AnalyticsActorDays = Table{"analytics_actor_days"}
+	// AnalyticsDeviceModels is sessions and people per device model and day (0104_analytics_device_models).
+	AnalyticsDeviceModels = Table{"analytics_device_models_1d"}
 
 	// Database monitoring (schema 0096_db_monitoring, db-monitoring.md, D-138): statement statistics per interval,
 	// session samples and execution plans. DBQueryPlans is aggregating: always re-aggregate with GROUP BY.

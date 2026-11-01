@@ -3218,6 +3218,36 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "504": { $ref: "#/components/responses/Timeout" }
+  /api/v1/analytics/audience:
+    get:
+      tags: [rum]
+      operationId: getAnalyticsAudience
+      description: >-
+        Sessions and people by what they ran on and where (analytics.md §6). A session counts once, under its first event. An
+        empty `value` means nobody reported it: `country` needs a proxy header or a database (rum.md §3.7), and `model` comes
+        from the mobile SDKs only. At most 200 rows and 90 days.
+      parameters:
+        - { name: app, in: query, required: true, schema: { type: string } }
+        - { name: environment, in: query, schema: { type: string } }
+        - { name: by, in: query, schema: { type: string, enum: [country, device, model, os, browser, version], default: country } }
+        - { name: from, in: query, schema: { type: string } }
+        - { name: to, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: The rows, most sessions first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [by, rows]
+                properties:
+                  by: { type: string }
+                  rows:
+                    type: array
+                    items: { $ref: "#/components/schemas/AnalyticsSource" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "504": { $ref: "#/components/responses/Timeout" }
   /api/v1/analytics/funnel:
     get:
       tags: [rum]

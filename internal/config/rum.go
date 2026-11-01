@@ -21,12 +21,16 @@ type RUM struct {
 	// country into (OPENLOG_RUM_GEO_HEADER; e.g. CF-IPCountry behind Cloudflare). Empty — the default —
 	// means no country is recorded at all.
 	//
-	// It is a header name rather than a switch because openlog does not resolve addresses itself: there is
-	// no GeoIP database to ship, license and refresh, and **no visitor address is ever stored**. The cost
-	// of that choice is stated rather than hidden: without a proxy that writes the header, the field stays
-	// empty. Anything openlog is fronted by can be trusted to write it exactly as far as it can be trusted
-	// to forward the request at all.
+	// It wins over GeoIPDB when it has an answer. Anything openlog is fronted by can be trusted to write it
+	// exactly as far as it can be trusted to forward the request at all.
 	GeoHeader string
+	// GeoIPDB is the path of a country database in MMDB form (OPENLOG_RUM_GEOIP_DB), for an installation with no CDN
+	// to declare the country. The operator supplies the file, so openlog ships no data and accepts no licence.
+	// Empty — the default — resolves nothing. **No visitor address is stored either way.**
+	GeoIPDB string
+	// TrustedProxies lists the proxies in front of ingest (OPENLOG_RUM_TRUSTED_PROXIES; CIDR ranges or addresses,
+	// comma-separated). Only they are believed about X-Forwarded-For, and with none the header is never read.
+	TrustedProxies string
 	// SourceMaps configures where the maps that un-minify browser stacks are stored (rum.md §8).
 	SourceMaps SourceMaps
 }
@@ -103,5 +107,8 @@ func loadRUM(p *parser) RUM {
 			m.S3Credentials = "static"
 		}
 	}
-	return RUM{Enabled: enabled, GeoHeader: geoHeader, SourceMaps: m}
+	return RUM{
+		Enabled: enabled, GeoHeader: geoHeader, SourceMaps: m,
+		GeoIPDB: p.str("OPENLOG_RUM_GEOIP_DB", ""), TrustedProxies: p.str("OPENLOG_RUM_TRUSTED_PROXIES", ""),
+	}
 }

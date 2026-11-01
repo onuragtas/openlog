@@ -281,5 +281,48 @@ code, oq = call("POST", "/api/v1/query", {"query": f"SELECT count(*) FROM Span W
 print("crash oql:", code, json.dumps(oq.get("rows", oq))[:200])
 check("crashes are alertable through OQL", code == 200 and oq["rows"][0]["values"][0] >= 2, oq)
 
+# ---- audience (analytics.md §6). Countries need OPENLOG_PROOF_GEOIP=1: a server started with
+# internal/rum/testdata/country-test.mmdb as OPENLOG_RUM_GEOIP_DB, and the path to it through a trusted proxy.
+APP_AU = f"audience-{RUN}"
+_, res = call("POST", "/api/v1/browser-keys", {"name": "audience", "service_name": APP_AU, "origins": [ORIGIN], "sample_rate": 1})
+key_au = res["key"]
+
+
+def visit(session, model, forwarded=None):
+    res = {"service.version": "2.0", "os.name": "iOS", "device.model.identifier": model}
+    body = {"resourceSpans": [{"resource": {"attributes": attrs(res)}, "scopeSpans": [{"spans": [
+        span("page_view", now, session, **{"openlog.rum.route": "/home", "device.type": "mobile"})]}]}]}
+    headers = {"openlog-browser-key": key_au, "Origin": ORIGIN}
+    if forwarded:
+        headers["X-Forwarded-For"] = forwarded
+    return call("POST", "/v1/rum", body, base=INGEST, headers=headers)
+
+
+visit("a1", "iPhone15,2", "198.51.100.7")
+visit("a2", "iPhone15,2", "203.0.113.9")
+visit("a3", "Pixel 8", "198.51.100.7, 203.0.113.9")  # the left hop is the client's to invent
+visit("a4", "Pixel 8", "192.0.2.1")  # an address the database has no answer for
+
+
+def audience(by, ready=lambda d: sum(r["sessions"] for r in d.get("rows", [])) >= 4):
+    data = poll(f"/api/v1/analytics/audience?{q(APP_AU)}&by={by}", ready, 45)
+    return {r["value"]: r["sessions"] for r in data.get("rows", [])}
+
+
+models = audience("model")
+print("models:", models)
+check("sessions by device model", models == {"iPhone15,2": 2, "Pixel 8": 2}, models)
+check("sessions by os", audience("os") == {"iOS": 4}, "os")
+check("sessions by version", audience("version") == {"2.0": 4}, "version")
+check("sessions by device type", audience("device") == {"mobile": 4}, "device")
+code, _ = call("GET", f"/api/v1/analytics/audience?{q(APP_AU)}&by=city")
+check("an unknown dimension is refused", code == 400, code)
+countries = audience("country")
+print("countries:", countries)
+if os.environ.get("OPENLOG_PROOF_GEOIP") == "1":
+    check("a country from the database, and a forged hop is ignored", countries == {"TR": 1, "DE": 2, "": 1}, countries)
+else:
+    check("no database means no country", countries == {"": 4}, countries)
+
 print(f"\n{fails} failed")
 sys.exit(1 if fails else 0)
