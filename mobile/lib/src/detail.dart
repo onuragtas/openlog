@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'api/client.dart';
 import 'api/schema.g.dart';
 import 'discovery.dart';
+import 'list_controller.dart';
 import 'session.dart';
 
 /// A single record behind a detail screen.
@@ -32,6 +33,14 @@ abstract class DetailController<T> extends ChangeNotifier {
   /// not estimate cost", not "that record is gone".
   SessionFailure? kindForStatus(int status) => null;
 
+  /// True on a screen whose endpoint is newer than some servers the app talks
+  /// to. Their 404 is then [notOffered] and not "that is gone".
+  bool get endpointMayBeMissing => false;
+
+  /// This server has no such endpoint yet. A plain state rather than a failure:
+  /// nothing went wrong, and trying again will not help.
+  bool notOffered = false;
+
   Future<void> refresh() async {
     if (!loaded) {
       loadingFirst = true;
@@ -40,10 +49,17 @@ abstract class DetailController<T> extends ChangeNotifier {
     try {
       value = await fetch();
       failure = null;
+      notOffered = false;
       loaded = true;
     } on ApiUnreachable {
       failure = const SessionFailure('unreachable', '');
     } on ApiException catch (e) {
+      if (endpointMayBeMissing && e.noSuchEndpoint) {
+        notOffered = true;
+        failure = null;
+        loaded = true;
+        return;
+      }
       failure =
           kindForStatus(e.status) ??
           switch (e.status) {
@@ -51,6 +67,9 @@ abstract class DetailController<T> extends ChangeNotifier {
             404 => const SessionFailure('detailGone', ''),
             _ => SessionFailure('unexpected', e.message),
           };
+    } on ApiShapeError catch (e) {
+      // See ListController.refresh: said on the screen, not thrown past it.
+      failure = SessionFailure('unexpected', e.toString());
     } finally {
       loadingFirst = false;
       notifyListeners();
@@ -439,22 +458,106 @@ class CostsController extends DetailController<CostHostPage> {
       ? const SessionFailure('costsOff', '')
       : null;
 
+  /// The two lists, each with its own sort and pages, as on the web.
+  late final CostHostsList hostList = CostHostsList(_client);
+  late final CostServicesList serviceList = CostServicesList(_client);
+
   /// What each service costs and how the bill moved, which the web shows
   /// beside the hosts. Fetched together so the three never describe three
   /// different windows.
-  List<CostService> services = const [];
+  List<CostService> get services => serviceList.items;
+  set services(List<CostService> v) => serviceList.items = v;
   CostTrend? trend;
+
+  /// The fleet's bill from `/costs/summary`. Null from a server that has not
+  /// got it, where the hosts answer's own summary says the same.
+  CostSummaryAnswer? fleet;
+
+  CostSummary? get summary => fleet?.summary ?? value?.summary;
+  CostPricing? get pricing => fleet?.pricing ?? value?.pricing;
+
+  Future<CostSummaryAnswer?> _fleet() async {
+    try {
+      return await _client.costSummary();
+    } on ApiException catch (e) {
+      if (e.status == 404) return null;
+      rethrow;
+    } on ApiShapeError {
+      return null;
+    }
+  }
 
   @override
   Future<CostHostPage> fetch() async {
-    final answers = await Future.wait([
-      _client.costHosts(),
-      _client.costServices(),
+    final answers = await Future.wait<Object?>([
+      hostList.fetch(),
+      serviceList.fetch(),
       _client.costTrend(),
+      _fleet(),
     ]);
-    services = (answers[1] as CostServicePage).services;
-    trend = answers[2] as CostTrend;
-    return answers[0] as CostHostPage;
+    hostList.items = answers[0]! as List<CostHost>;
+    serviceList.items = answers[1]! as List<CostService>;
+    hostList.loaded = serviceList.loaded = true;
+    hostList.failure = serviceList.failure = null;
+    trend = answers[2] as CostTrend?;
+    fleet = answers[3] as CostSummaryAnswer?;
+    return hostList.last!;
+  }
+
+  @override
+  void dispose() {
+    hostList.dispose();
+    serviceList.dispose();
+    super.dispose();
+  }
+}
+
+/// The hosts of the bill, most expensive first, sorted and cut by the server.
+class CostHostsList extends PagedListController<CostHost> {
+  CostHostsList(this._client)
+    : super(sort: 'cost', ascendingSorts: const {'host', 'instance'});
+
+  final OpenlogClient _client;
+
+  /// The whole of the first page's answer: the summary and the provenance of
+  /// the prices came with it.
+  CostHostPage? last;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ListPage<CostHost>> fetchPage(int offset) async {
+    final page = await _client.costHosts(
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    last = page;
+    return ListPage(page.hosts, hasMore: page.hasMore ?? false);
+  }
+}
+
+/// What each service costs, sorted and cut by the server.
+class CostServicesList extends PagedListController<CostService> {
+  CostServicesList(this._client)
+    : super(sort: 'cost', ascendingSorts: const {'service', 'environment'});
+
+  final OpenlogClient _client;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ListPage<CostService>> fetchPage(int offset) async {
+    final page = await _client.costServices(
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.services, hasMore: page.hasMore ?? false);
   }
 }
 
@@ -554,6 +657,10 @@ class HostController extends DetailController<Host> {
   /// running, this one is what sent traces.
   List<ApmHostService> apmServices = const [];
 
+  /// What this host costs. Null when there is no answer, which the web treats
+  /// the same way: estimates are optional, so no answer means no card.
+  CostHostDetail? cost;
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
@@ -578,6 +685,8 @@ class HostController extends DetailController<Host> {
     } on ApiException catch (e) {
       // The host itself came back, so the screen is worth showing.
       servicesError = e.message;
+    } on ApiShapeError catch (e) {
+      servicesError = e.toString();
     }
     apmServices = const [];
     try {
@@ -587,6 +696,18 @@ class HostController extends DetailController<Host> {
     } on ApiException {
       // A host with no traces is the common case, not a problem worth a
       // message: the section simply does not appear.
+    } on ApiShapeError {
+      // An answer it cannot read is no reason to lose the host above it.
+    }
+    cost = null;
+    try {
+      cost = await _client.costHost(hostId);
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException {
+      // Costs are off here, or this server is older than the endpoint.
+    } on ApiShapeError {
+      // The same: no answer it can read, no card.
     }
     return host;
   }
@@ -606,6 +727,15 @@ class ContainerController extends DetailController<ContainerDetail> {
   /// ago is still in the 30-day retention.
   String? seriesError;
 
+  /// The APM services whose spans carried this container, busiest first as on
+  /// the web.
+  List<ContainerService> services = const [];
+  String? servicesError;
+
+  /// This server has no such endpoint yet, which is its own plain state: not
+  /// a failure, and not the same as a container running no services.
+  bool servicesNotOffered = false;
+
   @override
   String get forbiddenKind => 'sectionForbidden';
 
@@ -620,6 +750,23 @@ class ContainerController extends DetailController<ContainerDetail> {
       rethrow;
     } on ApiException catch (e) {
       seriesError = e.message;
+    }
+    services = const [];
+    servicesError = null;
+    servicesNotOffered = false;
+    try {
+      services = [...(await _client.containerServices(containerId)).services]
+        ..sort((a, b) => b.throughput.compareTo(a.throughput));
+    } on ApiUnreachable {
+      rethrow;
+    } on ApiException catch (e) {
+      if (e.noSuchEndpoint) {
+        servicesNotOffered = true;
+      } else {
+        servicesError = e.message;
+      }
+    } on ApiShapeError catch (e) {
+      servicesError = e.toString();
     }
     return detail;
   }

@@ -25,17 +25,25 @@ class ListSortBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        DropdownButton<String>(
-          key: const Key('list-sort'),
-          value: controller.sort,
-          underline: const SizedBox.shrink(),
-          items: [
-            for (final c in columns)
-              DropdownMenuItem(value: c, child: Text(label(c))),
-          ],
-          onChanged: (v) {
-            if (v != null && v != controller.sort) controller.setSort(v);
-          },
+        // Flexible and expanded: a dropdown is as wide as its widest item, and a
+        // long column name in large text would otherwise run off a phone.
+        Flexible(
+          child: DropdownButton<String>(
+            key: const Key('list-sort'),
+            isExpanded: true,
+            value: controller.sort,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final c in columns)
+                DropdownMenuItem(
+                  value: c,
+                  child: Text(label(c), overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: (v) {
+              if (v != null && v != controller.sort) controller.setSort(v);
+            },
+          ),
         ),
         IconButton(
           key: const Key('list-sort-direction'),

@@ -44,6 +44,17 @@ class ApiException implements Exception {
   bool get isUnauthenticated => status == 401;
   bool get isForbidden => status == 403;
 
+  /// The server has no such endpoint, as opposed to no such record. The app
+  /// talks to servers older than it, and "this is gone" would be a false thing
+  /// to say about a feature that server has not got yet.
+  ///
+  /// The server's catch-all for `/api/` answers exactly this message, where a
+  /// missing record names what is missing ("slo not found"); a proxy's 404 has
+  /// no openlog code at all.
+  bool get noSuchEndpoint =>
+      status == 405 ||
+      (status == 404 && (code.isEmpty || message == 'no such endpoint'));
+
   @override
   String toString() => message;
 }
@@ -159,9 +170,12 @@ class OpenlogClient {
     final range = window?.call();
     // Only the paths the contract gives a `from`/`to`, and only when the
     // caller did not set its own window (the correlation screen asks
-    // about an incident's window, not the screen's).
+    // about an incident's window, not the screen's). Nor to product
+    // analytics, which reads over days and months: the contract lets it take
+    // a window, but a server too old for `days` would answer the picked hour.
     if (range == null ||
         !pathTakesRange(uri.path) ||
+        uri.path.startsWith('/api/v1/analytics/') ||
         uri.queryParameters.containsKey('from') ||
         uri.queryParameters.containsKey('to')) {
       return uri;
@@ -317,9 +331,39 @@ class OpenlogClient {
     },
   );
 
-  /// The mute windows: what is silenced, and until when.
-  Future<AlertMutePage> alertMutes() async =>
-      AlertMutePage.fromJson(await _send('GET', '/api/v1/alerts/mutes'));
+  /// The mute windows: what is silenced, and until when. The ones that ended
+  /// too, as on the web, which sorts them last.
+  Future<AlertMutePage> alertMutes() async => AlertMutePage.fromJson(
+    await _send('GET', '/api/v1/alerts/mutes?include_expired=true'),
+  );
+
+  /// Stores a mute from the whole form: an [AlertMuteInput] of the contract.
+  Future<void> createAlertMuteFrom(Map<String, Object?> input) =>
+      _send('POST', '/api/v1/alerts/mutes', body: input);
+
+  /// Writes over one. The whole mute goes back, so what the form does not
+  /// touch has to be in [input] as it came.
+  Future<AlertMute> updateAlertMute(
+    String id,
+    Map<String, Object?> input,
+  ) async => AlertMute.fromJson(
+    await _send(
+      'PUT',
+      '/api/v1/alerts/mutes/${Uri.encodeComponent(id)}',
+      body: input,
+    ),
+  );
+
+  /// When a schedule nobody saved yet would next silence alerting.
+  Future<AlertMuteOccurrencePage> previewAlertMute(
+    Map<String, Object?> schedule,
+  ) async => AlertMuteOccurrencePage.fromJson(
+    await _send(
+      'POST',
+      '/api/v1/alerts/mutes/preview',
+      body: {'schedule': schedule},
+    ),
+  );
 
   /// Silences alerting until [endsAt], optionally only for [ruleIds].
   ///
@@ -517,8 +561,28 @@ class OpenlogClient {
   /// so the screen has to say it before the tap, not after.
   Future<void> setAlertRuleEnabled(String id, {required bool enabled}) => _send(
     'POST',
-    '/api/v1/alerts/rules/${Uri.encodeComponent(id)}/'
-        '${enabled ? 'enable' : 'disable'}',
+    // One literal: check-parity.py reads a path to the closing quote, and split
+    // in two it saw a POST to the rule itself instead of these two endpoints.
+    '/api/v1/alerts/rules/${Uri.encodeComponent(id)}/${enabled ? 'enable' : 'disable'}',
+  );
+
+  /// One rule, and the state of each series it is watching.
+  Future<AlertRuleDetail> alertRule(String id) async =>
+      AlertRuleDetail.fromJson(
+        await _send('GET', '/api/v1/alerts/rules/${Uri.encodeComponent(id)}'),
+      );
+
+  /// What a rule's evaluations found between [from] and [to].
+  Future<AlertRuleEvaluations> alertRuleEvaluations(
+    String id, {
+    required DateTime from,
+    required DateTime to,
+  }) async => AlertRuleEvaluations.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/alerts/rules/${Uri.encodeComponent(id)}/evaluations'
+          '?from=${from.millisecondsSinceEpoch}&to=${to.millisecondsSinceEpoch}',
+    ),
   );
 
   /// One incident with its timeline and what the server tried to deliver.
@@ -555,8 +619,19 @@ class OpenlogClient {
   ///
   /// The range is left to the server's default (now - 1h), which is the window
   /// an on-call screen wants: what is happening, not what happened.
-  Future<ServicePage> services({String q = ''}) async {
-    final query = <String, String>{};
+  Future<ServicePage> services({
+    String q = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final query = <String, String>{
+      'sort': sort,
+      'dir': dir,
+      'limit': '$limit',
+      if (offset > 0) 'offset': '$offset',
+    };
     if (q.isNotEmpty) query['q'] = q;
     final suffix = query.isEmpty ? '' : '?${Uri(queryParameters: query).query}';
     return ServicePage.fromJson(
@@ -658,6 +733,8 @@ class OpenlogClient {
     required String service,
     required int atMillis,
     String window = '30m',
+    String? namespace,
+    String? environment,
   }) async => ApmDeploymentCompare.fromJson(
     await _send(
       'GET',
@@ -665,7 +742,15 @@ class OpenlogClient {
         '/api/v1/apm/services/${Uri.encodeComponent(service)}'
             '/deployments/compare',
         '',
-        extra: {'at': '$atMillis', 'window': window},
+        extra: {
+          'at': '$atMillis',
+          'window': window,
+          // Exact when given, and an empty one is a value of its own: the
+          // server reads a blank environment as "the rows that have none",
+          // and leaving it out as "all of them".
+          'namespace': ?namespace,
+          'environment': ?environment,
+        },
       ),
     ),
   );
@@ -677,13 +762,37 @@ class OpenlogClient {
   Future<ApmTransactionPage> apmTransactions({
     required String service,
     String sort = 'time',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
   }) async => ApmTransactionPage.fromJson(
     await _send(
       'GET',
       _listPath(
         '/api/v1/apm/services/${Uri.encodeComponent(service)}/transactions',
         '',
-        extra: {'sort': sort},
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// One transaction: its totals, its series, its latency distribution and
+  /// the slowest traces of it.
+  Future<ApmTransactionDetail> apmTransaction({
+    required String service,
+    required String name,
+  }) async => ApmTransactionDetail.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/services/${Uri.encodeComponent(service)}/transaction',
+        '',
+        extra: {'name': name},
       ),
     ),
   );
@@ -692,13 +801,62 @@ class OpenlogClient {
   Future<ApmDbQueryPage> apmServiceDatabases({
     required String service,
     String sort = 'time',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
   }) async => ApmDbQueryPage.fromJson(
     await _send(
       'GET',
       _listPath(
         '/api/v1/apm/services/${Uri.encodeComponent(service)}/databases',
         '',
-        extra: {'sort': sort},
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// The statements of every service, as the applications measured them, so
+  /// with no connection to the database server. 404 on a server older than
+  /// this list.
+  Future<ApmDbQueryPage> apmDbQueries({
+    String q = '',
+    String sort = 'time',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => ApmDbQueryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/db-queries',
+        q,
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// The execution plans agents captured for one statement, newest first.
+  /// 404 on a server older than them.
+  Future<ApmDbQueryPlanPage> apmDbQueryPlans({
+    required String dbSystem,
+    required String statement,
+  }) async => ApmDbQueryPlanPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/apm/db-queries/plans',
+        '',
+        extra: {'db_system': dbSystem, 'statement': statement},
       ),
     ),
   );
@@ -745,8 +903,10 @@ class OpenlogClient {
     String maxDurationMs = '',
     bool errorsOnly = false,
     String sort = 'timestamp',
+    String dir = 'desc',
     Map<String, String> attributes = const {},
     int limit = 50,
+    int offset = 0,
   }) async => ApmTracePage.fromJson(
     await _send(
       'GET',
@@ -762,7 +922,9 @@ class OpenlogClient {
           // not fail, which is not what an unchecked box means.
           if (errorsOnly) 'error': 'true',
           'sort': sort,
+          'dir': dir,
           'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
           for (final e in attributes.entries) 'attr.${e.key}': e.value,
         },
       ),
@@ -930,6 +1092,141 @@ class OpenlogClient {
     await _send('GET', '/api/v1/hosts/${Uri.encodeComponent(hostId)}'),
   );
 
+  /// Everything in the host's latest inventory snapshot, every category.
+  Future<InventoryResponse> hostInventory(String hostId) async =>
+      InventoryResponse.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/hosts/${Uri.encodeComponent(hostId)}/inventory',
+        ),
+      );
+
+  /// One metric of one host over the window, one series per [groupBy] value.
+  Future<MetricSeriesResponse> hostMetric(
+    String hostId, {
+    required String name,
+    required String agg,
+    String groupBy = '',
+  }) async => MetricSeriesResponse.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/hosts/${Uri.encodeComponent(hostId)}/metrics',
+        '',
+        extra: {
+          'name': name,
+          'agg': agg,
+          if (groupBy.isNotEmpty) 'group_by': groupBy,
+        },
+      ),
+    ),
+  );
+
+  /// The open findings of one host.
+  Future<HostVulnPage> hostVulnerabilities(
+    String hostId, {
+    String sort = 'severity',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
+  }) async => HostVulnPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/hosts/${Uri.encodeComponent(hostId)}/vulnerabilities',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// One advisory: the hosts it was found on and what upgrading each means.
+  Future<VulnAdvisoryPage> vulnerability(
+    String id, {
+    String sort = 'severity',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
+  }) async => VulnAdvisoryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/vulnerabilities/${Uri.encodeComponent(id)}',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// One SLO: its budget, its burn windows and its burndown. The SLO itself
+  /// is in the answer, which is why nothing asks `/slos/{id}` on its own.
+  Future<SloResults> sloResults(String id) async => SloResults.fromJson(
+    await _send('GET', '/api/v1/slos/${Uri.encodeComponent(id)}/results'),
+  );
+
+  /// One job monitor's concluded runs, with the monitor and their summary.
+  Future<JobRunPage> jobRuns(String id) async => JobRunPage.fromJson(
+    await _send('GET', '/api/v1/jobs/monitors/${Uri.encodeComponent(id)}/runs'),
+  );
+
+  /// One workload: its pods, its autoscaler and its attributes.
+  Future<KubernetesWorkloadDetail> k8sWorkload({
+    required String clusterUid,
+    required String namespace,
+    required String kind,
+    required String name,
+  }) async => KubernetesWorkloadDetail.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/kubernetes/workloads/${Uri.encodeComponent(clusterUid)}/${Uri.encodeComponent(namespace)}/${Uri.encodeComponent(kind)}/${Uri.encodeComponent(name)}',
+    ),
+  );
+
+  /// What that workload has been doing over the window.
+  Future<KubernetesWorkloadTimeseries> k8sWorkloadTimeseries({
+    required String clusterUid,
+    required String namespace,
+    required String kind,
+    required String name,
+  }) async => KubernetesWorkloadTimeseries.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/kubernetes/workloads/${Uri.encodeComponent(clusterUid)}/${Uri.encodeComponent(namespace)}/${Uri.encodeComponent(kind)}/${Uri.encodeComponent(name)}/timeseries',
+    ),
+  );
+
+  /// The APM services whose spans carried this container.
+  Future<ContainerServicePage> containerServices(String id) async =>
+      ContainerServicePage.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/containers/${Uri.encodeComponent(id)}/services',
+        ),
+      );
+
+  /// What one host costs, and who on it the bill goes to.
+  Future<CostHostDetail> costHost(String hostId) async =>
+      CostHostDetail.fromJson(
+        await _send(
+          'GET',
+          '/api/v1/costs/hosts/${Uri.encodeComponent(hostId)}',
+        ),
+      );
+
+  /// The fleet's bill over the window, with where its prices came from.
+  Future<CostSummaryAnswer> costSummary() async =>
+      CostSummaryAnswer.fromJson(await _send('GET', '/api/v1/costs/summary'));
+
   /// What the agent found running on it: the `discovered_service` items of the
   /// host's latest snapshot, integration status and all.
   Future<InventoryResponse> hostServices(String hostId) async =>
@@ -996,10 +1293,26 @@ class OpenlogClient {
   /// What has been profiled: one entry per service, environment and profile
   /// type. The type is never guessed -- nanoseconds and bytes do not add up,
   /// so the other endpoints take the type this list reports.
-  Future<ProfileServicePage> profileServices() async =>
-      ProfileServicePage.fromJson(
-        await _send('GET', '/api/v1/profiles/services'),
-      );
+  Future<ProfileServicePage> profileServices({
+    String sort = 'samples',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => ProfileServicePage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/profiles/services',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
 
   /// Functions ranked by self time. `total` is the sum of the rows returned,
   /// not of the window, so a share is of something the person can see.
@@ -1172,25 +1485,66 @@ class OpenlogClient {
 
   /// Hosts by cost, most expensive first, with the fleet summary and the
   /// provenance of the prices in the same answer.
-  Future<CostHostPage> costHosts({int limit = 50}) async =>
-      CostHostPage.fromJson(
-        await _send('GET', '/api/v1/costs/hosts?limit=$limit'),
-      );
+  Future<CostHostPage> costHosts({
+    String sort = 'cost',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => CostHostPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/costs/hosts',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
 
   /// What each service costs: the containers linked to it, on the hosts
   /// that ran them.
-  Future<CostServicePage> costServices({int limit = 50}) async =>
-      CostServicePage.fromJson(
-        await _send('GET', '/api/v1/costs/services?limit=$limit'),
-      );
+  Future<CostServicePage> costServices({
+    String sort = 'cost',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => CostServicePage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/costs/services',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
 
   /// The fleet's cost over time, with the idle part of it.
   Future<CostTrend> costTrend() async =>
       CostTrend.fromJson(await _send('GET', '/api/v1/costs/trend'));
 
   /// Browser applications that reported in the range.
-  Future<RumAppPage> rumApps() async =>
-      RumAppPage.fromJson(await _send('GET', '/api/v1/rum/apps'));
+  Future<RumAppPage> rumApps({
+    String sort = 'views',
+    String dir = '',
+    int limit = 50,
+    int offset = 0,
+  }) async => RumAppPage.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/apps?${Uri(queryParameters: {'sort': sort, if (dir.isNotEmpty) 'dir': dir, 'limit': '$limit', if (offset > 0) 'offset': '$offset'}).query}',
+    ),
+  );
 
   /// One application's Core Web Vitals, page views and totals.
   Future<RumOverview> rumOverview(String app) async => RumOverview.fromJson(
@@ -1271,13 +1625,17 @@ class OpenlogClient {
   /// because an id is something somebody arrives at.
   Future<RumSessionPage> rumSessions(
     String app, {
+    String sort = 'started',
+    String dir = '',
+    int limit = 50,
+    int offset = 0,
     String deviceType = '',
     String browser = '',
     String userId = '',
   }) async => RumSessionPage.fromJson(
     await _send(
       'GET',
-      '/api/v1/rum/sessions?${Uri(queryParameters: {'app': app, if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser, if (userId.isNotEmpty) 'user_id': userId}).query}',
+      '/api/v1/rum/sessions?${Uri(queryParameters: {'app': app, 'sort': sort, if (dir.isNotEmpty) 'dir': dir, 'limit': '$limit', if (offset > 0) 'offset': '$offset', if (deviceType.isNotEmpty) 'device_type': deviceType, if (browser.isNotEmpty) 'browser': browser, if (userId.isNotEmpty) 'user_id': userId}).query}',
     ),
   );
 
@@ -1289,13 +1647,103 @@ class OpenlogClient {
       );
 
   /// How each version behaved, and the deployments that introduced them.
-  Future<RumReleaseList> rumReleases(String app) async =>
-      RumReleaseList.fromJson(
-        await _send(
-          'GET',
-          '/api/v1/rum/releases?${Uri(queryParameters: {'app': app}).query}',
-        ),
-      );
+  Future<RumReleaseList> rumReleases(
+    String app, {
+    String sort = 'last_seen',
+    String dir = '',
+    int limit = 50,
+    int offset = 0,
+  }) async => RumReleaseList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/releases?${Uri(queryParameters: {'app': app, 'sort': sort, if (dir.isNotEmpty) 'dir': dir, 'limit': '$limit', if (offset > 0) 'offset': '$offset'}).query}',
+    ),
+  );
+
+  /// What crashed a mobile application, most frequent first. Stacks are
+  /// symbolicated as they are read. A 404 is a server older than this list.
+  Future<RumCrashList> rumCrashes(String app) async => RumCrashList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/rum/crashes?${Uri(queryParameters: {'app': app}).query}',
+    ),
+  );
+
+  /// A period against the one before it. A 404 is a server older than this
+  /// comparison.
+  Future<AnalyticsCompareResponse> analyticsCompare(
+    String app, {
+    int days = 28,
+  }) async => AnalyticsCompareResponse.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/analytics/compare',
+        '',
+        extra: {'app': app, 'days': '$days'},
+      ),
+    ),
+  );
+
+  /// DAU, WAU and MAU per day. Over days and not the picked window: an hour
+  /// of DAU means nothing.
+  Future<AnalyticsActivityResponse> analyticsActivity(
+    String app, {
+    int days = 28,
+  }) async => AnalyticsActivityResponse.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/analytics/activity?${Uri(queryParameters: {'app': app, 'days': '$days'}).query}',
+    ),
+  );
+
+  /// Of the people first seen in a period, how many came back in each later
+  /// one. [from] is in epoch milliseconds, as the web sends it.
+  Future<AnalyticsRetentionResponse> analyticsRetention(
+    String app, {
+    required String grain,
+    required int from,
+  }) async => AnalyticsRetentionResponse.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/analytics/retention?${Uri(queryParameters: {'app': app, 'grain': grain, 'from': '$from'}).query}',
+    ),
+  );
+
+  /// The application's custom events, most frequent first.
+  Future<AnalyticsEventList> analyticsEvents(
+    String app, {
+    int days = 28,
+  }) async => AnalyticsEventList.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/analytics/events?${Uri(queryParameters: {'app': app, 'days': '$days'}).query}',
+    ),
+  );
+
+  /// Sessions and people by how the session started.
+  Future<AnalyticsAcquisitionResponse> analyticsAcquisition(
+    String app, {
+    required String by,
+    int days = 28,
+  }) async => AnalyticsAcquisitionResponse.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/analytics/acquisition?${Uri(queryParameters: {'app': app, 'by': by, 'days': '$days'}).query}',
+    ),
+  );
+
+  /// Sessions and people by what they ran on and where.
+  Future<AnalyticsAudienceResponse> analyticsAudience(
+    String app, {
+    required String by,
+    int days = 28,
+  }) async => AnalyticsAudienceResponse.fromJson(
+    await _send(
+      'GET',
+      '/api/v1/analytics/audience?${Uri(queryParameters: {'app': app, 'by': by, 'days': '$days'}).query}',
+    ),
+  );
 
   /// Of the sessions that did the first step, how many reached each of the
   /// next ones in order. The endpoint takes between two and six steps.
@@ -1393,9 +1841,14 @@ class OpenlogClient {
     List<String> columns = const [],
     bool oldestFirst = false,
     int limit = 50,
+    String transaction = '',
+    String transactionService = '',
   }) async {
     final body = <String, Object?>{
       'limit': limit,
+      if (transaction.isNotEmpty) 'transaction': transaction,
+      if (transactionService.isNotEmpty)
+        'transaction_service': transactionService,
       // The extra keys to return in `fields`. The row's own fields come
       // back whether they are asked for or not.
       if (columns.isNotEmpty) 'columns': columns,
@@ -1470,8 +1923,27 @@ class OpenlogClient {
   // spread out because that is all they are; anything that needs more than a
   // page and a query gets its own method above.
 
-  Future<HostPage> hosts({String q = ''}) async =>
-      HostPage.fromJson(await _send('GET', _listPath('/api/v1/hosts', q)));
+  Future<HostPage> hosts({
+    String q = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
+  }) async => HostPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/hosts',
+        q,
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
 
   /// The containers of the window, with the web's filters: one host, one
   /// compose project, one state.
@@ -1480,6 +1952,10 @@ class OpenlogClient {
     String hostId = '',
     String? composeProject,
     String state = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
   }) async => ContainerPage.fromJson(
     await _send(
       'GET',
@@ -1487,6 +1963,12 @@ class OpenlogClient {
         '/api/v1/containers',
         q,
         extra: {
+          'sort': sort,
+          'dir': dir,
+          // None at all for the grouped view, which takes what one request
+          // gives by the server's own default, as the web's does.
+          if (limit > 0) 'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
           if (hostId.isNotEmpty) 'host_id': hostId,
           // An empty project is a filter of its own -- the containers that
           // belong to no compose project -- so null means "every one" and
@@ -1522,6 +2004,10 @@ class OpenlogClient {
     String phase = '',
     String workloadKind = '',
     String workloadName = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
   }) async => PodPage.fromJson(
     await _send(
       'GET',
@@ -1529,6 +2015,10 @@ class OpenlogClient {
         '/api/v1/kubernetes/pods',
         q,
         extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
           if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
           if (namespace.isNotEmpty) 'namespace': namespace,
           if (node.isNotEmpty) 'node': node,
@@ -1577,13 +2067,23 @@ class OpenlogClient {
   Future<KubernetesNodePage> k8sNodes({
     String clusterUid = '',
     String q = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
   }) async => KubernetesNodePage.fromJson(
     await _send(
       'GET',
       _listPath(
         '/api/v1/kubernetes/nodes',
         q,
-        extra: {if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid},
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+          if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
+        },
       ),
     ),
   );
@@ -1594,6 +2094,10 @@ class OpenlogClient {
     String kind = '',
     String health = '',
     String q = '',
+    String sort = 'name',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
   }) async => KubernetesWorkloadPage.fromJson(
     await _send(
       'GET',
@@ -1601,6 +2105,10 @@ class OpenlogClient {
         '/api/v1/kubernetes/workloads',
         q,
         extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
           if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
           if (namespace.isNotEmpty) 'namespace': namespace,
           if (kind.isNotEmpty) 'kind': kind,
@@ -1616,6 +2124,8 @@ class OpenlogClient {
     String clusterUid = '',
     String namespace = '',
     String type = '',
+    String objectKind = '',
+    String objectName = '',
     int limit = 100,
   }) async => KubernetesEventList.fromJson(
     await _send(
@@ -1625,6 +2135,8 @@ class OpenlogClient {
         '',
         extra: {
           'limit': '$limit',
+          if (objectKind.isNotEmpty) 'object_kind': objectKind,
+          if (objectName.isNotEmpty) 'object_name': objectName,
           if (clusterUid.isNotEmpty) 'cluster_uid': clusterUid,
           if (namespace.isNotEmpty) 'namespace': namespace,
           if (type.isNotEmpty) 'type': type,
@@ -1659,14 +2171,118 @@ class OpenlogClient {
         await _send('GET', _listPath('/api/v1/jobs/monitors', q)),
       );
 
-  Future<VulnPage> vulnerabilities({String q = ''}) async => VulnPage.fromJson(
-    await _send('GET', _listPath('/api/v1/vulnerabilities', q)),
+  /// The advisories, grouped. The counters in the answer are of the whole
+  /// list, not of the page, and the severity is what filters it: the contract
+  /// has no search here.
+  Future<VulnPage> vulnerabilities({
+    String severity = '',
+    String sort = 'severity',
+    String dir = 'asc',
+    int limit = 50,
+    int offset = 0,
+  }) async => VulnPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/vulnerabilities',
+        '',
+        extra: {
+          if (severity.isNotEmpty) 'severity': severity,
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
   );
 
-  Future<DbInstancePage> dbInstances({String q = ''}) async =>
-      DbInstancePage.fromJson(
-        await _send('GET', _listPath('/api/v1/db/instances', q)),
-      );
+  Future<DbInstancePage> dbInstances({
+    String sort = 'time',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => DbInstancePage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/instances',
+        '',
+        extra: {
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// Every wait event of an instance in the range, where [dbActivity] holds
+  /// the top ones. 404 on a server older than this list.
+  Future<DbWaitPage> dbActivityWaits({
+    required String instance,
+    String sort = 'samples',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => DbWaitPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/activity/waits',
+        '',
+        extra: {
+          'instance': instance,
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// Every statement the session samples caught, where [dbActivity] holds
+  /// the top ones. 404 on a server older than this list.
+  Future<DbActivityQueryPage> dbActivityQueries({
+    required String instance,
+    String sort = 'samples',
+    String dir = 'desc',
+    int limit = 50,
+    int offset = 0,
+  }) async => DbActivityQueryPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/activity/queries',
+        '',
+        extra: {
+          'instance': instance,
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
+      ),
+    ),
+  );
+
+  /// The instances whose statistics hold a normalized statement, heaviest
+  /// first: the way from an application's call to the server's view of it.
+  Future<DbLookupPage> dbLookup({
+    required String dbSystem,
+    required String statement,
+  }) async => DbLookupPage.fromJson(
+    await _send(
+      'GET',
+      _listPath(
+        '/api/v1/db/lookup',
+        '',
+        extra: {'db_system': dbSystem, 'statement': statement},
+      ),
+    ),
+  );
 
   /// What one instance is busy with: average active sessions per wait type,
   /// the top wait events and the statements the samples were running.
@@ -1681,15 +2297,23 @@ class OpenlogClient {
   Future<DbQueryPage> dbQueries({
     required String instance,
     String sort = 'time',
+    String dir = 'desc',
     String q = '',
     int limit = 50,
+    int offset = 0,
   }) async => DbQueryPage.fromJson(
     await _send(
       'GET',
       _listPath(
         '/api/v1/db/queries',
         q,
-        extra: {'instance': instance, 'sort': sort, 'limit': '$limit'},
+        extra: {
+          'instance': instance,
+          'sort': sort,
+          'dir': dir,
+          'limit': '$limit',
+          if (offset > 0) 'offset': '$offset',
+        },
       ),
     ),
   );

@@ -130,36 +130,44 @@ void main() {
   );
 
   group('services', () {
-    test(
-      'the worst service is first, because the top is what gets read',
-      () async {
-        final server = await FakeServer.start(
-          (req, _) => writeJson(req, 200, {
-            'step': '60s',
-            'services': [
-              svc('quiet'),
-              svc('broken', errorRate: 0.12),
-              svc('busy', throughput: 900),
-            ],
-          }),
-        );
-        addTearDown(server.stop);
-        final client = OpenlogClient(baseUrl: server.baseUrl);
-        addTearDown(client.close);
-        final c = ServicesController(client);
+    test('the web\'s order, which is the server\'s: by name', () async {
+      final server = await FakeServer.start(
+        (req, _) => writeJson(req, 200, {
+          'step': '60s',
+          'services': [
+            svc('broken', errorRate: 0.12),
+            svc('busy', throughput: 900),
+            svc('quiet'),
+          ],
+          'has_more': true,
+        }),
+      );
+      addTearDown(server.stop);
+      final client = OpenlogClient(baseUrl: server.baseUrl);
+      addTearDown(client.close);
+      final c = ServicesController(client);
 
-        await c.refresh();
+      await c.refresh();
 
-        // Errors first, then throughput: a phone list is read from the top and
-        // rarely scrolled, so the broken one has to be there.
-        expect(c.items.map((s) => s.serviceName), ['broken', 'busy', 'quiet']);
-        expect(c.items.first.errorRate, closeTo(0.12, 1e-9));
-        expect(c.items.first.p95Ms, 180);
-        // allOf composed ApmRed into the same class rather than a nested one.
-        expect(c.items.first.requests, 1200);
-        expect(c.items.first.sparkline.single, [1760000000000, 12.5]);
-      },
-    );
+      expect(Uri.splitQueryString(server.requests.last.query), {
+        'sort': 'name',
+        'dir': 'asc',
+        'limit': '50',
+      });
+      expect(c.items.map((s) => s.serviceName), ['broken', 'busy', 'quiet']);
+      expect(c.items.first.errorRate, closeTo(0.12, 1e-9));
+      expect(c.items.first.p95Ms, 180);
+      // allOf composed ApmRed into the same class rather than a nested one.
+      expect(c.items.first.requests, 1200);
+      expect(c.items.first.sparkline.single, [1760000000000, 12.5]);
+      expect(c.hasMore, isTrue);
+
+      await c.loadMore();
+      expect(Uri.splitQueryString(server.requests.last.query)['offset'], '3');
+
+      await c.setSort('error_rate');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'desc');
+    });
 
     test('the search box becomes a query the server can answer', () async {
       final server = await FakeServer.start(
@@ -187,7 +195,7 @@ void main() {
 
       await ServicesController(client).refresh();
 
-      expect(server.requests.single.query, isEmpty);
+      expect(server.requests.single.query, isNot(contains('q=')));
     });
   });
 

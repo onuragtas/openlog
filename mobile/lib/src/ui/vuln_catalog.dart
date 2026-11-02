@@ -7,10 +7,58 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../api/schema.g.dart';
+import '../infra_detail.dart';
 import '../sections.dart';
 import 'list_scaffold.dart' show relativeTimeOf;
+import 'monitor_screens.dart' show vulnSeverityLabel;
 import 'oql_view.dart' show formatNumber;
 import 'severity.dart';
+
+/// The severity counters, which double as the filter: the number a person looks
+/// at is the thing they tap. Of the whole list rather than of the page.
+class VulnSeverityFilter extends StatelessWidget {
+  const VulnSeverityFilter({super.key, required this.controller});
+
+  final VulnerabilitiesController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final c = controller;
+    final total = c.severityCounts.values.fold(0, (a, b) => a + b);
+    void pick(String severity) {
+      c.severity = severity;
+      c.refresh();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        children: [
+          ChoiceChip(
+            key: const Key('vuln-severity-all'),
+            label: Text(l.vulnFilterAll(total)),
+            selected: c.severity.isEmpty,
+            onSelected: (_) => pick(''),
+          ),
+          for (final s in vulnSeverities)
+            ChoiceChip(
+              key: Key('vuln-severity-$s'),
+              label: Text(
+                '${vulnSeverityLabel(l, VulnSeverity.fromJson(s, 'severity')).$1} '
+                '${c.severityCounts[s] ?? 0}',
+              ),
+              selected: c.severity == s,
+              onSelected: (_) => pick(s),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 class VulnCatalogNote extends StatelessWidget {
   const VulnCatalogNote({super.key, required this.controller});

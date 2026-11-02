@@ -11,6 +11,8 @@ class LogsController extends ListController<LogQueryRow> {
     this.traceId = '',
     this.podUid = '',
     this.containerId = '',
+    this.transaction = '',
+    this.transactionService = '',
   });
 
   final OpenlogClient _client;
@@ -52,9 +54,17 @@ class LogsController extends ListController<LogQueryRow> {
   final String podUid;
   final String containerId;
 
+  /// One APM transaction of one service: the records of its traces. The
+  /// server reads these two together and has no condition for them.
+  final String transaction;
+  final String transactionService;
+
   /// True when this list is about one thing rather than the whole stream.
   bool get scoped =>
-      traceId.isNotEmpty || podUid.isNotEmpty || containerId.isNotEmpty;
+      traceId.isNotEmpty ||
+      podUid.isNotEmpty ||
+      containerId.isNotEmpty ||
+      transaction.isNotEmpty;
 
   @override
   String get forbiddenKind => 'logsForbidden';
@@ -66,6 +76,8 @@ class LogsController extends ListController<LogQueryRow> {
       filters: _conditions(),
       columns: requestColumns(columns),
       oldestFirst: oldestFirst,
+      transaction: transaction,
+      transactionService: transactionService,
     );
     return page.rows;
   }

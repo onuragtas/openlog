@@ -11,6 +11,7 @@ import '../rum.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart' show formatNumber;
 import 'rum_facets.dart';
@@ -18,6 +19,17 @@ import 'rum_vitals.dart' show formatVital;
 import 'sections_screen.dart';
 import 'severity.dart';
 import 'trace_screen.dart';
+
+/// The columns the web sorts by, with its default first. The contract also
+/// offers `last_seen`, which the web has no column for.
+const rumSessionSorts = [
+  'started',
+  'duration',
+  'page_views',
+  'errors',
+  'entry',
+  'browser',
+];
 
 class RumSessionsTab extends StatefulWidget {
   const RumSessionsTab({
@@ -49,6 +61,15 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
     _c.dispose();
     super.dispose();
   }
+
+  String _sortLabel(L l, String sort) => switch (sort) {
+    'duration' => l.rumSessionDuration,
+    'page_views' => l.rumSessionPageViews,
+    'errors' => l.rumErrors,
+    'entry' => l.rumSessionEntry,
+    'browser' => l.rumFacetBrowser,
+    _ => l.rumSessionStarted,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +111,14 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
                   ),
               ],
             ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ListSortBar(
+                controller: _c,
+                columns: rumSessionSorts,
+                label: (s) => _sortLabel(l, s),
+              ),
+            ),
             const SizedBox(height: 4),
             Align(
               alignment: Alignment.centerLeft,
@@ -106,6 +135,7 @@ class _RumSessionsTabState extends State<RumSessionsTab> {
             ),
           ],
         ),
+        footer: LoadMoreTile(controller: _c),
         itemBuilder: (context, i) => _SessionCard(
           visit: _c.items[i],
           onOpen: () => Navigator.of(context).push(

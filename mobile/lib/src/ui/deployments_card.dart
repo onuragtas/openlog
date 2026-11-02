@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../apm_format.dart';
 import '../services.dart';
 import '../session.dart';
 import 'failure_text.dart';
@@ -19,10 +20,14 @@ class DeploymentsCard extends StatelessWidget {
     super.key,
     required this.session,
     required this.controller,
+    this.onOpenError,
   });
 
   final SessionController session;
   final ServiceDeploymentsController controller;
+
+  /// Opens an error group a deployment brought, by its id.
+  final ValueChanged<String>? onOpenError;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +70,16 @@ class DeploymentsCard extends StatelessWidget {
                 compare: controller.comparing == d.t
                     ? controller.compare
                     : null,
-                onTap: () => controller.toggleCompare(d.t),
+                // The deployment's own namespace and environment, exactly,
+                // as the web compares it: a blank one is a value too.
+                onTap: () => controller.toggleCompare(
+                  d.t,
+                  namespace: d.serviceNamespace,
+                  environment: d.environment,
+                ),
+                window: controller.compareWindow,
+                onWindow: controller.setCompareWindow,
+                onOpenError: onOpenError,
               ),
         ],
       ),
@@ -80,6 +94,9 @@ class _DeploymentRow extends StatelessWidget {
     required this.busy,
     required this.compare,
     required this.onTap,
+    required this.window,
+    required this.onWindow,
+    this.onOpenError,
   });
 
   final ApmDeployment deployment;
@@ -87,6 +104,9 @@ class _DeploymentRow extends StatelessWidget {
   final bool busy;
   final ApmDeploymentCompare? compare;
   final VoidCallback onTap;
+  final String window;
+  final ValueChanged<String> onWindow;
+  final ValueChanged<String>? onOpenError;
 
   @override
   Widget build(BuildContext context) {
@@ -158,6 +178,7 @@ class _DeploymentRow extends StatelessWidget {
                     Text(deployment.environment, style: muted),
                 ],
               ),
+              if (open) _WindowPicker(window: window, onChanged: onWindow),
               if (busy)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
@@ -169,7 +190,8 @@ class _DeploymentRow extends StatelessWidget {
                     ),
                   ),
                 ),
-              if (open && compare != null) _Compare(compare: compare!),
+              if (open && compare != null)
+                _Compare(compare: compare!, onOpenError: onOpenError),
             ],
           ),
         ),
@@ -178,10 +200,60 @@ class _DeploymentRow extends StatelessWidget {
   }
 }
 
+/// How far either side of the deployment to look.
+class _WindowPicker extends StatelessWidget {
+  const _WindowPicker({required this.window, required this.onChanged});
+
+  final String window;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Text(
+            l.deploymentsWindowLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 10),
+          DropdownButton<String>(
+            key: const Key('deployment-window'),
+            value: window,
+            isDense: true,
+            underline: const SizedBox.shrink(),
+            items: [
+              for (final w in compareWindows)
+                DropdownMenuItem(
+                  value: w,
+                  child: Text(switch (w) {
+                    '15m' => l.deploymentsWindow15m,
+                    '1h' => l.deploymentsWindow1h,
+                    '3h' => l.deploymentsWindow3h,
+                    _ => l.deploymentsWindow30m,
+                  }),
+                ),
+            ],
+            onChanged: (w) {
+              if (w != null && w != window) onChanged(w);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Compare extends StatelessWidget {
-  const _Compare({required this.compare});
+  const _Compare({required this.compare, this.onOpenError});
 
   final ApmDeploymentCompare compare;
+  final ValueChanged<String>? onOpenError;
 
   @override
   Widget build(BuildContext context) {
@@ -202,50 +274,74 @@ class _Compare extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
+          // The web's six, in its order.
           _Delta(
-            label: l.svcThroughput,
+            metric: 'throughput',
+            label: l.apmSortThroughput,
             before: before.throughput,
             after: after.throughput,
-            format: _rpm,
-            // More requests is not worse; only the error rate and the
-            // latencies are bad when they go up.
-            worseWhenUp: false,
           ),
           _Delta(
-            label: l.serviceErrors,
+            metric: 'error_rate',
+            label: l.apmSortErrorRate,
             before: before.errorRate,
             after: after.errorRate,
-            format: _rate,
-            worseWhenUp: true,
           ),
           _Delta(
+            metric: 'avg_ms',
+            label: l.dbAvg,
+            before: before.avgMs,
+            after: after.avgMs,
+          ),
+          _Delta(
+            metric: 'p95_ms',
             label: 'p95',
             before: before.p95Ms,
             after: after.p95Ms,
-            format: _ms,
-            worseWhenUp: true,
           ),
           _Delta(
+            metric: 'p99_ms',
+            label: 'p99',
+            before: before.p99Ms,
+            after: after.p99Ms,
+          ),
+          _Delta(
+            metric: 'apdex',
             label: l.svcApdex,
             before: before.apdex,
             after: after.apdex,
-            format: _apdex,
-            worseWhenUp: false,
           ),
-          if (compare.newErrorGroups.isNotEmpty) ...[
-            const SizedBox(height: 8),
+          const SizedBox(height: 8),
+          if (compare.newErrorGroups.isEmpty)
+            Text(
+              l.deploymentsNoNewErrors,
+              key: const Key('deployment-no-new-errors'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            )
+          else ...[
             Text(
               l.deploymentsNewErrors(compare.newErrorGroups.length),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: severityTextColor(context, SeverityLevel.critical),
               ),
             ),
-            for (final g in compare.newErrorGroups.take(5))
-              Text(
-                '${g.errorType}: ${g.message}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall,
+            for (final g in compare.newErrorGroups)
+              InkWell(
+                key: Key('deployment-new-error-${g.groupId}'),
+                onTap: onOpenError == null
+                    ? null
+                    : () => onOpenError!(g.groupId),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Text(
+                    '${g.errorType}: ${g.message}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
               ),
           ],
         ],
@@ -257,57 +353,87 @@ class _Compare extends StatelessWidget {
 /// One number before and after, with the change between them.
 class _Delta extends StatelessWidget {
   const _Delta({
+    required this.metric,
     required this.label,
     required this.before,
     required this.after,
-    required this.format,
-    required this.worseWhenUp,
   });
 
+  final String metric;
   final String label;
   final double? before;
   final double? after;
-  final String Function(double?) format;
-  final bool worseWhenUp;
+
+  String _format(double? v) => switch (metric) {
+    'throughput' => formatApmRpm(v),
+    'error_rate' => formatApmRate(v),
+    'apdex' => formatApmApdex(v),
+    _ => formatApmMs(v),
+  };
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ratio = deltaRatio(before, after);
+    final d = compareDelta(metric, before, after);
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
-    // No comparison is its own answer: a missing before, a missing after or
-    // a zero before cannot produce a percentage that means anything.
-    final color = ratio == null || ratio.abs() < 0.01
-        ? null
-        : severityTextColor(
-            context,
-            (ratio > 0) == worseWhenUp
-                ? SeverityLevel.critical
-                : SeverityLevel.good,
-          );
+    final color = switch (d.verdict) {
+      'good' => severityTextColor(context, SeverityLevel.good),
+      'bad' => severityTextColor(context, SeverityLevel.critical),
+      _ => null,
+    };
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Row(
+      key: Key('compare-$metric'),
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      // Two lines: "1.2 s > 1.4 s" and a change with its percentage do not fit
+      // on one at this width, and which of them to cut is not obvious.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(label, style: muted)),
-          Text(format(before), style: muted),
-          const _Arrow(),
-          Text(format(after), style: muted),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 64,
-            child: Text(
-              ratio == null ? '—' : _signed(ratio),
-              textAlign: TextAlign.right,
-              style: theme.textTheme.bodySmall?.copyWith(color: color),
-            ),
+          Row(
+            children: [
+              Expanded(child: Text(label, style: muted)),
+              Text(
+                _change(d),
+                key: Key('compare-$metric-change'),
+                style: theme.textTheme.bodySmall?.copyWith(color: color),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Text(_format(before), style: muted),
+              const _Arrow(),
+              Text(_format(after), style: muted),
+            ],
           ),
         ],
       ),
     );
+  }
+
+  /// The change as the web writes it: the sign, the amount, and how much that
+  /// is relative to before except for what is already a share of something.
+  /// No comparison is its own answer, a dash, and never a zero.
+  String _change(CompareDelta d) {
+    final delta = d.delta;
+    if (delta == null) return '–';
+    final ratio = d.ratio;
+    final percent = ratio == null || metric == 'error_rate' || metric == 'apdex'
+        ? ''
+        : ' (${ratio > 0
+              ? '+'
+              : ratio < 0
+              ? '−'
+              : ''}${formatApmRate(ratio.abs())})';
+    final sign = switch (d.direction) {
+      'up' => '+',
+      'down' => '−',
+      _ => '',
+    };
+    return '$sign${_format(delta.abs())}$percent';
   }
 }
 
@@ -331,24 +457,3 @@ String _version(String v) {
   if (v.isEmpty) return '–';
   return RegExp(r'^v\d', caseSensitive: false).hasMatch(v) ? v : 'v$v';
 }
-
-String _signed(double ratio) {
-  final percent = ratio * 100;
-  final shown = percent.abs() >= 10
-      ? percent.toStringAsFixed(0)
-      : percent.toStringAsFixed(1);
-  return percent > 0 ? '+$shown%' : '$shown%';
-}
-
-String _rpm(double? v) => v == null ? '—' : v.toStringAsFixed(v >= 100 ? 0 : 1);
-
-String _rate(double? v) {
-  if (v == null) return '—';
-  final percent = v * 100;
-  return '%${percent >= 10 ? percent.toStringAsFixed(0) : percent.toStringAsFixed(1)}';
-}
-
-String _ms(double? v) =>
-    v == null ? '—' : '${v.toStringAsFixed(v >= 100 ? 0 : 1)} ms';
-
-String _apdex(double? v) => v == null ? '—' : v.toStringAsFixed(2);

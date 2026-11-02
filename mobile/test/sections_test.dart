@@ -98,11 +98,15 @@ Map<String, Object?> mute(
   String id, {
   bool active = true,
   int endsInHours = 2,
+  int startsInHours = 0,
 }) => {
   'id': id,
   'name': 'mute $id',
   'comment': '',
-  'starts_at': DateTime.now().toUtc().toIso8601String(),
+  'starts_at': DateTime.now()
+      .toUtc()
+      .add(Duration(hours: startsInHours))
+      .toIso8601String(),
   'ends_at': DateTime.now()
       .toUtc()
       .add(Duration(hours: endsInHours))
@@ -257,7 +261,7 @@ void main() {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, {
         'mutes': [
-          mute('m1', active: false, endsInHours: 1),
+          mute('m1', active: false, startsInHours: 1, endsInHours: 2),
           mute('m2', active: true, endsInHours: 5),
           mute('m3', active: true, endsInHours: 2),
         ],
@@ -764,7 +768,7 @@ void main() {
     // `q=` is a filter that matches the empty string on some endpoints and
     // everything on others, and neither is what an empty box means.
     await HostsController(client).refresh();
-    expect(server.requests.single.query, isEmpty);
+    expect(server.requests.single.query, isNot(contains('q=')));
   });
 
   test('a whitespace-only search is an empty one', () async {
@@ -776,7 +780,7 @@ void main() {
     addTearDown(client.close);
 
     await (HostsController(client)..query = '   ').refresh();
-    expect(server.requests.single.query, isEmpty);
+    expect(server.requests.single.query, isNot(contains('q=')));
   });
 
   test('SLOs come back with the emptiest budget first', () async {

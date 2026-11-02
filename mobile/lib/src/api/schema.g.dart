@@ -130,6 +130,24 @@ Map<String, T> _map<T>(
   return (a(v[0], '$path[0]'), b(v[1], '$path[1]'));
 }
 
+/// The same with three positions, such as an evaluation's
+/// `[unix ms, value, state]`.
+(A, B, C) _tuple3<A, B, C>(
+  Object? v,
+  String path,
+  A Function(Object?, String) a,
+  B Function(Object?, String) b,
+  C Function(Object?, String) c,
+) {
+  if (v is! List) {
+    throw ApiShapeError(path, 'expected an array, got ${v.runtimeType}');
+  }
+  if (v.length != 3) {
+    throw ApiShapeError(path, 'expected an array of 3, got ${v.length}');
+  }
+  return (a(v[0], '$path[0]'), b(v[1], '$path[1]'), c(v[2], '$path[2]'));
+}
+
 /// The paths whose GET takes a `from`/`to` window, from the
 /// contract. `{}` stands for a path parameter.
 const _rangedPaths = <List<String>>[
@@ -1412,6 +1430,87 @@ enum OqlSchemaEventTypesItemAttributesItemType {
   }
 }
 
+/// VulnSeverity of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum VulnSeverity {
+  critical('critical'),
+  high('high'),
+  medium('medium'),
+  low('low'),
+  none('none'),
+  unknown('');
+
+  const VulnSeverity(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static VulnSeverity fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// KubernetesWorkloadHealth of the contract.
+///
+/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum KubernetesWorkloadHealth {
+  healthy('healthy'),
+  degraded('degraded'),
+  unavailable('unavailable'),
+  unknown('unknown'),
+  unknownToThisBuild('');
+
+  const KubernetesWorkloadHealth(this.wire);
+
+  /// The value as the API spells it; empty for unknownToThisBuild.
+  final String wire;
+
+  static KubernetesWorkloadHealth fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknownToThisBuild;
+  }
+}
+
+/// AlertSeriesStateName of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum AlertSeriesStateName {
+  ok('ok'),
+  pending('pending'),
+  firing('firing'),
+  unknown('');
+
+  const AlertSeriesStateName(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static AlertSeriesStateName fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
 /// UserLanguage of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2430,32 +2529,6 @@ enum AlertTemplateParamKind {
   }
 }
 
-/// AlertSeriesStateName of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum AlertSeriesStateName {
-  ok('ok'),
-  pending('pending'),
-  firing('firing'),
-  unknown('');
-
-  const AlertSeriesStateName(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static AlertSeriesStateName fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
 /// ApmMapNodeType of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
@@ -2989,6 +3062,31 @@ enum SyntheticAssertionType {
   final String wire;
 
   static SyntheticAssertionType fromJson(Object? v, String path) {
+    final s = _str(v, path);
+    for (final e in values) {
+      if (e.wire == s) return e;
+    }
+    return unknown;
+  }
+}
+
+/// SloSliType of the contract.
+///
+/// `unknown` is not in the contract: it is what a value this build has never
+/// heard of becomes. A store build cannot be updated in step with the server it
+/// talks to, so a value added there must leave this app readable rather than
+/// throwing on a screen that would otherwise have worked.
+enum SloSliType {
+  availability('availability'),
+  latency('latency'),
+  unknown('');
+
+  const SloSliType(this.wire);
+
+  /// The value as the API spells it; empty for unknown.
+  final String wire;
+
+  static SloSliType fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -3550,78 +3648,26 @@ enum KubernetesNodeReady {
   }
 }
 
-/// KubernetesWorkloadHealth of the contract.
-///
-/// `unknownToThisBuild` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum KubernetesWorkloadHealth {
-  healthy('healthy'),
-  degraded('degraded'),
-  unavailable('unavailable'),
-  unknown('unknown'),
-  unknownToThisBuild('');
-
-  const KubernetesWorkloadHealth(this.wire);
-
-  /// The value as the API spells it; empty for unknownToThisBuild.
-  final String wire;
-
-  static KubernetesWorkloadHealth fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknownToThisBuild;
-  }
-}
-
-/// SloSliType of the contract.
+/// JobRunStatus of the contract.
 ///
 /// `unknown` is not in the contract: it is what a value this build has never
 /// heard of becomes. A store build cannot be updated in step with the server it
 /// talks to, so a value added there must leave this app readable rather than
 /// throwing on a screen that would otherwise have worked.
-enum SloSliType {
-  availability('availability'),
-  latency('latency'),
+enum JobRunStatus {
+  running('running'),
+  success('success'),
+  failure('failure'),
+  missed('missed'),
+  overrun('overrun'),
   unknown('');
 
-  const SloSliType(this.wire);
+  const JobRunStatus(this.wire);
 
   /// The value as the API spells it; empty for unknown.
   final String wire;
 
-  static SloSliType fromJson(Object? v, String path) {
-    final s = _str(v, path);
-    for (final e in values) {
-      if (e.wire == s) return e;
-    }
-    return unknown;
-  }
-}
-
-/// VulnSeverity of the contract.
-///
-/// `unknown` is not in the contract: it is what a value this build has never
-/// heard of becomes. A store build cannot be updated in step with the server it
-/// talks to, so a value added there must leave this app readable rather than
-/// throwing on a screen that would otherwise have worked.
-enum VulnSeverity {
-  critical('critical'),
-  high('high'),
-  medium('medium'),
-  low('low'),
-  none('none'),
-  unknown('');
-
-  const VulnSeverity(this.wire);
-
-  /// The value as the API spells it; empty for unknown.
-  final String wire;
-
-  static VulnSeverity fromJson(Object? v, String path) {
+  static JobRunStatus fromJson(Object? v, String path) {
     final s = _str(v, path);
     for (final e in values) {
       if (e.wire == s) return e;
@@ -5719,6 +5765,84 @@ class DbQueryDetailCallersItem {
   final double calls;
   final double? avgMs;
   final double errors;
+}
+
+/// `ApmTransactionDetail` of the openlog API contract.
+class ApmTransactionDetail {
+  const ApmTransactionDetail({
+    required this.transactionName,
+    required this.transactionType,
+    required this.step,
+    required this.apdexTMs,
+    required this.totals,
+    required this.maxMs,
+    required this.series,
+    required this.histogram,
+    required this.slowest,
+  });
+
+  factory ApmTransactionDetail.fromJson(
+    Object? json, [
+    String path = 'ApmTransactionDetail',
+  ]) {
+    final m = _obj(json, path);
+    return ApmTransactionDetail(
+      transactionName: _req(m, 'transaction_name', path, _str),
+      transactionType: _req(m, 'transaction_type', path, _str),
+      step: _req(m, 'step', path, _str),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+      totals: _req(m, 'totals', path, (v, p) => ApmRed.fromJson(v, p)),
+      maxMs: _req(m, 'max_ms', path, _num),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<ApmPoint>(v, p, (v, p) => ApmPoint.fromJson(v, p)),
+      ),
+      histogram: _req(
+        m,
+        'histogram',
+        path,
+        (v, p) => _list<ApmHistogramBin>(
+          v,
+          p,
+          (v, p) => ApmHistogramBin.fromJson(v, p),
+        ),
+      ),
+      slowest: _req(
+        m,
+        'slowest',
+        path,
+        (v, p) => _list<ApmTraceSample>(
+          v,
+          p,
+          (v, p) => ApmTraceSample.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'transaction_name': transactionName,
+    'transaction_type': transactionType,
+    'step': step,
+    'apdex_t_ms': apdexTMs,
+    'totals': totals.toJson(),
+    'max_ms': maxMs,
+    'series': [for (final e in series) e.toJson()],
+    'histogram': [for (final e in histogram) e.toJson()],
+    'slowest': [for (final e in slowest) e.toJson()],
+  };
+
+  final String transactionName;
+  final String transactionType;
+  final String step;
+  final double apdexTMs;
+  final ApmRed totals;
+  final double maxMs;
+  final List<ApmPoint> series;
+  final List<ApmHistogramBin> histogram;
+  final List<ApmTraceSample> slowest;
 }
 
 /// `FieldKeysResponse` of the openlog API contract.
@@ -10687,6 +10811,892 @@ class SyntheticResults {
   final List<SyntheticFailure> failures;
 }
 
+/// `SloResults` of the openlog API contract.
+class SloResults {
+  const SloResults({
+    required this.slo,
+    required this.status,
+    required this.step,
+    required this.burn,
+    required this.series,
+  });
+
+  factory SloResults.fromJson(Object? json, [String path = 'SloResults']) {
+    final m = _obj(json, path);
+    return SloResults(
+      slo: _req(m, 'slo', path, (v, p) => Slo.fromJson(v, p)),
+      status: _req(m, 'status', path, (v, p) => SloStatus.fromJson(v, p)),
+      step: _req(m, 'step', path, _str),
+      burn: _req(
+        m,
+        'burn',
+        path,
+        (v, p) => _list<SloBurnWindowResult>(
+          v,
+          p,
+          (v, p) => SloBurnWindowResult.fromJson(v, p),
+        ),
+      ),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<SloPoint>(v, p, (v, p) => SloPoint.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'slo': slo.toJson(),
+    'status': status.toJson(),
+    'step': step,
+    'burn': [for (final e in burn) e.toJson()],
+    'series': [for (final e in series) e.toJson()],
+  };
+
+  final Slo slo;
+  final SloStatus status;
+  final String step;
+  final List<SloBurnWindowResult> burn;
+  final List<SloPoint> series;
+}
+
+/// `VulnFinding` of the openlog API contract.
+class VulnFinding {
+  const VulnFinding({
+    required this.hostId,
+    required this.hostName,
+    required this.vulnId,
+    required this.cve,
+    required this.severity,
+    required this.score,
+    required this.ecosystem,
+    required this.package,
+    required this.version,
+    required this.fixedIn,
+    required this.summary,
+    required this.firstSeen,
+    required this.lastSeen,
+  });
+
+  factory VulnFinding.fromJson(Object? json, [String path = 'VulnFinding']) {
+    final m = _obj(json, path);
+    return VulnFinding(
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      vulnId: _req(m, 'vuln_id', path, _str),
+      cve: _req(m, 'cve', path, _str),
+      severity: _req(m, 'severity', path, VulnSeverity.fromJson),
+      score: _req(m, 'score', path, _num),
+      ecosystem: _req(m, 'ecosystem', path, _str),
+      package: _req(m, 'package', path, _str),
+      version: _req(m, 'version', path, _str),
+      fixedIn: _req(m, 'fixed_in', path, _str),
+      summary: _req(m, 'summary', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'host_name': hostName,
+    'vuln_id': vulnId,
+    'cve': cve,
+    'severity': severity.wire,
+    'score': score,
+    'ecosystem': ecosystem,
+    'package': package,
+    'version': version,
+    'fixed_in': fixedIn,
+    'summary': summary,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+  };
+
+  final String hostId;
+  final String hostName;
+  final String vulnId;
+  final String cve;
+  final VulnSeverity severity;
+  final double score;
+  final String ecosystem;
+  final String package;
+  final String version;
+  final String fixedIn;
+  final String summary;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+}
+
+/// One advisory over all of its open findings, whichever page of them the response holds. A server older than this field does not send it.
+class VulnAdvisorySummary {
+  const VulnAdvisorySummary({
+    required this.cve,
+    required this.severity,
+    required this.score,
+    required this.summary,
+    required this.findings,
+    required this.withoutFix,
+  });
+
+  factory VulnAdvisorySummary.fromJson(
+    Object? json, [
+    String path = 'VulnAdvisorySummary',
+  ]) {
+    final m = _obj(json, path);
+    return VulnAdvisorySummary(
+      cve: _req(m, 'cve', path, _str),
+      severity: _req(m, 'severity', path, VulnSeverity.fromJson),
+      score: _req(m, 'score', path, _num),
+      summary: _req(m, 'summary', path, _str),
+      findings: _req(m, 'findings', path, _int),
+      withoutFix: _req(m, 'without_fix', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cve': cve,
+    'severity': severity.wire,
+    'score': score,
+    'summary': summary,
+    'findings': findings,
+    'without_fix': withoutFix,
+  };
+
+  final String cve;
+  final VulnSeverity severity;
+  final double score;
+  final String summary;
+  final int findings;
+  final int withoutFix;
+}
+
+/// `KubernetesWorkloadDetail` of the openlog API contract.
+class KubernetesWorkloadDetail {
+  const KubernetesWorkloadDetail({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.kind,
+    required this.name,
+    required this.uid,
+    required this.desired,
+    required this.ready,
+    required this.available,
+    required this.updated,
+    required this.health,
+    required this.pods,
+    required this.restarts,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.cpuSparkline,
+    required this.memorySparkline,
+    this.createdAt,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+    required this.podList,
+    this.hpa,
+    required this.attributes,
+  });
+
+  factory KubernetesWorkloadDetail.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkloadDetail',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkloadDetail(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      kind: _req(m, 'kind', path, _str),
+      name: _req(m, 'name', path, _str),
+      uid: _req(m, 'uid', path, _str),
+      desired: _req(m, 'desired', path, _int),
+      ready: _req(m, 'ready', path, _int),
+      available: _req(m, 'available', path, _int),
+      updated: _req(m, 'updated', path, _int),
+      health: _req(m, 'health', path, KubernetesWorkloadHealth.fromJson),
+      pods: _req(m, 'pods', path, _int),
+      restarts: _req(m, 'restarts', path, _int),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      cpuSparkline: _req(
+        m,
+        'cpu_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memorySparkline: _req(
+        m,
+        'memory_sparkline',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      createdAt: _opt(m, 'created_at', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+      podList: _req(
+        m,
+        'pod_list',
+        path,
+        (v, p) =>
+            _list<KubernetesPod>(v, p, (v, p) => KubernetesPod.fromJson(v, p)),
+      ),
+      hpa: _opt(m, 'hpa', path, (v, p) => KubernetesHPA.fromJson(v, p)),
+      attributes: _req(
+        m,
+        'attributes',
+        path,
+        (v, p) => _map<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'kind': kind,
+    'name': name,
+    'uid': uid,
+    'desired': desired,
+    'ready': ready,
+    'available': available,
+    'updated': updated,
+    'health': health.wire,
+    'pods': pods,
+    'restarts': restarts,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'cpu_sparkline': cpuSparkline,
+    'memory_sparkline': memorySparkline,
+    'created_at': ?createdAt,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+    'pod_list': [for (final e in podList) e.toJson()],
+    if (hpa != null) 'hpa': hpa!.toJson(),
+    'attributes': attributes,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String kind;
+  final String name;
+  final String uid;
+  final int desired;
+  final int ready;
+  final int available;
+  final int updated;
+  final KubernetesWorkloadHealth health;
+  final int pods;
+  final int restarts;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final List<List<double>> cpuSparkline;
+  final List<List<double>> memorySparkline;
+  final String? createdAt;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+  final List<KubernetesPod> podList;
+  final KubernetesHPA? hpa;
+  final Map<String, String> attributes;
+}
+
+/// `KubernetesWorkloadTimeseries` of the openlog API contract.
+class KubernetesWorkloadTimeseries {
+  const KubernetesWorkloadTimeseries({
+    required this.step,
+    required this.from,
+    required this.to,
+    required this.series,
+  });
+
+  factory KubernetesWorkloadTimeseries.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkloadTimeseries',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkloadTimeseries(
+      step: _req(m, 'step', path, _str),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => KubernetesWorkloadTimeseriesSeries.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'step': step,
+    'from': from,
+    'to': to,
+    'series': series.toJson(),
+  };
+
+  final String step;
+  final int from;
+  final int to;
+  final KubernetesWorkloadTimeseriesSeries series;
+}
+
+/// `KubernetesWorkloadTimeseriesSeries` of the openlog API contract.
+class KubernetesWorkloadTimeseriesSeries {
+  const KubernetesWorkloadTimeseriesSeries({
+    required this.cpuUsage,
+    required this.memoryWorkingSet,
+    required this.ready,
+    required this.desired,
+    required this.restarts,
+  });
+
+  factory KubernetesWorkloadTimeseriesSeries.fromJson(
+    Object? json, [
+    String path = 'KubernetesWorkloadTimeseriesSeries',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesWorkloadTimeseriesSeries(
+      cpuUsage: _req(
+        m,
+        'cpu_usage',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      memoryWorkingSet: _req(
+        m,
+        'memory_working_set',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      ready: _req(
+        m,
+        'ready',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      desired: _req(
+        m,
+        'desired',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+      restarts: _req(
+        m,
+        'restarts',
+        path,
+        (v, p) =>
+            _list<List<double>>(v, p, (v, p) => _list<double>(v, p, _num)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cpu_usage': cpuUsage,
+    'memory_working_set': memoryWorkingSet,
+    'ready': ready,
+    'desired': desired,
+    'restarts': restarts,
+  };
+
+  final List<List<double>> cpuUsage;
+  final List<List<double>> memoryWorkingSet;
+  final List<List<double>> ready;
+  final List<List<double>> desired;
+  final List<List<double>> restarts;
+}
+
+/// `ContainerService` of the openlog API contract.
+class ContainerService {
+  const ContainerService({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+    required this.serviceName,
+    required this.serviceNamespace,
+    required this.environment,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.apdexTMs,
+  });
+
+  factory ContainerService.fromJson(
+    Object? json, [
+    String path = 'ContainerService',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerService(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _req(m, 'service_namespace', path, _str),
+      environment: _req(m, 'environment', path, _str),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      apdexTMs: _req(m, 'apdex_t_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+    'service_name': serviceName,
+    'service_namespace': serviceNamespace,
+    'environment': environment,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'apdex_t_ms': apdexTMs,
+  };
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+  final String serviceName;
+  final String serviceNamespace;
+  final String environment;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final double apdexTMs;
+}
+
+/// `CostContainer` of the openlog API contract.
+class CostContainer {
+  const CostContainer({
+    required this.containerId,
+    required this.containerName,
+    required this.hostId,
+    required this.hostName,
+    required this.serviceName,
+    required this.total,
+    required this.cpuShare,
+    required this.memoryShare,
+    required this.share,
+  });
+
+  factory CostContainer.fromJson(
+    Object? json, [
+    String path = 'CostContainer',
+  ]) {
+    final m = _obj(json, path);
+    return CostContainer(
+      containerId: _req(m, 'container_id', path, _str),
+      containerName: _req(m, 'container_name', path, _str),
+      hostId: _req(m, 'host_id', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      total: _req(m, 'total', path, _num),
+      cpuShare: _req(m, 'cpu_share', path, _num),
+      memoryShare: _req(m, 'memory_share', path, _num),
+      share: _req(m, 'share', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'container_id': containerId,
+    'container_name': containerName,
+    'host_id': hostId,
+    'host_name': hostName,
+    'service_name': serviceName,
+    'total': total,
+    'cpu_share': cpuShare,
+    'memory_share': memoryShare,
+    'share': share,
+  };
+
+  final String containerId;
+  final String containerName;
+  final String hostId;
+  final String hostName;
+  final String serviceName;
+  final double total;
+  final double cpuShare;
+  final double memoryShare;
+  final double share;
+}
+
+/// `AlertRuleDetail` of the openlog API contract.
+class AlertRuleDetail {
+  const AlertRuleDetail({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.type,
+    required this.severity,
+    required this.enabled,
+    required this.intervalSeconds,
+    required this.forSeconds,
+    required this.recoveryForSeconds,
+    required this.condition,
+    required this.channelIds,
+    required this.renotifyIntervalSeconds,
+    required this.flapping,
+    required this.runbookUrl,
+    required this.labels,
+    required this.version,
+    this.createdByUserId,
+    required this.createdByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.status,
+    required this.series,
+  });
+
+  factory AlertRuleDetail.fromJson(
+    Object? json, [
+    String path = 'AlertRuleDetail',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleDetail(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      type: _req(m, 'type', path, AlertRuleType.fromJson),
+      severity: _req(m, 'severity', path, AlertSeverity.fromJson),
+      enabled: _req(m, 'enabled', path, _bool),
+      intervalSeconds: _req(m, 'interval_seconds', path, _int),
+      forSeconds: _req(m, 'for_seconds', path, _int),
+      recoveryForSeconds: _req(m, 'recovery_for_seconds', path, _int),
+      condition: _req(
+        m,
+        'condition',
+        path,
+        (v, p) => AlertCondition.fromJson(v, p),
+      ),
+      channelIds: _req(
+        m,
+        'channel_ids',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+      renotifyIntervalSeconds: _req(m, 'renotify_interval_seconds', path, _int),
+      flapping: _req(
+        m,
+        'flapping',
+        path,
+        (v, p) => AlertFlapping.fromJson(v, p),
+      ),
+      runbookUrl: _req(m, 'runbook_url', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      version: _req(m, 'version', path, _int),
+      createdByUserId: _opt(m, 'created_by_user_id', path, _str),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+      status: _req(m, 'status', path, (v, p) => AlertRuleStatus.fromJson(v, p)),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<AlertSeriesState>(
+          v,
+          p,
+          (v, p) => AlertSeriesState.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'type': type.wire,
+    'severity': severity.wire,
+    'enabled': enabled,
+    'interval_seconds': intervalSeconds,
+    'for_seconds': forSeconds,
+    'recovery_for_seconds': recoveryForSeconds,
+    'condition': condition.toJson(),
+    'channel_ids': channelIds,
+    'renotify_interval_seconds': renotifyIntervalSeconds,
+    'flapping': flapping.toJson(),
+    'runbook_url': runbookUrl,
+    'labels': labels,
+    'version': version,
+    'created_by_user_id': ?createdByUserId,
+    'created_by_email': createdByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+    'status': status.toJson(),
+    'series': [for (final e in series) e.toJson()],
+  };
+
+  final String id;
+  final String name;
+  final String description;
+  final AlertRuleType type;
+  final AlertSeverity severity;
+  final bool enabled;
+  final int intervalSeconds;
+  final int forSeconds;
+  final int recoveryForSeconds;
+  final AlertCondition condition;
+  final List<String> channelIds;
+  final int renotifyIntervalSeconds;
+  final AlertFlapping flapping;
+  final String runbookUrl;
+  final Map<String, String> labels;
+  final int version;
+  final String? createdByUserId;
+  final String createdByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final AlertRuleStatus status;
+  final List<AlertSeriesState> series;
+}
+
+/// `AlertRuleEvaluations` of the openlog API contract.
+class AlertRuleEvaluations {
+  const AlertRuleEvaluations({
+    required this.from,
+    required this.to,
+    required this.stepSeconds,
+    required this.evaluations,
+    required this.series,
+    required this.truncated,
+  });
+
+  factory AlertRuleEvaluations.fromJson(
+    Object? json, [
+    String path = 'AlertRuleEvaluations',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleEvaluations(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      stepSeconds: _req(m, 'step_seconds', path, _int),
+      evaluations: _req(
+        m,
+        'evaluations',
+        path,
+        (v, p) => _list<AlertRuleEvaluationsEvaluationsItem>(
+          v,
+          p,
+          (v, p) => AlertRuleEvaluationsEvaluationsItem.fromJson(v, p),
+        ),
+      ),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) => _list<AlertRuleEvaluationsSeriesItem>(
+          v,
+          p,
+          (v, p) => AlertRuleEvaluationsSeriesItem.fromJson(v, p),
+        ),
+      ),
+      truncated: _req(m, 'truncated', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'step_seconds': stepSeconds,
+    'evaluations': [for (final e in evaluations) e.toJson()],
+    'series': [for (final e in series) e.toJson()],
+    'truncated': truncated,
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final int stepSeconds;
+  final List<AlertRuleEvaluationsEvaluationsItem> evaluations;
+  final List<AlertRuleEvaluationsSeriesItem> series;
+  final bool truncated;
+}
+
+/// `AlertRuleEvaluationsEvaluationsItem` of the openlog API contract.
+class AlertRuleEvaluationsEvaluationsItem {
+  const AlertRuleEvaluationsEvaluationsItem({
+    required this.at,
+    this.firingSeries,
+    required this.evaluations,
+    required this.errors,
+    required this.durationMs,
+    required this.maxDurationMs,
+  });
+
+  factory AlertRuleEvaluationsEvaluationsItem.fromJson(
+    Object? json, [
+    String path = 'AlertRuleEvaluationsEvaluationsItem',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleEvaluationsEvaluationsItem(
+      at: _req(m, 'at', path, _time),
+      firingSeries: _opt(m, 'firing_series', path, _num),
+      evaluations: _req(m, 'evaluations', path, _int),
+      errors: _req(m, 'errors', path, _int),
+      durationMs: _req(m, 'duration_ms', path, _int),
+      maxDurationMs: _req(m, 'max_duration_ms', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'at': at.toUtc().toIso8601String(),
+    'firing_series': ?firingSeries,
+    'evaluations': evaluations,
+    'errors': errors,
+    'duration_ms': durationMs,
+    'max_duration_ms': maxDurationMs,
+  };
+
+  final DateTime at;
+  final double? firingSeries;
+  final int evaluations;
+  final int errors;
+  final int durationMs;
+  final int maxDurationMs;
+}
+
+/// `AlertRuleEvaluationsSeriesItem` of the openlog API contract.
+class AlertRuleEvaluationsSeriesItem {
+  const AlertRuleEvaluationsSeriesItem({
+    required this.seriesKey,
+    required this.labels,
+    required this.points,
+  });
+
+  factory AlertRuleEvaluationsSeriesItem.fromJson(
+    Object? json, [
+    String path = 'AlertRuleEvaluationsSeriesItem',
+  ]) {
+    final m = _obj(json, path);
+    return AlertRuleEvaluationsSeriesItem(
+      seriesKey: _req(m, 'series_key', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      points: _req(
+        m,
+        'points',
+        path,
+        (v, p) => _list<(int, double?, AlertSeriesStateName)>(
+          v,
+          p,
+          (v, p) => _tuple3<int, double?, AlertSeriesStateName>(
+            v,
+            p,
+            _int,
+            _nullable<double>(_num),
+            AlertSeriesStateName.fromJson,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'series_key': seriesKey,
+    'labels': labels,
+    'points': [
+      for (final e in points) [e.$1, e.$2, e.$3.wire],
+    ],
+  };
+
+  final String seriesKey;
+  final Map<String, String> labels;
+  final List<(int, double?, AlertSeriesStateName)> points;
+}
+
+/// `AlertMuteOccurrence` of the openlog API contract.
+class AlertMuteOccurrence {
+  const AlertMuteOccurrence({required this.startsAt, required this.endsAt});
+
+  factory AlertMuteOccurrence.fromJson(
+    Object? json, [
+    String path = 'AlertMuteOccurrence',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMuteOccurrence(
+      startsAt: _req(m, 'starts_at', path, _time),
+      endsAt: _req(m, 'ends_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'starts_at': startsAt.toUtc().toIso8601String(),
+    'ends_at': endsAt.toUtc().toIso8601String(),
+  };
+
+  final DateTime startsAt;
+  final DateTime endsAt;
+}
+
+/// `MetricSeriesResponse` of the openlog API contract.
+class MetricSeriesResponse {
+  const MetricSeriesResponse({
+    required this.metric,
+    required this.step,
+    required this.series,
+  });
+
+  factory MetricSeriesResponse.fromJson(
+    Object? json, [
+    String path = 'MetricSeriesResponse',
+  ]) {
+    final m = _obj(json, path);
+    return MetricSeriesResponse(
+      metric: _req(m, 'metric', path, (v, p) => MetricMeta.fromJson(v, p)),
+      step: _req(m, 'step', path, _str),
+      series: _req(
+        m,
+        'series',
+        path,
+        (v, p) =>
+            _list<MetricSeries>(v, p, (v, p) => MetricSeries.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'metric': metric.toJson(),
+    'step': step,
+    'series': [for (final e in series) e.toJson()],
+  };
+
+  final MetricMeta metric;
+  final String step;
+  final List<MetricSeries> series;
+}
+
 /// `User` of the openlog API contract.
 class User {
   const User({
@@ -12159,6 +13169,196 @@ class DbPlan {
   final bool planChange;
 }
 
+/// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
+class ApmRed {
+  const ApmRed({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+  });
+
+  factory ApmRed.fromJson(Object? json, [String path = 'ApmRed']) {
+    final m = _obj(json, path);
+    return ApmRed(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+  };
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+}
+
+/// `ApmPoint` of the openlog API contract.
+class ApmPoint {
+  const ApmPoint({
+    required this.requests,
+    required this.throughput,
+    required this.errors,
+    required this.errorRate,
+    this.avgMs,
+    this.p50Ms,
+    this.p95Ms,
+    this.p99Ms,
+    this.apdex,
+    required this.t,
+  });
+
+  factory ApmPoint.fromJson(Object? json, [String path = 'ApmPoint']) {
+    final m = _obj(json, path);
+    return ApmPoint(
+      requests: _req(m, 'requests', path, _num),
+      throughput: _req(m, 'throughput', path, _num),
+      errors: _req(m, 'errors', path, _num),
+      errorRate: _req(m, 'error_rate', path, _num),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      p50Ms: _opt(m, 'p50_ms', path, _num),
+      p95Ms: _opt(m, 'p95_ms', path, _num),
+      p99Ms: _opt(m, 'p99_ms', path, _num),
+      apdex: _opt(m, 'apdex', path, _num),
+      t: _req(m, 't', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'throughput': throughput,
+    'errors': errors,
+    'error_rate': errorRate,
+    'avg_ms': ?avgMs,
+    'p50_ms': ?p50Ms,
+    'p95_ms': ?p95Ms,
+    'p99_ms': ?p99Ms,
+    'apdex': ?apdex,
+    't': t,
+  };
+
+  final double requests;
+  final double throughput;
+  final double errors;
+  final double errorRate;
+  final double? avgMs;
+  final double? p50Ms;
+  final double? p95Ms;
+  final double? p99Ms;
+  final double? apdex;
+  final int t;
+}
+
+/// `ApmHistogramBin` of the openlog API contract.
+class ApmHistogramBin {
+  const ApmHistogramBin({
+    required this.fromMs,
+    required this.toMs,
+    required this.count,
+  });
+
+  factory ApmHistogramBin.fromJson(
+    Object? json, [
+    String path = 'ApmHistogramBin',
+  ]) {
+    final m = _obj(json, path);
+    return ApmHistogramBin(
+      fromMs: _req(m, 'from_ms', path, _num),
+      toMs: _req(m, 'to_ms', path, _num),
+      count: _req(m, 'count', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from_ms': fromMs,
+    'to_ms': toMs,
+    'count': count,
+  };
+
+  final double fromMs;
+  final double toMs;
+  final double count;
+}
+
+/// `ApmTraceSample` of the openlog API contract.
+class ApmTraceSample {
+  const ApmTraceSample({
+    required this.traceId,
+    required this.spanId,
+    required this.timestamp,
+    required this.durationMs,
+    required this.isError,
+    required this.httpStatusCode,
+    required this.serviceName,
+    required this.transactionName,
+  });
+
+  factory ApmTraceSample.fromJson(
+    Object? json, [
+    String path = 'ApmTraceSample',
+  ]) {
+    final m = _obj(json, path);
+    return ApmTraceSample(
+      traceId: _req(m, 'trace_id', path, _str),
+      spanId: _req(m, 'span_id', path, _str),
+      timestamp: _req(m, 'timestamp', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      isError: _req(m, 'is_error', path, _bool),
+      httpStatusCode: _req(m, 'http_status_code', path, _int),
+      serviceName: _req(m, 'service_name', path, _str),
+      transactionName: _req(m, 'transaction_name', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'trace_id': traceId,
+    'span_id': spanId,
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'is_error': isError,
+    'http_status_code': httpStatusCode,
+    'service_name': serviceName,
+    'transaction_name': transactionName,
+  };
+
+  final String traceId;
+  final String spanId;
+  final DateTime timestamp;
+  final double durationMs;
+  final bool isError;
+  final int httpStatusCode;
+  final String serviceName;
+  final String transactionName;
+}
+
 /// `FieldKey` of the openlog API contract.
 class FieldKey {
   const FieldKey({
@@ -13192,30 +14392,6 @@ class AlertMuteSchedule {
   final List<String> holidayCalendarIds;
 }
 
-/// `AlertMuteOccurrence` of the openlog API contract.
-class AlertMuteOccurrence {
-  const AlertMuteOccurrence({required this.startsAt, required this.endsAt});
-
-  factory AlertMuteOccurrence.fromJson(
-    Object? json, [
-    String path = 'AlertMuteOccurrence',
-  ]) {
-    final m = _obj(json, path);
-    return AlertMuteOccurrence(
-      startsAt: _req(m, 'starts_at', path, _time),
-      endsAt: _req(m, 'ends_at', path, _time),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'starts_at': startsAt.toUtc().toIso8601String(),
-    'ends_at': endsAt.toUtc().toIso8601String(),
-  };
-
-  final DateTime startsAt;
-  final DateTime endsAt;
-}
-
 /// Route condition; the parts are AND-ed and an empty part matches everything.
 class AlertRouteMatch {
   const AlertRouteMatch({
@@ -14120,114 +15296,6 @@ class TailSamplingPolicy {
   final double baselineRatio;
   final double maxSpansPerSecond;
   final List<TailSamplingRule> rules;
-}
-
-/// Weighted metrics of apm.md §4; avg/percentiles/apdex are null without requests.
-class ApmRed {
-  const ApmRed({
-    required this.requests,
-    required this.throughput,
-    required this.errors,
-    required this.errorRate,
-    this.avgMs,
-    this.p50Ms,
-    this.p95Ms,
-    this.p99Ms,
-    this.apdex,
-  });
-
-  factory ApmRed.fromJson(Object? json, [String path = 'ApmRed']) {
-    final m = _obj(json, path);
-    return ApmRed(
-      requests: _req(m, 'requests', path, _num),
-      throughput: _req(m, 'throughput', path, _num),
-      errors: _req(m, 'errors', path, _num),
-      errorRate: _req(m, 'error_rate', path, _num),
-      avgMs: _opt(m, 'avg_ms', path, _num),
-      p50Ms: _opt(m, 'p50_ms', path, _num),
-      p95Ms: _opt(m, 'p95_ms', path, _num),
-      p99Ms: _opt(m, 'p99_ms', path, _num),
-      apdex: _opt(m, 'apdex', path, _num),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'requests': requests,
-    'throughput': throughput,
-    'errors': errors,
-    'error_rate': errorRate,
-    'avg_ms': ?avgMs,
-    'p50_ms': ?p50Ms,
-    'p95_ms': ?p95Ms,
-    'p99_ms': ?p99Ms,
-    'apdex': ?apdex,
-  };
-
-  final double requests;
-  final double throughput;
-  final double errors;
-  final double errorRate;
-  final double? avgMs;
-  final double? p50Ms;
-  final double? p95Ms;
-  final double? p99Ms;
-  final double? apdex;
-}
-
-/// `ApmPoint` of the openlog API contract.
-class ApmPoint {
-  const ApmPoint({
-    required this.requests,
-    required this.throughput,
-    required this.errors,
-    required this.errorRate,
-    this.avgMs,
-    this.p50Ms,
-    this.p95Ms,
-    this.p99Ms,
-    this.apdex,
-    required this.t,
-  });
-
-  factory ApmPoint.fromJson(Object? json, [String path = 'ApmPoint']) {
-    final m = _obj(json, path);
-    return ApmPoint(
-      requests: _req(m, 'requests', path, _num),
-      throughput: _req(m, 'throughput', path, _num),
-      errors: _req(m, 'errors', path, _num),
-      errorRate: _req(m, 'error_rate', path, _num),
-      avgMs: _opt(m, 'avg_ms', path, _num),
-      p50Ms: _opt(m, 'p50_ms', path, _num),
-      p95Ms: _opt(m, 'p95_ms', path, _num),
-      p99Ms: _opt(m, 'p99_ms', path, _num),
-      apdex: _opt(m, 'apdex', path, _num),
-      t: _req(m, 't', path, _int),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'requests': requests,
-    'throughput': throughput,
-    'errors': errors,
-    'error_rate': errorRate,
-    'avg_ms': ?avgMs,
-    'p50_ms': ?p50Ms,
-    'p95_ms': ?p95Ms,
-    'p99_ms': ?p99Ms,
-    'apdex': ?apdex,
-    't': t,
-  };
-
-  final double requests;
-  final double throughput;
-  final double errors;
-  final double errorRate;
-  final double? avgMs;
-  final double? p50Ms;
-  final double? p95Ms;
-  final double? p99Ms;
-  final double? apdex;
-  final int t;
 }
 
 /// `ApmErrorGroup` of the openlog API contract.
@@ -16314,6 +17382,445 @@ class SyntheticFailure {
   final double durationMs;
 }
 
+/// `Slo` of the openlog API contract.
+class Slo {
+  const Slo({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.serviceName,
+    this.serviceNamespace,
+    this.environment,
+    required this.sliType,
+    this.latencyThresholdMs,
+    required this.objective,
+    required this.windowDays,
+    required this.createdByEmail,
+    required this.updatedByEmail,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory Slo.fromJson(Object? json, [String path = 'Slo']) {
+    final m = _obj(json, path);
+    return Slo(
+      id: _req(m, 'id', path, _str),
+      name: _req(m, 'name', path, _str),
+      description: _req(m, 'description', path, _str),
+      serviceName: _req(m, 'service_name', path, _str),
+      serviceNamespace: _opt(m, 'service_namespace', path, _str),
+      environment: _opt(m, 'environment', path, _str),
+      sliType: _req(m, 'sli_type', path, SloSliType.fromJson),
+      latencyThresholdMs: _opt(m, 'latency_threshold_ms', path, _num),
+      objective: _req(m, 'objective', path, _num),
+      windowDays: _req(m, 'window_days', path, _int),
+      createdByEmail: _req(m, 'created_by_email', path, _str),
+      updatedByEmail: _req(m, 'updated_by_email', path, _str),
+      createdAt: _req(m, 'created_at', path, _time),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'id': id,
+    'name': name,
+    'description': description,
+    'service_name': serviceName,
+    'service_namespace': ?serviceNamespace,
+    'environment': ?environment,
+    'sli_type': sliType.wire,
+    'latency_threshold_ms': ?latencyThresholdMs,
+    'objective': objective,
+    'window_days': windowDays,
+    'created_by_email': createdByEmail,
+    'updated_by_email': updatedByEmail,
+    'created_at': createdAt.toUtc().toIso8601String(),
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String id;
+  final String name;
+  final String description;
+  final String serviceName;
+  final String? serviceNamespace;
+  final String? environment;
+  final SloSliType sliType;
+  final double? latencyThresholdMs;
+  final double objective;
+  final int windowDays;
+  final String createdByEmail;
+  final String updatedByEmail;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+/// `SloStatus` of the openlog API contract.
+class SloStatus {
+  const SloStatus({
+    required this.from,
+    required this.to,
+    required this.windowDays,
+    required this.budget,
+  });
+
+  factory SloStatus.fromJson(Object? json, [String path = 'SloStatus']) {
+    final m = _obj(json, path);
+    return SloStatus(
+      from: _req(m, 'from', path, _time),
+      to: _req(m, 'to', path, _time),
+      windowDays: _req(m, 'window_days', path, _int),
+      budget: _req(m, 'budget', path, (v, p) => SloBudget.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'from': from.toUtc().toIso8601String(),
+    'to': to.toUtc().toIso8601String(),
+    'window_days': windowDays,
+    'budget': budget.toJson(),
+  };
+
+  final DateTime from;
+  final DateTime to;
+  final int windowDays;
+  final SloBudget budget;
+}
+
+/// One long/short burn window (slo.md §3); rate and ratio are null when a window has no requests.
+class SloBurnWindowResult {
+  const SloBurnWindowResult({
+    required this.name,
+    required this.factor,
+    required this.longSeconds,
+    required this.shortSeconds,
+    required this.long,
+    required this.short,
+    this.rate,
+    this.ratio,
+    required this.breaching,
+  });
+
+  factory SloBurnWindowResult.fromJson(
+    Object? json, [
+    String path = 'SloBurnWindowResult',
+  ]) {
+    final m = _obj(json, path);
+    return SloBurnWindowResult(
+      name: _req(m, 'name', path, _str),
+      factor: _req(m, 'factor', path, _num),
+      longSeconds: _req(m, 'long_seconds', path, _int),
+      shortSeconds: _req(m, 'short_seconds', path, _int),
+      long: _req(m, 'long', path, (v, p) => SloBudget.fromJson(v, p)),
+      short: _req(m, 'short', path, (v, p) => SloBudget.fromJson(v, p)),
+      rate: _opt(m, 'rate', path, _num),
+      ratio: _opt(m, 'ratio', path, _num),
+      breaching: _req(m, 'breaching', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'factor': factor,
+    'long_seconds': longSeconds,
+    'short_seconds': shortSeconds,
+    'long': long.toJson(),
+    'short': short.toJson(),
+    'rate': ?rate,
+    'ratio': ?ratio,
+    'breaching': breaching,
+  };
+
+  final String name;
+  final double factor;
+  final int longSeconds;
+  final int shortSeconds;
+  final SloBudget long;
+  final SloBudget short;
+  final double? rate;
+  final double? ratio;
+  final bool breaching;
+}
+
+/// `SloPoint` of the openlog API contract.
+class SloPoint {
+  const SloPoint({
+    required this.t,
+    required this.requests,
+    required this.good,
+    required this.bad,
+    this.sli,
+    this.burnRate,
+    this.remainingRatio,
+  });
+
+  factory SloPoint.fromJson(Object? json, [String path = 'SloPoint']) {
+    final m = _obj(json, path);
+    return SloPoint(
+      t: _req(m, 't', path, _int),
+      requests: _req(m, 'requests', path, _num),
+      good: _req(m, 'good', path, _num),
+      bad: _req(m, 'bad', path, _num),
+      sli: _opt(m, 'sli', path, _num),
+      burnRate: _opt(m, 'burn_rate', path, _num),
+      remainingRatio: _opt(m, 'remaining_ratio', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    't': t,
+    'requests': requests,
+    'good': good,
+    'bad': bad,
+    'sli': ?sli,
+    'burn_rate': ?burnRate,
+    'remaining_ratio': ?remainingRatio,
+  };
+
+  final int t;
+  final double requests;
+  final double good;
+  final double bad;
+  final double? sli;
+  final double? burnRate;
+  final double? remainingRatio;
+}
+
+/// `KubernetesPod` of the openlog API contract.
+class KubernetesPod {
+  const KubernetesPod({
+    required this.clusterUid,
+    required this.clusterName,
+    required this.namespace,
+    required this.podName,
+    required this.podUid,
+    required this.nodeName,
+    required this.workloadKind,
+    required this.workloadName,
+    required this.phase,
+    required this.ready,
+    required this.reason,
+    required this.status,
+    required this.restarts,
+    required this.podIp,
+    required this.qosClass,
+    this.createdAt,
+    this.startedAt,
+    this.cpuUsage,
+    this.memoryWorkingSet,
+    required this.firstSeen,
+    required this.lastSeen,
+    required this.reporting,
+  });
+
+  factory KubernetesPod.fromJson(
+    Object? json, [
+    String path = 'KubernetesPod',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesPod(
+      clusterUid: _req(m, 'cluster_uid', path, _str),
+      clusterName: _req(m, 'cluster_name', path, _str),
+      namespace: _req(m, 'namespace', path, _str),
+      podName: _req(m, 'pod_name', path, _str),
+      podUid: _req(m, 'pod_uid', path, _str),
+      nodeName: _req(m, 'node_name', path, _str),
+      workloadKind: _req(m, 'workload_kind', path, _str),
+      workloadName: _req(m, 'workload_name', path, _str),
+      phase: _req(m, 'phase', path, _str),
+      ready: _req(m, 'ready', path, _bool),
+      reason: _req(m, 'reason', path, _str),
+      status: _req(m, 'status', path, _str),
+      restarts: _req(m, 'restarts', path, _int),
+      podIp: _req(m, 'pod_ip', path, _str),
+      qosClass: _req(m, 'qos_class', path, _str),
+      createdAt: _opt(m, 'created_at', path, _str),
+      startedAt: _opt(m, 'started_at', path, _str),
+      cpuUsage: _opt(m, 'cpu_usage', path, _num),
+      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
+      firstSeen: _req(m, 'first_seen', path, _time),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      reporting: _req(m, 'reporting', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cluster_uid': clusterUid,
+    'cluster_name': clusterName,
+    'namespace': namespace,
+    'pod_name': podName,
+    'pod_uid': podUid,
+    'node_name': nodeName,
+    'workload_kind': workloadKind,
+    'workload_name': workloadName,
+    'phase': phase,
+    'ready': ready,
+    'reason': reason,
+    'status': status,
+    'restarts': restarts,
+    'pod_ip': podIp,
+    'qos_class': qosClass,
+    'created_at': ?createdAt,
+    'started_at': ?startedAt,
+    'cpu_usage': ?cpuUsage,
+    'memory_working_set': ?memoryWorkingSet,
+    'first_seen': firstSeen.toUtc().toIso8601String(),
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'reporting': reporting,
+  };
+
+  final String clusterUid;
+  final String clusterName;
+  final String namespace;
+  final String podName;
+  final String podUid;
+  final String nodeName;
+  final String workloadKind;
+  final String workloadName;
+  final String phase;
+  final bool ready;
+  final String reason;
+  final String status;
+  final int restarts;
+  final String podIp;
+  final String qosClass;
+  final String? createdAt;
+  final String? startedAt;
+  final double? cpuUsage;
+  final double? memoryWorkingSet;
+  final DateTime firstSeen;
+  final DateTime lastSeen;
+  final bool reporting;
+}
+
+/// `KubernetesHPA` of the openlog API contract.
+class KubernetesHPA {
+  const KubernetesHPA({
+    required this.name,
+    this.minReplicas,
+    this.maxReplicas,
+    this.currentReplicas,
+    this.desiredReplicas,
+  });
+
+  factory KubernetesHPA.fromJson(
+    Object? json, [
+    String path = 'KubernetesHPA',
+  ]) {
+    final m = _obj(json, path);
+    return KubernetesHPA(
+      name: _req(m, 'name', path, _str),
+      minReplicas: _opt(m, 'min_replicas', path, _num),
+      maxReplicas: _opt(m, 'max_replicas', path, _num),
+      currentReplicas: _opt(m, 'current_replicas', path, _num),
+      desiredReplicas: _opt(m, 'desired_replicas', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'min_replicas': ?minReplicas,
+    'max_replicas': ?maxReplicas,
+    'current_replicas': ?currentReplicas,
+    'desired_replicas': ?desiredReplicas,
+  };
+
+  final String name;
+  final double? minReplicas;
+  final double? maxReplicas;
+  final double? currentReplicas;
+  final double? desiredReplicas;
+}
+
+/// `AlertSeriesState` of the openlog API contract.
+class AlertSeriesState {
+  const AlertSeriesState({
+    required this.seriesKey,
+    required this.labels,
+    required this.state,
+    this.value,
+    this.pendingSince,
+    this.firingSince,
+    this.recoveringSince,
+    this.incidentId,
+    required this.flapping,
+    required this.updatedAt,
+  });
+
+  factory AlertSeriesState.fromJson(
+    Object? json, [
+    String path = 'AlertSeriesState',
+  ]) {
+    final m = _obj(json, path);
+    return AlertSeriesState(
+      seriesKey: _req(m, 'series_key', path, _str),
+      labels: _req(m, 'labels', path, (v, p) => _map<String>(v, p, _str)),
+      state: _req(m, 'state', path, AlertSeriesStateName.fromJson),
+      value: _opt(m, 'value', path, _num),
+      pendingSince: _opt(m, 'pending_since', path, _time),
+      firingSince: _opt(m, 'firing_since', path, _time),
+      recoveringSince: _opt(m, 'recovering_since', path, _time),
+      incidentId: _opt(m, 'incident_id', path, _str),
+      flapping: _req(m, 'flapping', path, _bool),
+      updatedAt: _req(m, 'updated_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'series_key': seriesKey,
+    'labels': labels,
+    'state': state.wire,
+    'value': ?value,
+    if (pendingSince != null)
+      'pending_since': pendingSince!.toUtc().toIso8601String(),
+    if (firingSince != null)
+      'firing_since': firingSince!.toUtc().toIso8601String(),
+    if (recoveringSince != null)
+      'recovering_since': recoveringSince!.toUtc().toIso8601String(),
+    'incident_id': ?incidentId,
+    'flapping': flapping,
+    'updated_at': updatedAt.toUtc().toIso8601String(),
+  };
+
+  final String seriesKey;
+  final Map<String, String> labels;
+  final AlertSeriesStateName state;
+  final double? value;
+  final DateTime? pendingSince;
+  final DateTime? firingSince;
+  final DateTime? recoveringSince;
+  final String? incidentId;
+  final bool flapping;
+  final DateTime updatedAt;
+}
+
+/// `MetricMeta` of the openlog API contract.
+class MetricMeta {
+  const MetricMeta({
+    required this.name,
+    required this.type,
+    required this.unit,
+  });
+
+  factory MetricMeta.fromJson(Object? json, [String path = 'MetricMeta']) {
+    final m = _obj(json, path);
+    return MetricMeta(
+      name: _req(m, 'name', path, _str),
+      type: _req(m, 'type', path, MetricType.fromJson),
+      unit: _req(m, 'unit', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'name': name,
+    'type': type.wire,
+    'unit': unit,
+  };
+
+  final String name;
+  final MetricType type;
+  final String unit;
+}
+
 /// 0 or absent = unlimited (retention_days absent = table default)
 class PlanLimits {
   const PlanLimits({
@@ -17132,6 +18639,62 @@ class SyntheticPoint {
   final int failures;
   final double? uptime;
   final double? p95Ms;
+}
+
+/// Error budget over one range; ratios are null without requests (slo.md §2).
+class SloBudget {
+  const SloBudget({
+    required this.requests,
+    required this.good,
+    required this.bad,
+    this.sli,
+    required this.budgetRequests,
+    required this.budgetConsumed,
+    required this.budgetRemaining,
+    this.remainingRatio,
+    this.burnRate,
+    required this.met,
+  });
+
+  factory SloBudget.fromJson(Object? json, [String path = 'SloBudget']) {
+    final m = _obj(json, path);
+    return SloBudget(
+      requests: _req(m, 'requests', path, _num),
+      good: _req(m, 'good', path, _num),
+      bad: _req(m, 'bad', path, _num),
+      sli: _opt(m, 'sli', path, _num),
+      budgetRequests: _req(m, 'budget_requests', path, _num),
+      budgetConsumed: _req(m, 'budget_consumed', path, _num),
+      budgetRemaining: _req(m, 'budget_remaining', path, _num),
+      remainingRatio: _opt(m, 'remaining_ratio', path, _num),
+      burnRate: _opt(m, 'burn_rate', path, _num),
+      met: _req(m, 'met', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'requests': requests,
+    'good': good,
+    'bad': bad,
+    'sli': ?sli,
+    'budget_requests': budgetRequests,
+    'budget_consumed': budgetConsumed,
+    'budget_remaining': budgetRemaining,
+    'remaining_ratio': ?remainingRatio,
+    'burn_rate': ?burnRate,
+    'met': met,
+  };
+
+  final double requests;
+  final double good;
+  final double bad;
+  final double? sli;
+  final double budgetRequests;
+  final double budgetConsumed;
+  final double budgetRemaining;
+  final double? remainingRatio;
+  final double? burnRate;
+  final bool met;
 }
 
 /// `PlanQueryLimits` of the openlog API contract.
@@ -18550,6 +20113,344 @@ class RumFunnelResponse {
   final int windowSeconds;
 }
 
+/// `RumCrashList` of the openlog API contract.
+class RumCrashList {
+  const RumCrashList({required this.crashes});
+
+  factory RumCrashList.fromJson(Object? json, [String path = 'RumCrashList']) {
+    final m = _obj(json, path);
+    return RumCrashList(
+      crashes: _req(
+        m,
+        'crashes',
+        path,
+        (v, p) => _list<RumCrash>(v, p, (v, p) => RumCrash.fromJson(v, p)),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'crashes': [for (final e in crashes) e.toJson()],
+  };
+
+  final List<RumCrash> crashes;
+}
+
+/// `AnalyticsCompareResponse` of the openlog API contract.
+class AnalyticsCompareResponse {
+  const AnalyticsCompareResponse({
+    required this.days,
+    required this.current,
+    required this.previous,
+    required this.previousPartial,
+    required this.collecting,
+    required this.metrics,
+  });
+
+  factory AnalyticsCompareResponse.fromJson(
+    Object? json, [
+    String path = 'AnalyticsCompareResponse',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsCompareResponse(
+      days: _req(m, 'days', path, _int),
+      current: _req(
+        m,
+        'current',
+        path,
+        (v, p) => AnalyticsPeriod.fromJson(v, p),
+      ),
+      previous: _req(
+        m,
+        'previous',
+        path,
+        (v, p) => AnalyticsPeriod.fromJson(v, p),
+      ),
+      previousPartial: _req(m, 'previous_partial', path, _bool),
+      collecting: _req(m, 'collecting', path, _bool),
+      metrics: _req(
+        m,
+        'metrics',
+        path,
+        (v, p) => AnalyticsCompareResponseMetrics.fromJson(v, p),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'days': days,
+    'current': current.toJson(),
+    'previous': previous.toJson(),
+    'previous_partial': previousPartial,
+    'collecting': collecting,
+    'metrics': metrics.toJson(),
+  };
+
+  final int days;
+  final AnalyticsPeriod current;
+  final AnalyticsPeriod previous;
+  final bool previousPartial;
+  final bool collecting;
+  final AnalyticsCompareResponseMetrics metrics;
+}
+
+/// `AnalyticsCompareResponseMetrics` of the openlog API contract.
+class AnalyticsCompareResponseMetrics {
+  const AnalyticsCompareResponseMetrics({
+    required this.users,
+    required this.newUsers,
+    required this.avgDailyUsers,
+    required this.dau,
+    required this.wau,
+    required this.mau,
+    required this.stickiness,
+    required this.sessions,
+    required this.pageViews,
+    required this.events,
+  });
+
+  factory AnalyticsCompareResponseMetrics.fromJson(
+    Object? json, [
+    String path = 'AnalyticsCompareResponseMetrics',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsCompareResponseMetrics(
+      users: _req(m, 'users', path, (v, p) => AnalyticsMetric.fromJson(v, p)),
+      newUsers: _req(
+        m,
+        'new_users',
+        path,
+        (v, p) => AnalyticsMetric.fromJson(v, p),
+      ),
+      avgDailyUsers: _req(
+        m,
+        'avg_daily_users',
+        path,
+        (v, p) => AnalyticsMetric.fromJson(v, p),
+      ),
+      dau: _req(m, 'dau', path, (v, p) => AnalyticsMetric.fromJson(v, p)),
+      wau: _req(m, 'wau', path, (v, p) => AnalyticsMetric.fromJson(v, p)),
+      mau: _req(m, 'mau', path, (v, p) => AnalyticsMetric.fromJson(v, p)),
+      stickiness: _req(
+        m,
+        'stickiness',
+        path,
+        (v, p) => AnalyticsMetric.fromJson(v, p),
+      ),
+      sessions: _req(
+        m,
+        'sessions',
+        path,
+        (v, p) => AnalyticsMetric.fromJson(v, p),
+      ),
+      pageViews: _req(
+        m,
+        'page_views',
+        path,
+        (v, p) => AnalyticsMetric.fromJson(v, p),
+      ),
+      events: _req(m, 'events', path, (v, p) => AnalyticsMetric.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'users': users.toJson(),
+    'new_users': newUsers.toJson(),
+    'avg_daily_users': avgDailyUsers.toJson(),
+    'dau': dau.toJson(),
+    'wau': wau.toJson(),
+    'mau': mau.toJson(),
+    'stickiness': stickiness.toJson(),
+    'sessions': sessions.toJson(),
+    'page_views': pageViews.toJson(),
+    'events': events.toJson(),
+  };
+
+  final AnalyticsMetric users;
+  final AnalyticsMetric newUsers;
+  final AnalyticsMetric avgDailyUsers;
+  final AnalyticsMetric dau;
+  final AnalyticsMetric wau;
+  final AnalyticsMetric mau;
+  final AnalyticsMetric stickiness;
+  final AnalyticsMetric sessions;
+  final AnalyticsMetric pageViews;
+  final AnalyticsMetric events;
+}
+
+/// `AnalyticsActivityResponse` of the openlog API contract.
+class AnalyticsActivityResponse {
+  const AnalyticsActivityResponse({
+    required this.days,
+    required this.collecting,
+  });
+
+  factory AnalyticsActivityResponse.fromJson(
+    Object? json, [
+    String path = 'AnalyticsActivityResponse',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsActivityResponse(
+      days: _req(
+        m,
+        'days',
+        path,
+        (v, p) =>
+            _list<AnalyticsDay>(v, p, (v, p) => AnalyticsDay.fromJson(v, p)),
+      ),
+      collecting: _req(m, 'collecting', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'days': [for (final e in days) e.toJson()],
+    'collecting': collecting,
+  };
+
+  final List<AnalyticsDay> days;
+  final bool collecting;
+}
+
+/// `AnalyticsRetentionResponse` of the openlog API contract.
+class AnalyticsRetentionResponse {
+  const AnalyticsRetentionResponse({
+    required this.grain,
+    required this.cohorts,
+    required this.collecting,
+    required this.samplingChanged,
+  });
+
+  factory AnalyticsRetentionResponse.fromJson(
+    Object? json, [
+    String path = 'AnalyticsRetentionResponse',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsRetentionResponse(
+      grain: _req(m, 'grain', path, _str),
+      cohorts: _req(
+        m,
+        'cohorts',
+        path,
+        (v, p) => _list<AnalyticsCohort>(
+          v,
+          p,
+          (v, p) => AnalyticsCohort.fromJson(v, p),
+        ),
+      ),
+      collecting: _req(m, 'collecting', path, _bool),
+      samplingChanged: _req(m, 'sampling_changed', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'grain': grain,
+    'cohorts': [for (final e in cohorts) e.toJson()],
+    'collecting': collecting,
+    'sampling_changed': samplingChanged,
+  };
+
+  final String grain;
+  final List<AnalyticsCohort> cohorts;
+  final bool collecting;
+  final bool samplingChanged;
+}
+
+/// `AnalyticsEventList` of the openlog API contract.
+class AnalyticsEventList {
+  const AnalyticsEventList({required this.events});
+
+  factory AnalyticsEventList.fromJson(
+    Object? json, [
+    String path = 'AnalyticsEventList',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsEventList(
+      events: _req(
+        m,
+        'events',
+        path,
+        (v, p) => _list<AnalyticsEventRow>(
+          v,
+          p,
+          (v, p) => AnalyticsEventRow.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'events': [for (final e in events) e.toJson()],
+  };
+
+  final List<AnalyticsEventRow> events;
+}
+
+/// `AnalyticsAcquisitionResponse` of the openlog API contract.
+class AnalyticsAcquisitionResponse {
+  const AnalyticsAcquisitionResponse({required this.by, required this.sources});
+
+  factory AnalyticsAcquisitionResponse.fromJson(
+    Object? json, [
+    String path = 'AnalyticsAcquisitionResponse',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsAcquisitionResponse(
+      by: _req(m, 'by', path, _str),
+      sources: _req(
+        m,
+        'sources',
+        path,
+        (v, p) => _list<AnalyticsSource>(
+          v,
+          p,
+          (v, p) => AnalyticsSource.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'by': by,
+    'sources': [for (final e in sources) e.toJson()],
+  };
+
+  final String by;
+  final List<AnalyticsSource> sources;
+}
+
+/// `AnalyticsAudienceResponse` of the openlog API contract.
+class AnalyticsAudienceResponse {
+  const AnalyticsAudienceResponse({required this.by, required this.rows});
+
+  factory AnalyticsAudienceResponse.fromJson(
+    Object? json, [
+    String path = 'AnalyticsAudienceResponse',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsAudienceResponse(
+      by: _req(m, 'by', path, _str),
+      rows: _req(
+        m,
+        'rows',
+        path,
+        (v, p) => _list<AnalyticsSource>(
+          v,
+          p,
+          (v, p) => AnalyticsSource.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'by': by,
+    'rows': [for (final e in rows) e.toJson()],
+  };
+
+  final String by;
+  final List<AnalyticsSource> rows;
+}
+
 /// `CostHostPage` of the openlog API contract.
 class CostHostPage {
   const CostHostPage({
@@ -19237,6 +21138,269 @@ class JobMonitorPage {
   final List<JobMonitor> monitors;
 }
 
+/// `JobRunPage` of the openlog API contract.
+class JobRunPage {
+  const JobRunPage({
+    required this.monitor,
+    required this.runs,
+    required this.summary,
+  });
+
+  factory JobRunPage.fromJson(Object? json, [String path = 'JobRunPage']) {
+    final m = _obj(json, path);
+    return JobRunPage(
+      monitor: _req(m, 'monitor', path, (v, p) => JobMonitor.fromJson(v, p)),
+      runs: _req(
+        m,
+        'runs',
+        path,
+        (v, p) => _list<JobRun>(v, p, (v, p) => JobRun.fromJson(v, p)),
+      ),
+      summary: _req(m, 'summary', path, (v, p) => JobSummary.fromJson(v, p)),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'monitor': monitor.toJson(),
+    'runs': [for (final e in runs) e.toJson()],
+    'summary': summary.toJson(),
+  };
+
+  final JobMonitor monitor;
+  final List<JobRun> runs;
+  final JobSummary summary;
+}
+
+/// `VulnAdvisoryPage` of the openlog API contract.
+class VulnAdvisoryPage {
+  const VulnAdvisoryPage({
+    required this.vulnId,
+    required this.findings,
+    this.advisory,
+    this.hasMore,
+  });
+
+  factory VulnAdvisoryPage.fromJson(
+    Object? json, [
+    String path = 'VulnAdvisoryPage',
+  ]) {
+    final m = _obj(json, path);
+    return VulnAdvisoryPage(
+      vulnId: _req(m, 'vuln_id', path, _str),
+      findings: _req(
+        m,
+        'findings',
+        path,
+        (v, p) =>
+            _list<VulnFinding>(v, p, (v, p) => VulnFinding.fromJson(v, p)),
+      ),
+      advisory: _opt(
+        m,
+        'advisory',
+        path,
+        (v, p) => VulnAdvisorySummary.fromJson(v, p),
+      ),
+      hasMore: _opt(m, 'has_more', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'vuln_id': vulnId,
+    'findings': [for (final e in findings) e.toJson()],
+    if (advisory != null) 'advisory': advisory!.toJson(),
+    'has_more': ?hasMore,
+  };
+
+  final String vulnId;
+  final List<VulnFinding> findings;
+  final VulnAdvisorySummary? advisory;
+  final bool? hasMore;
+}
+
+/// `HostVulnPage` of the openlog API contract.
+class HostVulnPage {
+  const HostVulnPage({
+    required this.hostId,
+    required this.findings,
+    this.hasMore,
+  });
+
+  factory HostVulnPage.fromJson(Object? json, [String path = 'HostVulnPage']) {
+    final m = _obj(json, path);
+    return HostVulnPage(
+      hostId: _req(m, 'host_id', path, _str),
+      findings: _req(
+        m,
+        'findings',
+        path,
+        (v, p) =>
+            _list<VulnFinding>(v, p, (v, p) => VulnFinding.fromJson(v, p)),
+      ),
+      hasMore: _opt(m, 'has_more', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host_id': hostId,
+    'findings': [for (final e in findings) e.toJson()],
+    'has_more': ?hasMore,
+  };
+
+  final String hostId;
+  final List<VulnFinding> findings;
+  final bool? hasMore;
+}
+
+/// `ContainerServicePage` of the openlog API contract.
+class ContainerServicePage {
+  const ContainerServicePage({required this.services});
+
+  factory ContainerServicePage.fromJson(
+    Object? json, [
+    String path = 'ContainerServicePage',
+  ]) {
+    final m = _obj(json, path);
+    return ContainerServicePage(
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) => _list<ContainerService>(
+          v,
+          p,
+          (v, p) => ContainerService.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'services': [for (final e in services) e.toJson()],
+  };
+
+  final List<ContainerService> services;
+}
+
+/// `CostHostDetail` of the openlog API contract.
+class CostHostDetail {
+  const CostHostDetail({
+    required this.host,
+    required this.services,
+    required this.containers,
+    required this.pricing,
+    required this.from,
+    required this.to,
+  });
+
+  factory CostHostDetail.fromJson(
+    Object? json, [
+    String path = 'CostHostDetail',
+  ]) {
+    final m = _obj(json, path);
+    return CostHostDetail(
+      host: _req(m, 'host', path, (v, p) => CostHost.fromJson(v, p)),
+      services: _req(
+        m,
+        'services',
+        path,
+        (v, p) =>
+            _list<CostService>(v, p, (v, p) => CostService.fromJson(v, p)),
+      ),
+      containers: _req(
+        m,
+        'containers',
+        path,
+        (v, p) =>
+            _list<CostContainer>(v, p, (v, p) => CostContainer.fromJson(v, p)),
+      ),
+      pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'host': host.toJson(),
+    'services': [for (final e in services) e.toJson()],
+    'containers': [for (final e in containers) e.toJson()],
+    'pricing': pricing.toJson(),
+    'from': from,
+    'to': to,
+  };
+
+  final CostHost host;
+  final List<CostService> services;
+  final List<CostContainer> containers;
+  final CostPricing pricing;
+  final int from;
+  final int to;
+}
+
+/// `CostSummaryAnswer` of the openlog API contract.
+class CostSummaryAnswer {
+  const CostSummaryAnswer({
+    required this.summary,
+    required this.pricing,
+    required this.from,
+    required this.to,
+  });
+
+  factory CostSummaryAnswer.fromJson(
+    Object? json, [
+    String path = 'CostSummaryAnswer',
+  ]) {
+    final m = _obj(json, path);
+    return CostSummaryAnswer(
+      summary: _req(m, 'summary', path, (v, p) => CostSummary.fromJson(v, p)),
+      pricing: _req(m, 'pricing', path, (v, p) => CostPricing.fromJson(v, p)),
+      from: _req(m, 'from', path, _int),
+      to: _req(m, 'to', path, _int),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'summary': summary.toJson(),
+    'pricing': pricing.toJson(),
+    'from': from,
+    'to': to,
+  };
+
+  final CostSummary summary;
+  final CostPricing pricing;
+  final int from;
+  final int to;
+}
+
+/// `AlertMuteOccurrencePage` of the openlog API contract.
+class AlertMuteOccurrencePage {
+  const AlertMuteOccurrencePage({required this.occurrences});
+
+  factory AlertMuteOccurrencePage.fromJson(
+    Object? json, [
+    String path = 'AlertMuteOccurrencePage',
+  ]) {
+    final m = _obj(json, path);
+    return AlertMuteOccurrencePage(
+      occurrences: _req(
+        m,
+        'occurrences',
+        path,
+        (v, p) => _list<AlertMuteOccurrence>(
+          v,
+          p,
+          (v, p) => AlertMuteOccurrence.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'occurrences': [for (final e in occurrences) e.toJson()],
+  };
+
+  final List<AlertMuteOccurrence> occurrences;
+}
+
 /// `VulnPage` of the openlog API contract.
 class VulnPage {
   const VulnPage({
@@ -19367,6 +21531,161 @@ class DbSessionPage {
   final DateTime? sampledAt;
   final List<DbSession> sessions;
   final bool? hasMore;
+}
+
+/// `DbWaitPage` of the openlog API contract.
+class DbWaitPage {
+  const DbWaitPage({required this.waits, this.hasMore});
+
+  factory DbWaitPage.fromJson(Object? json, [String path = 'DbWaitPage']) {
+    final m = _obj(json, path);
+    return DbWaitPage(
+      waits: _req(
+        m,
+        'waits',
+        path,
+        (v, p) => _list<DbWait>(v, p, (v, p) => DbWait.fromJson(v, p)),
+      ),
+      hasMore: _opt(m, 'has_more', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'waits': [for (final e in waits) e.toJson()],
+    'has_more': ?hasMore,
+  };
+
+  final List<DbWait> waits;
+  final bool? hasMore;
+}
+
+/// `DbActivityQueryPage` of the openlog API contract.
+class DbActivityQueryPage {
+  const DbActivityQueryPage({required this.queries, this.hasMore});
+
+  factory DbActivityQueryPage.fromJson(
+    Object? json, [
+    String path = 'DbActivityQueryPage',
+  ]) {
+    final m = _obj(json, path);
+    return DbActivityQueryPage(
+      queries: _req(
+        m,
+        'queries',
+        path,
+        (v, p) => _list<DbActivityQuery>(
+          v,
+          p,
+          (v, p) => DbActivityQuery.fromJson(v, p),
+        ),
+      ),
+      hasMore: _opt(m, 'has_more', path, _bool),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'queries': [for (final e in queries) e.toJson()],
+    'has_more': ?hasMore,
+  };
+
+  final List<DbActivityQuery> queries;
+  final bool? hasMore;
+}
+
+/// `DbLookupPage` of the openlog API contract.
+class DbLookupPage {
+  const DbLookupPage({required this.matches});
+
+  factory DbLookupPage.fromJson(Object? json, [String path = 'DbLookupPage']) {
+    final m = _obj(json, path);
+    return DbLookupPage(
+      matches: _req(
+        m,
+        'matches',
+        path,
+        (v, p) => _list<DbLookupPageMatchesItem>(
+          v,
+          p,
+          (v, p) => DbLookupPageMatchesItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'matches': [for (final e in matches) e.toJson()],
+  };
+
+  final List<DbLookupPageMatchesItem> matches;
+}
+
+/// `DbLookupPageMatchesItem` of the openlog API contract.
+class DbLookupPageMatchesItem {
+  const DbLookupPageMatchesItem({
+    required this.instance,
+    required this.fingerprint,
+    required this.hostName,
+    required this.calls,
+    this.avgMs,
+  });
+
+  factory DbLookupPageMatchesItem.fromJson(
+    Object? json, [
+    String path = 'DbLookupPageMatchesItem',
+  ]) {
+    final m = _obj(json, path);
+    return DbLookupPageMatchesItem(
+      instance: _req(m, 'instance', path, _str),
+      fingerprint: _req(m, 'fingerprint', path, _str),
+      hostName: _req(m, 'host_name', path, _str),
+      calls: _req(m, 'calls', path, _int),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'instance': instance,
+    'fingerprint': fingerprint,
+    'host_name': hostName,
+    'calls': calls,
+    'avg_ms': ?avgMs,
+  };
+
+  final String instance;
+  final String fingerprint;
+  final String hostName;
+  final int calls;
+  final double? avgMs;
+}
+
+/// `ApmDbQueryPlanPage` of the openlog API contract.
+class ApmDbQueryPlanPage {
+  const ApmDbQueryPlanPage({required this.plans});
+
+  factory ApmDbQueryPlanPage.fromJson(
+    Object? json, [
+    String path = 'ApmDbQueryPlanPage',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDbQueryPlanPage(
+      plans: _req(
+        m,
+        'plans',
+        path,
+        (v, p) => _list<ApmDbQueryPlan>(
+          v,
+          p,
+          (v, p) => ApmDbQueryPlan.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'plans': [for (final e in plans) e.toJson()],
+  };
+
+  final List<ApmDbQueryPlan> plans;
 }
 
 /// `AlertChannel` of the openlog API contract.
@@ -20832,6 +23151,328 @@ class RumFunnelStep {
   final double rate;
 }
 
+/// `RumCrash` of the openlog API contract.
+class RumCrash {
+  const RumCrash({
+    required this.groupId,
+    required this.type,
+    required this.message,
+    required this.kind,
+    required this.count,
+    required this.sessions,
+    required this.lastVersion,
+    required this.lastSeen,
+    required this.stack,
+    this.frame,
+    this.symbolicatedFrames,
+    this.missingSymbols,
+  });
+
+  factory RumCrash.fromJson(Object? json, [String path = 'RumCrash']) {
+    final m = _obj(json, path);
+    return RumCrash(
+      groupId: _req(m, 'group_id', path, _str),
+      type: _req(m, 'type', path, _str),
+      message: _req(m, 'message', path, _str),
+      kind: _req(m, 'kind', path, _str),
+      count: _req(m, 'count', path, _num),
+      sessions: _req(m, 'sessions', path, _int),
+      lastVersion: _req(m, 'last_version', path, _str),
+      lastSeen: _req(m, 'last_seen', path, _time),
+      stack: _req(m, 'stack', path, _str),
+      frame: _opt(m, 'frame', path, _str),
+      symbolicatedFrames: _opt(m, 'symbolicated_frames', path, _int),
+      missingSymbols: _opt(
+        m,
+        'missing_symbols',
+        path,
+        (v, p) => _list<String>(v, p, _str),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'group_id': groupId,
+    'type': type,
+    'message': message,
+    'kind': kind,
+    'count': count,
+    'sessions': sessions,
+    'last_version': lastVersion,
+    'last_seen': lastSeen.toUtc().toIso8601String(),
+    'stack': stack,
+    'frame': ?frame,
+    'symbolicated_frames': ?symbolicatedFrames,
+    'missing_symbols': ?missingSymbols,
+  };
+
+  final String groupId;
+  final String type;
+  final String message;
+  final String kind;
+  final double count;
+  final int sessions;
+  final String lastVersion;
+  final DateTime lastSeen;
+  final String stack;
+  final String? frame;
+  final int? symbolicatedFrames;
+  final List<String>? missingSymbols;
+}
+
+/// `AnalyticsPeriod` of the openlog API contract.
+class AnalyticsPeriod {
+  const AnalyticsPeriod({required this.from, required this.to});
+
+  factory AnalyticsPeriod.fromJson(
+    Object? json, [
+    String path = 'AnalyticsPeriod',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsPeriod(
+      from: _req(m, 'from', path, _str),
+      to: _req(m, 'to', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {'from': from, 'to': to};
+
+  final String from;
+  final String to;
+}
+
+/// `AnalyticsMetric` of the openlog API contract.
+class AnalyticsMetric {
+  const AnalyticsMetric({
+    required this.current,
+    this.previous,
+    this.change,
+    this.changeRate,
+  });
+
+  factory AnalyticsMetric.fromJson(
+    Object? json, [
+    String path = 'AnalyticsMetric',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsMetric(
+      current: _req(m, 'current', path, _num),
+      previous: _opt(m, 'previous', path, _num),
+      change: _opt(m, 'change', path, _num),
+      changeRate: _opt(m, 'change_rate', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'current': current,
+    'previous': ?previous,
+    'change': ?change,
+    'change_rate': ?changeRate,
+  };
+
+  final double current;
+  final double? previous;
+  final double? change;
+  final double? changeRate;
+}
+
+/// `AnalyticsDay` of the openlog API contract.
+class AnalyticsDay {
+  const AnalyticsDay({
+    required this.date,
+    required this.dau,
+    required this.wau,
+    required this.mau,
+    required this.newUsers,
+    required this.stickiness,
+  });
+
+  factory AnalyticsDay.fromJson(Object? json, [String path = 'AnalyticsDay']) {
+    final m = _obj(json, path);
+    return AnalyticsDay(
+      date: _req(m, 'date', path, _str),
+      dau: _req(m, 'dau', path, _num),
+      wau: _req(m, 'wau', path, _num),
+      mau: _req(m, 'mau', path, _num),
+      newUsers: _req(m, 'new_users', path, _num),
+      stickiness: _req(m, 'stickiness', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'date': date,
+    'dau': dau,
+    'wau': wau,
+    'mau': mau,
+    'new_users': newUsers,
+    'stickiness': stickiness,
+  };
+
+  final String date;
+  final double dau;
+  final double wau;
+  final double mau;
+  final double newUsers;
+  final double stickiness;
+}
+
+/// `AnalyticsCohort` of the openlog API contract.
+class AnalyticsCohort {
+  const AnalyticsCohort({
+    required this.cohort,
+    required this.size,
+    required this.periods,
+  });
+
+  factory AnalyticsCohort.fromJson(
+    Object? json, [
+    String path = 'AnalyticsCohort',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsCohort(
+      cohort: _req(m, 'cohort', path, _str),
+      size: _req(m, 'size', path, _num),
+      periods: _req(
+        m,
+        'periods',
+        path,
+        (v, p) => _list<AnalyticsCohortPeriodsItem>(
+          v,
+          p,
+          (v, p) => AnalyticsCohortPeriodsItem.fromJson(v, p),
+        ),
+      ),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'cohort': cohort,
+    'size': size,
+    'periods': [for (final e in periods) e.toJson()],
+  };
+
+  final String cohort;
+  final double size;
+  final List<AnalyticsCohortPeriodsItem> periods;
+}
+
+/// `AnalyticsCohortPeriodsItem` of the openlog API contract.
+class AnalyticsCohortPeriodsItem {
+  const AnalyticsCohortPeriodsItem({
+    required this.period,
+    required this.users,
+    required this.rate,
+  });
+
+  factory AnalyticsCohortPeriodsItem.fromJson(
+    Object? json, [
+    String path = 'AnalyticsCohortPeriodsItem',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsCohortPeriodsItem(
+      period: _req(m, 'period', path, _int),
+      users: _req(m, 'users', path, _num),
+      rate: _req(m, 'rate', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'period': period,
+    'users': users,
+    'rate': rate,
+  };
+
+  final int period;
+  final double users;
+  final double rate;
+}
+
+/// `AnalyticsEventRow` of the openlog API contract.
+class AnalyticsEventRow {
+  const AnalyticsEventRow({
+    this.previousCount,
+    this.previousSessions,
+    this.previousUsers,
+    required this.name,
+    required this.count,
+    required this.sessions,
+    required this.users,
+  });
+
+  factory AnalyticsEventRow.fromJson(
+    Object? json, [
+    String path = 'AnalyticsEventRow',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsEventRow(
+      previousCount: _opt(m, 'previous_count', path, _num),
+      previousSessions: _opt(m, 'previous_sessions', path, _num),
+      previousUsers: _opt(m, 'previous_users', path, _num),
+      name: _req(m, 'name', path, _str),
+      count: _req(m, 'count', path, _num),
+      sessions: _req(m, 'sessions', path, _num),
+      users: _req(m, 'users', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'previous_count': ?previousCount,
+    'previous_sessions': ?previousSessions,
+    'previous_users': ?previousUsers,
+    'name': name,
+    'count': count,
+    'sessions': sessions,
+    'users': users,
+  };
+
+  final double? previousCount;
+  final double? previousSessions;
+  final double? previousUsers;
+  final String name;
+  final double count;
+  final double sessions;
+  final double users;
+}
+
+/// `AnalyticsSource` of the openlog API contract.
+class AnalyticsSource {
+  const AnalyticsSource({
+    required this.value,
+    required this.sessions,
+    required this.users,
+    this.previousSessions,
+    this.previousUsers,
+  });
+
+  factory AnalyticsSource.fromJson(
+    Object? json, [
+    String path = 'AnalyticsSource',
+  ]) {
+    final m = _obj(json, path);
+    return AnalyticsSource(
+      value: _req(m, 'value', path, _str),
+      sessions: _req(m, 'sessions', path, _num),
+      users: _req(m, 'users', path, _num),
+      previousSessions: _opt(m, 'previous_sessions', path, _num),
+      previousUsers: _opt(m, 'previous_users', path, _num),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'value': value,
+    'sessions': sessions,
+    'users': users,
+    'previous_sessions': ?previousSessions,
+    'previous_users': ?previousUsers,
+  };
+
+  final String value;
+  final double sessions;
+  final double users;
+  final double? previousSessions;
+  final double? previousUsers;
+}
+
 /// `CostHost` of the openlog API contract.
 class CostHost {
   const CostHost({
@@ -21609,113 +24250,6 @@ class ApiContainer {
   final List<List<double>> memorySparkline;
 }
 
-/// `KubernetesPod` of the openlog API contract.
-class KubernetesPod {
-  const KubernetesPod({
-    required this.clusterUid,
-    required this.clusterName,
-    required this.namespace,
-    required this.podName,
-    required this.podUid,
-    required this.nodeName,
-    required this.workloadKind,
-    required this.workloadName,
-    required this.phase,
-    required this.ready,
-    required this.reason,
-    required this.status,
-    required this.restarts,
-    required this.podIp,
-    required this.qosClass,
-    this.createdAt,
-    this.startedAt,
-    this.cpuUsage,
-    this.memoryWorkingSet,
-    required this.firstSeen,
-    required this.lastSeen,
-    required this.reporting,
-  });
-
-  factory KubernetesPod.fromJson(
-    Object? json, [
-    String path = 'KubernetesPod',
-  ]) {
-    final m = _obj(json, path);
-    return KubernetesPod(
-      clusterUid: _req(m, 'cluster_uid', path, _str),
-      clusterName: _req(m, 'cluster_name', path, _str),
-      namespace: _req(m, 'namespace', path, _str),
-      podName: _req(m, 'pod_name', path, _str),
-      podUid: _req(m, 'pod_uid', path, _str),
-      nodeName: _req(m, 'node_name', path, _str),
-      workloadKind: _req(m, 'workload_kind', path, _str),
-      workloadName: _req(m, 'workload_name', path, _str),
-      phase: _req(m, 'phase', path, _str),
-      ready: _req(m, 'ready', path, _bool),
-      reason: _req(m, 'reason', path, _str),
-      status: _req(m, 'status', path, _str),
-      restarts: _req(m, 'restarts', path, _int),
-      podIp: _req(m, 'pod_ip', path, _str),
-      qosClass: _req(m, 'qos_class', path, _str),
-      createdAt: _opt(m, 'created_at', path, _str),
-      startedAt: _opt(m, 'started_at', path, _str),
-      cpuUsage: _opt(m, 'cpu_usage', path, _num),
-      memoryWorkingSet: _opt(m, 'memory_working_set', path, _num),
-      firstSeen: _req(m, 'first_seen', path, _time),
-      lastSeen: _req(m, 'last_seen', path, _time),
-      reporting: _req(m, 'reporting', path, _bool),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'cluster_uid': clusterUid,
-    'cluster_name': clusterName,
-    'namespace': namespace,
-    'pod_name': podName,
-    'pod_uid': podUid,
-    'node_name': nodeName,
-    'workload_kind': workloadKind,
-    'workload_name': workloadName,
-    'phase': phase,
-    'ready': ready,
-    'reason': reason,
-    'status': status,
-    'restarts': restarts,
-    'pod_ip': podIp,
-    'qos_class': qosClass,
-    'created_at': ?createdAt,
-    'started_at': ?startedAt,
-    'cpu_usage': ?cpuUsage,
-    'memory_working_set': ?memoryWorkingSet,
-    'first_seen': firstSeen.toUtc().toIso8601String(),
-    'last_seen': lastSeen.toUtc().toIso8601String(),
-    'reporting': reporting,
-  };
-
-  final String clusterUid;
-  final String clusterName;
-  final String namespace;
-  final String podName;
-  final String podUid;
-  final String nodeName;
-  final String workloadKind;
-  final String workloadName;
-  final String phase;
-  final bool ready;
-  final String reason;
-  final String status;
-  final int restarts;
-  final String podIp;
-  final String qosClass;
-  final String? createdAt;
-  final String? startedAt;
-  final double? cpuUsage;
-  final double? memoryWorkingSet;
-  final DateTime firstSeen;
-  final DateTime lastSeen;
-  final bool reporting;
-}
-
 /// `ComposeProject` of the openlog API contract.
 class ComposeProject {
   const ComposeProject({
@@ -22436,6 +24970,94 @@ class JobMonitor {
   final JobSummary? summary;
 }
 
+/// `JobRun` of the openlog API contract.
+class JobRun {
+  const JobRun({
+    required this.timestamp,
+    required this.status,
+    this.startedAt,
+    required this.durationMs,
+    required this.exitCode,
+    required this.lateSeconds,
+    required this.message,
+    required this.source,
+  });
+
+  factory JobRun.fromJson(Object? json, [String path = 'JobRun']) {
+    final m = _obj(json, path);
+    return JobRun(
+      timestamp: _req(m, 'timestamp', path, _time),
+      status: _req(m, 'status', path, JobRunStatus.fromJson),
+      startedAt: _opt(m, 'started_at', path, _time),
+      durationMs: _req(m, 'duration_ms', path, _num),
+      exitCode: _req(m, 'exit_code', path, _int),
+      lateSeconds: _req(m, 'late_seconds', path, _num),
+      message: _req(m, 'message', path, _str),
+      source: _req(m, 'source', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'timestamp': timestamp.toUtc().toIso8601String(),
+    'status': status.wire,
+    if (startedAt != null) 'started_at': startedAt!.toUtc().toIso8601String(),
+    'duration_ms': durationMs,
+    'exit_code': exitCode,
+    'late_seconds': lateSeconds,
+    'message': message,
+    'source': source,
+  };
+
+  final DateTime timestamp;
+  final JobRunStatus status;
+  final DateTime? startedAt;
+  final double durationMs;
+  final int exitCode;
+  final double lateSeconds;
+  final String message;
+  final String source;
+}
+
+/// `JobSummary` of the openlog API contract.
+class JobSummary {
+  const JobSummary({
+    required this.runs,
+    required this.failures,
+    required this.missed,
+    this.avgMs,
+    this.maxMs,
+    this.lastAt,
+  });
+
+  factory JobSummary.fromJson(Object? json, [String path = 'JobSummary']) {
+    final m = _obj(json, path);
+    return JobSummary(
+      runs: _req(m, 'runs', path, _int),
+      failures: _req(m, 'failures', path, _int),
+      missed: _req(m, 'missed', path, _int),
+      avgMs: _opt(m, 'avg_ms', path, _num),
+      maxMs: _opt(m, 'max_ms', path, _num),
+      lastAt: _opt(m, 'last_at', path, _time),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'runs': runs,
+    'failures': failures,
+    'missed': missed,
+    'avg_ms': ?avgMs,
+    'max_ms': ?maxMs,
+    if (lastAt != null) 'last_at': lastAt!.toUtc().toIso8601String(),
+  };
+
+  final int runs;
+  final int failures;
+  final int missed;
+  final double? avgMs;
+  final double? maxMs;
+  final DateTime? lastAt;
+}
+
 /// `VulnGroup` of the openlog API contract.
 class VulnGroup {
   const VulnGroup({
@@ -22635,6 +25257,45 @@ class DbSession {
   final String text;
   final List<String> blockingSessionIds;
   final int blocks;
+}
+
+/// `ApmDbQueryPlan` of the openlog API contract.
+class ApmDbQueryPlan {
+  const ApmDbQueryPlan({
+    required this.plan,
+    required this.service,
+    required this.generic,
+    required this.capturedAt,
+    required this.traceId,
+  });
+
+  factory ApmDbQueryPlan.fromJson(
+    Object? json, [
+    String path = 'ApmDbQueryPlan',
+  ]) {
+    final m = _obj(json, path);
+    return ApmDbQueryPlan(
+      plan: _req(m, 'plan', path, _str),
+      service: _req(m, 'service', path, _str),
+      generic: _req(m, 'generic', path, _bool),
+      capturedAt: _req(m, 'captured_at', path, _time),
+      traceId: _req(m, 'trace_id', path, _str),
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+    'plan': plan,
+    'service': service,
+    'generic': generic,
+    'captured_at': capturedAt.toUtc().toIso8601String(),
+    'trace_id': traceId,
+  };
+
+  final String plan;
+  final String service;
+  final bool generic;
+  final DateTime capturedAt;
+  final String traceId;
 }
 
 /// Non-secret settings, one section per channel type. email: to (required), smtp (optional override); pagerduty: pagerduty; opsgenie: opsgenie (alerting.md §5.3).
@@ -23333,38 +25994,6 @@ class KubernetesNodeCondition {
   final KubernetesNodeConditionStatus status;
 }
 
-/// `SloStatus` of the openlog API contract.
-class SloStatus {
-  const SloStatus({
-    required this.from,
-    required this.to,
-    required this.windowDays,
-    required this.budget,
-  });
-
-  factory SloStatus.fromJson(Object? json, [String path = 'SloStatus']) {
-    final m = _obj(json, path);
-    return SloStatus(
-      from: _req(m, 'from', path, _time),
-      to: _req(m, 'to', path, _time),
-      windowDays: _req(m, 'window_days', path, _int),
-      budget: _req(m, 'budget', path, (v, p) => SloBudget.fromJson(v, p)),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'from': from.toUtc().toIso8601String(),
-    'to': to.toUtc().toIso8601String(),
-    'window_days': windowDays,
-    'budget': budget.toJson(),
-  };
-
-  final DateTime from;
-  final DateTime to;
-  final int windowDays;
-  final SloBudget budget;
-}
-
 /// `JobMonitorState` of the openlog API contract.
 class JobMonitorState {
   const JobMonitorState({
@@ -23425,46 +26054,6 @@ class JobMonitorState {
   final DateTime expectedAt;
   final int consecutiveFailures;
   final bool late;
-}
-
-/// `JobSummary` of the openlog API contract.
-class JobSummary {
-  const JobSummary({
-    required this.runs,
-    required this.failures,
-    required this.missed,
-    this.avgMs,
-    this.maxMs,
-    this.lastAt,
-  });
-
-  factory JobSummary.fromJson(Object? json, [String path = 'JobSummary']) {
-    final m = _obj(json, path);
-    return JobSummary(
-      runs: _req(m, 'runs', path, _int),
-      failures: _req(m, 'failures', path, _int),
-      missed: _req(m, 'missed', path, _int),
-      avgMs: _opt(m, 'avg_ms', path, _num),
-      maxMs: _opt(m, 'max_ms', path, _num),
-      lastAt: _opt(m, 'last_at', path, _time),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'runs': runs,
-    'failures': failures,
-    'missed': missed,
-    'avg_ms': ?avgMs,
-    'max_ms': ?maxMs,
-    if (lastAt != null) 'last_at': lastAt!.toUtc().toIso8601String(),
-  };
-
-  final int runs;
-  final int failures;
-  final int missed;
-  final double? avgMs;
-  final double? maxMs;
-  final DateTime? lastAt;
 }
 
 /// `ApmAgentVersion` of the openlog API contract.
@@ -23856,60 +26445,4 @@ class FleetJavaOverride {
 
   final FleetJavaAgentMode mode;
   final DateTime updatedAt;
-}
-
-/// Error budget over one range; ratios are null without requests (slo.md §2).
-class SloBudget {
-  const SloBudget({
-    required this.requests,
-    required this.good,
-    required this.bad,
-    this.sli,
-    required this.budgetRequests,
-    required this.budgetConsumed,
-    required this.budgetRemaining,
-    this.remainingRatio,
-    this.burnRate,
-    required this.met,
-  });
-
-  factory SloBudget.fromJson(Object? json, [String path = 'SloBudget']) {
-    final m = _obj(json, path);
-    return SloBudget(
-      requests: _req(m, 'requests', path, _num),
-      good: _req(m, 'good', path, _num),
-      bad: _req(m, 'bad', path, _num),
-      sli: _opt(m, 'sli', path, _num),
-      budgetRequests: _req(m, 'budget_requests', path, _num),
-      budgetConsumed: _req(m, 'budget_consumed', path, _num),
-      budgetRemaining: _req(m, 'budget_remaining', path, _num),
-      remainingRatio: _opt(m, 'remaining_ratio', path, _num),
-      burnRate: _opt(m, 'burn_rate', path, _num),
-      met: _req(m, 'met', path, _bool),
-    );
-  }
-
-  Map<String, Object?> toJson() => {
-    'requests': requests,
-    'good': good,
-    'bad': bad,
-    'sli': ?sli,
-    'budget_requests': budgetRequests,
-    'budget_consumed': budgetConsumed,
-    'budget_remaining': budgetRemaining,
-    'remaining_ratio': ?remainingRatio,
-    'burn_rate': ?burnRate,
-    'met': met,
-  };
-
-  final double requests;
-  final double good;
-  final double bad;
-  final double? sli;
-  final double budgetRequests;
-  final double budgetConsumed;
-  final double budgetRemaining;
-  final double? remainingRatio;
-  final double? burnRate;
-  final bool met;
 }

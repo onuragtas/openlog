@@ -12,6 +12,727 @@ class LTr extends L {
   String get appTitle => 'openlog';
 
   @override
+  String get serverNotOffered =>
+      'Bu sunucu bunu henüz sunmuyor. Sunucudaki openlog güncellendiğinde gelecek.';
+
+  @override
+  String get detailEditOnWeb => 'Bunu değiştirmek web\'den yapılır.';
+
+  @override
+  String get infraSortName => 'Ad';
+
+  @override
+  String get infraSortOs => 'İşletim sistemi';
+
+  @override
+  String get infraSortCpu => 'CPU';
+
+  @override
+  String get infraSortMemory => 'Bellek';
+
+  @override
+  String get infraSortDisk => 'Disk';
+
+  @override
+  String get infraSortLoad => 'Yük';
+
+  @override
+  String get infraSortAgent => 'Ajan';
+
+  @override
+  String get infraSortLastSeen => 'Son görülme';
+
+  @override
+  String get infraSortState => 'Durum';
+
+  @override
+  String get infraSortImage => 'İmaj';
+
+  @override
+  String get infraSortCompose => 'Compose';
+
+  @override
+  String get infraSortHost => 'Host';
+
+  @override
+  String get infraSortStatus => 'Durum';
+
+  @override
+  String get infraSortRestarts => 'Yeniden başlatma';
+
+  @override
+  String get infraSortWorkload => 'Workload';
+
+  @override
+  String get infraSortNode => 'Node';
+
+  @override
+  String get infraSortIp => 'IP';
+
+  @override
+  String get infraSortAge => 'Yaş';
+
+  @override
+  String get infraSortCluster => 'Küme';
+
+  @override
+  String get infraSortKind => 'Tür';
+
+  @override
+  String get infraSortHealth => 'Sağlık';
+
+  @override
+  String get infraSortReplicas => 'Replika';
+
+  @override
+  String get infraSortKubelet => 'Kubelet';
+
+  @override
+  String get infraSortInstance => 'Örnek';
+
+  @override
+  String get infraSortCost => 'Maliyet';
+
+  @override
+  String get infraSortIdle => 'Atıl';
+
+  @override
+  String get infraSortService => 'Servis';
+
+  @override
+  String get infraSortEnvironment => 'Ortam';
+
+  @override
+  String get infraSortContainers => 'Konteyner';
+
+  @override
+  String get infraSortType => 'Tür';
+
+  @override
+  String get infraSortTotal => 'Toplam';
+
+  @override
+  String get infraSortSamples => 'Örnek sayısı';
+
+  @override
+  String get infraSortAdvisory => 'Duyuru';
+
+  @override
+  String get infraSortSeverity => 'Önem';
+
+  @override
+  String get infraSortScore => 'CVSS';
+
+  @override
+  String get infraSortHosts => 'Host';
+
+  @override
+  String get infraSortPackage => 'Paket';
+
+  @override
+  String get infraSortVersion => 'Kurulu → düzeltilmiş';
+
+  @override
+  String get infraSortEcosystem => 'Sürüm';
+
+  @override
+  String get sloStatusHealthy => 'Sağlıklı';
+
+  @override
+  String get sloStatusWarning => 'Bütçe azaldı';
+
+  @override
+  String get sloStatusExhausted => 'Bütçe tükendi';
+
+  @override
+  String get sloStatusNone => 'Veri yok';
+
+  @override
+  String sloWindowDays(int count) {
+    return '$count gün';
+  }
+
+  @override
+  String get sloSliAvailability => 'Erişilebilirlik';
+
+  @override
+  String get sloSliLatency => 'Gecikme';
+
+  @override
+  String get sloObjective => 'Hedef değer';
+
+  @override
+  String get sloRemaining => 'Kalan bütçe';
+
+  @override
+  String get sloBurnRate => 'Yanma hızı';
+
+  @override
+  String get sloRequests => 'İstek';
+
+  @override
+  String get sloBad => 'Başarısız istek';
+
+  @override
+  String get sloBudgetTitle => 'Hata bütçesi';
+
+  @override
+  String get sloSeriesEmpty => 'Bu pencerede henüz istek yok.';
+
+  @override
+  String get sloBudgetFull => 'Bütçe dolu';
+
+  @override
+  String get sloBudgetEmpty => 'Tükendi';
+
+  @override
+  String get sloBurnTitle => 'Yanma hızı pencereleri';
+
+  @override
+  String get sloBurnHint =>
+      'Bir pencere, bütçe hem uzun hem kısa penceresinde bu katın üstünde tükeniyorsa alarm verir.';
+
+  @override
+  String get sloBurnFast => 'Hızlı (1 sa / 5 dk)';
+
+  @override
+  String get sloBurnSlow => 'Yavaş (6 sa / 30 dk)';
+
+  @override
+  String get sloBurnBreaching => 'Hızlı tükeniyor';
+
+  @override
+  String get sloBurnOk => 'Bütçe içinde';
+
+  @override
+  String get sloBurnThreshold => 'Alarm eşiği';
+
+  @override
+  String get sloBurnLong => 'Uzun pencere';
+
+  @override
+  String get sloBurnShort => 'Kısa pencere';
+
+  @override
+  String get jobStateOk => 'Tamam';
+
+  @override
+  String get jobStateLate => 'Gecikti';
+
+  @override
+  String get jobStateFailing => 'Başarısız';
+
+  @override
+  String get jobStateRunning => 'Çalışıyor';
+
+  @override
+  String get jobStatePaused => 'Duraklatıldı';
+
+  @override
+  String get jobStateUnknown => 'Veri yok';
+
+  @override
+  String get jobRunSuccess => 'Başarılı';
+
+  @override
+  String get jobRunFailure => 'Başarısız';
+
+  @override
+  String get jobRunMissed => 'Kaçırıldı';
+
+  @override
+  String get jobRunOverrun => 'Aşım';
+
+  @override
+  String get jobRunRunning => 'Çalışıyor';
+
+  @override
+  String jobEvery(String interval) {
+    return 'her $interval';
+  }
+
+  @override
+  String get jobRuns => 'Koşu (7 g)';
+
+  @override
+  String get jobFailures => 'Başarısız';
+
+  @override
+  String get jobMissed => 'Kaçırılan';
+
+  @override
+  String get jobAvg => 'Ortalama';
+
+  @override
+  String get jobMax => 'En uzun';
+
+  @override
+  String get jobNextRun => 'Sıradaki';
+
+  @override
+  String get jobPingUrl => 'Ping URL\'si';
+
+  @override
+  String get jobLastOutput => 'Son çıktı';
+
+  @override
+  String get jobRunsTitle => 'Koşular';
+
+  @override
+  String get jobRunsEmpty => 'Bu aralıkta henüz koşu yok.';
+
+  @override
+  String get jobDuration => 'Süre';
+
+  @override
+  String get jobLate => 'Gecikme';
+
+  @override
+  String get jobExit => 'Çıkış';
+
+  @override
+  String get vulnSeverityCritical => 'Kritik';
+
+  @override
+  String get vulnSeverityHigh => 'Yüksek';
+
+  @override
+  String get vulnSeverityMedium => 'Orta';
+
+  @override
+  String get vulnSeverityLow => 'Düşük';
+
+  @override
+  String get vulnSeverityNone => 'Derecesiz';
+
+  @override
+  String vulnFilterAll(int count) {
+    return 'Tümü ($count)';
+  }
+
+  @override
+  String get vulnNoFindings => 'Bu duyurunun açık bulgusu yok.';
+
+  @override
+  String vulnNoFix(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count host, duyurunun henüz düzeltmesi olmayan bir sürümü çalıştırıyor; yükseltmek bunu çözmez.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get vulnHostEmpty => 'Bu host\'ta açık paket yok.';
+
+  @override
+  String get vulnHostEmptyHint =>
+      'En son envanter anlık görüntüsündeki her paket, sürümünün duyurularıyla karşılaştırıldı.';
+
+  @override
+  String get hostTabMetrics => 'Metrikler';
+
+  @override
+  String get hostTabInventory => 'Envanter';
+
+  @override
+  String get hostTabVulns => 'Güvenlik açıkları';
+
+  @override
+  String get hostChartCpu => 'Moda göre CPU kullanımı';
+
+  @override
+  String get hostChartLoad => 'Yük ortalaması';
+
+  @override
+  String get hostChartMemory => 'Duruma göre bellek kullanımı';
+
+  @override
+  String get hostChartFilesystem =>
+      'Bağlama noktasına göre dosya sistemi doluluğu';
+
+  @override
+  String get hostChartDisk => 'Disk G/Ç';
+
+  @override
+  String get hostChartNetwork => 'Ağ G/Ç';
+
+  @override
+  String get hostChartBusy => 'Meşgul';
+
+  @override
+  String get hostInvNoSnapshot =>
+      'Bu sunucu henüz tam bir envanter anlık görüntüsü göndermedi.';
+
+  @override
+  String get hostInvEmpty => 'Envanter öğesi yok.';
+
+  @override
+  String get hostInvAll => 'Tümü';
+
+  @override
+  String get hostInvSearch => 'Anahtar veya değere göre filtrele…';
+
+  @override
+  String hostInvCount(int shown, int total) {
+    return '$total öğeden $shown';
+  }
+
+  @override
+  String get hostInvNoMatch => 'Filtreyle eşleşen öğe yok.';
+
+  @override
+  String get costHostTitle => 'Maliyet';
+
+  @override
+  String costHostPerHour(String value) {
+    return 'saatte $value';
+  }
+
+  @override
+  String costHostIdleShare(int percent) {
+    return '%$percent atıl';
+  }
+
+  @override
+  String get costHostNotPriced =>
+      'openlog bu sunucuyu fiyatlayamadı: bulut örnek tipi ve CPU/bellek kapasitesi bildirilmemiş.';
+
+  @override
+  String get costHostFallback => 'vCPU ve bellekten tahmin';
+
+  @override
+  String get costHostOversubscribed =>
+      'Konteynerlerinin toplamı sunucunun kullandığını aştı, bu yüzden payları küçültüldü.';
+
+  @override
+  String get costHostServices => 'Bu sunucudaki servisler';
+
+  @override
+  String get costHostContainers => 'Bu sunucudaki konteynerler';
+
+  @override
+  String costHostShare(int percent) {
+    return 'sunucunun %$percent\'i';
+  }
+
+  @override
+  String get workloadReplicas => 'Hazır / istenen';
+
+  @override
+  String get workloadAvailable => 'Kullanılabilir';
+
+  @override
+  String get workloadUpdated => 'Güncel';
+
+  @override
+  String get workloadSucceeded => 'Başarılı';
+
+  @override
+  String get workloadFailed => 'Başarısız';
+
+  @override
+  String get workloadHpa => 'Otomatik ölçekleyici';
+
+  @override
+  String workloadHpaValue(
+    String name,
+    String current,
+    String desired,
+    String min,
+    String max,
+  ) {
+    return '$name: $current → $desired (en az $min, en çok $max)';
+  }
+
+  @override
+  String get workloadPods => 'Pod\'lar';
+
+  @override
+  String get workloadPodsEmpty =>
+      'Bu zaman aralığında bu workload\'a ait pod yok.';
+
+  @override
+  String get workloadAllPods => 'Pod listesinde aç';
+
+  @override
+  String get workloadEvents => 'Olaylar';
+
+  @override
+  String get workloadEventsEmpty =>
+      'Bu zaman aralığında bu workload\'a ait olay yok.';
+
+  @override
+  String get containerServicesTitle => 'APM servisleri';
+
+  @override
+  String get containerServicesEmpty =>
+      'Bu aralıkta bu konteynerden bildirim yapan APM servisi yok.';
+
+  @override
+  String get ruleTypeMetricThreshold => 'Metrik eşiği';
+
+  @override
+  String get ruleTypeLogMatch => 'Log eşleşme sayısı';
+
+  @override
+  String get ruleTypeNoData => 'Veri yok';
+
+  @override
+  String get ruleTypeDiscovery => 'Keşif olayı';
+
+  @override
+  String get ruleTypeApm => 'APM';
+
+  @override
+  String get ruleTypeApmNoData => 'APM servisi sessiz';
+
+  @override
+  String get ruleTypeApmError => 'APM hata grubu';
+
+  @override
+  String get ruleTypeOql => 'OQL sorgusu';
+
+  @override
+  String get ruleTypeSloBurn => 'SLO yanma hızı';
+
+  @override
+  String get ruleTypeAnomaly => 'Temel çizgi (anomali)';
+
+  @override
+  String get ruleLastEvaluated => 'Son değerlendirme';
+
+  @override
+  String get ruleNotEvaluated => 'henüz yok';
+
+  @override
+  String get ruleNextEvaluation => 'Sonraki değerlendirme';
+
+  @override
+  String get ruleConditionTitle => 'Koşul';
+
+  @override
+  String get ruleSeriesTitle => 'Seriler';
+
+  @override
+  String get ruleSeriesEmpty => 'Henüz izlediği bir seri yok.';
+
+  @override
+  String get ruleChannels => 'Kanallar';
+
+  @override
+  String get ruleLabels => 'Etiketler';
+
+  @override
+  String get ruleRunbook => 'Runbook';
+
+  @override
+  String get ruleHistoryTitle => 'Değerlendirme geçmişi';
+
+  @override
+  String ruleHistoryHours(int hours) {
+    return '$hours sa';
+  }
+
+  @override
+  String get ruleHistoryEmpty => 'Bu aralıkta henüz kayıtlı değerlendirme yok.';
+
+  @override
+  String ruleHistorySummary(int count, int errors, int ms) {
+    return '$count değerlendirme, $errors hata; sonuncusu $ms ms sürdü.';
+  }
+
+  @override
+  String get ruleHistoryTruncated =>
+      'Serilerin yalnızca bir kısmı gösteriliyor.';
+
+  @override
+  String get muteDayMon => 'Pzt';
+
+  @override
+  String get muteDayTue => 'Sal';
+
+  @override
+  String get muteDayWed => 'Çar';
+
+  @override
+  String get muteDayThu => 'Per';
+
+  @override
+  String get muteDayFri => 'Cum';
+
+  @override
+  String get muteDaySat => 'Cmt';
+
+  @override
+  String get muteDaySun => 'Paz';
+
+  @override
+  String get muteOrdinalFirst => 'İlk';
+
+  @override
+  String get muteOrdinalSecond => 'İkinci';
+
+  @override
+  String get muteOrdinalThird => 'Üçüncü';
+
+  @override
+  String get muteOrdinalFourth => 'Dördüncü';
+
+  @override
+  String get muteOrdinalLast => 'Son';
+
+  @override
+  String get muteOpEq => 'eşittir';
+
+  @override
+  String get muteOpNeq => 'eşit değildir';
+
+  @override
+  String get muteOpContains => 'içerir';
+
+  @override
+  String muteSummaryMonthday(String days) {
+    return 'Her ayın $days. günü';
+  }
+
+  @override
+  String muteSummaryNthDay(String ordinal, String day) {
+    return 'Ayın $ordinal $day günü';
+  }
+
+  @override
+  String muteSummaryNthWeekday(String ordinal) {
+    return 'Ayın $ordinal iş günü';
+  }
+
+  @override
+  String muteExceptionsSummary(int dates, int calendars) {
+    return 'İstisnalar: $dates tarih, $calendars takvim';
+  }
+
+  @override
+  String get muteEditTitle => 'Susturmayı düzenle';
+
+  @override
+  String get muteName => 'Ad';
+
+  @override
+  String get muteComment => 'Açıklama';
+
+  @override
+  String get muteRecurringToggle => 'Seçili günlerde tekrarla';
+
+  @override
+  String get muteCreate => 'Susturma oluştur';
+
+  @override
+  String get muteSave => 'Susturmayı kaydet';
+
+  @override
+  String muteCreatedBy(String email) {
+    return 'Oluşturan: $email';
+  }
+
+  @override
+  String get muteStarts => 'Başlangıç';
+
+  @override
+  String get muteEnds => 'Bitiş';
+
+  @override
+  String get muteWeekly => 'Haftalık';
+
+  @override
+  String get muteMonthly => 'Aylık';
+
+  @override
+  String get muteTimezone => 'Saat dilimi';
+
+  @override
+  String get muteStartTime => 'Başlangıç (yerel saat)';
+
+  @override
+  String get muteEndTime => 'Bitiş (yerel saat)';
+
+  @override
+  String get muteEndTimeHint => 'Başlangıçtan önceyse ertesi gün.';
+
+  @override
+  String get muteModeMonthday => 'Ayın günü';
+
+  @override
+  String get muteModeWeekday => 'Ayın haftanın günü';
+
+  @override
+  String get muteCustomRule => 'Özel kural';
+
+  @override
+  String get muteMonthDays => 'Ayın günleri';
+
+  @override
+  String get muteMonthDaysHint => 'Virgülle ayrılmış, 1–31; -1 ayın son günü.';
+
+  @override
+  String get muteMonthDaysInvalid =>
+      '1 ile 31 veya -1 … -31 arasında günler girin.';
+
+  @override
+  String get muteAnyWeekday => 'İş günü (Pzt–Cum)';
+
+  @override
+  String get muteExceptions => 'İstisnalar';
+
+  @override
+  String get muteExceptionsHint =>
+      'Bu yerel tarihlerde ve seçili tatil takvimlerinin tarihlerinde tekrar başlamaz.';
+
+  @override
+  String get muteAddException => 'Tarih ekle';
+
+  @override
+  String get muteUpcoming => 'Sonraki tekrarlar';
+
+  @override
+  String get muteUpcomingInvalid =>
+      'Sonraki tekrarları görmek için takvimi tamamlayın.';
+
+  @override
+  String get muteUpcomingNone => 'Başka tekrar yok.';
+
+  @override
+  String get muteRules => 'Kurallar';
+
+  @override
+  String get muteRulesHint => 'Hiçbiri seçilmezse tüm kurallar.';
+
+  @override
+  String get muteMatchers => 'Etiket eşleştiricileri';
+
+  @override
+  String get muteAddMatcher => 'Eşleştirici ekle';
+
+  @override
+  String get muteRemoveMatcher => 'Eşleştiriciyi kaldır';
+
+  @override
+  String get mutesEdit => 'Düzenle';
+
+  @override
+  String get mutesDelete => 'Sil';
+
+  @override
+  String get mutesDetailed => 'Tüm seçeneklerle yeni susturma';
+
+  @override
+  String get mutesStatusScheduled => 'planlandı';
+
+  @override
+  String get mutesStatusEnded => 'bitti';
+
+  @override
   String get serverTitle => 'openlog\'a bağlan';
 
   @override
@@ -413,7 +1134,8 @@ class LTr extends L {
   String get podsEmpty => 'Pod bulunamadı.';
 
   @override
-  String get databasesEmpty => 'Bildirim yapan veritabanı örneği yok.';
+  String get databasesEmpty =>
+      'Henüz sorgu istatistiği gönderen veritabanı yok. Veritabanı sunucusundaki infra agent\'ta sorgu izlemeyi açıp (config.yaml) yeniden başlatın:\nintegrations.postgresql.query_stats.enabled: true';
 
   @override
   String get slosEmpty => 'Tanımlı SLO yok.';
@@ -1399,7 +2121,7 @@ class LTr extends L {
   }
 
   @override
-  String get mutesRecurring => 'tekrarlayan; webden düzenlenir';
+  String get mutesRecurring => 'tekrarlayan';
 
   @override
   String get mutesDuration30m => '30 dk';
@@ -3566,6 +4288,133 @@ class LTr extends L {
   String get dbCallers => 'Çağıran servisler';
 
   @override
+  String get dbSourceApplications => 'Uygulamalardan';
+
+  @override
+  String get dbSourceServers => 'Sunuculardan';
+
+  @override
+  String get dbAppHint =>
+      'Bu süreler uygulamaların ölçtüğü sürelerdir, ağı ve bağlantı beklemeyi de içerir. Bekleme nedenleri ve oturumlar sunucuya bağlantı ister: Sunuculardan sekmesine bak.';
+
+  @override
+  String get dbAppSearch => 'Statement ara';
+
+  @override
+  String get dbAppServices => 'Servisler';
+
+  @override
+  String get dbAppPlan => 'Çalıştırma planı';
+
+  @override
+  String get dbAppGeneric =>
+      'Genel plan: parametre değerleri olmadan üretildi, bu yüzden yavaş çağrının kullandığından farklı olabilir.';
+
+  @override
+  String get dbAppNoPlan =>
+      'Yakalanmış plan yok. Planlar, açıklaması açık bir ajandan gelir; örneğin Go pgx paketindeki WithExplain.';
+
+  @override
+  String get dbAppEmpty =>
+      'Bu aralıkta hiçbir uygulama veritabanı çağrısı göndermedi. APM ajanları bunları veritabanına bağlanmadan kendiliğinden raporlar.';
+
+  @override
+  String get dbServerView => 'Sunucu görünümü';
+
+  @override
+  String get dbNotMonitored => 'Veritabanı sunucusunda izlenmiyor';
+
+  @override
+  String get apmSortService => 'Servis';
+
+  @override
+  String get apmSortEnvironment => 'Ortam';
+
+  @override
+  String get apmSortThroughput => 'İstek hızı';
+
+  @override
+  String get apmSortErrorRate => 'Hata oranı';
+
+  @override
+  String get apmSortLastSeen => 'Son görülme';
+
+  @override
+  String get apmSortTransaction => 'İşlem';
+
+  @override
+  String get apmSortStatement => 'Sorgu';
+
+  @override
+  String get apmSortDatabase => 'Veritabanı';
+
+  @override
+  String get apmSortInstance => 'Instance';
+
+  @override
+  String get apmSortHost => 'Sunucu';
+
+  @override
+  String get apmSortCalls => 'Çağrı';
+
+  @override
+  String get apmSortAas => 'Ort. aktif oturum';
+
+  @override
+  String get apmSortTopWait => 'Baskın bekleme';
+
+  @override
+  String get apmSortWaitType => 'Bekleme türü';
+
+  @override
+  String get apmSortWaitEvent => 'Bekleme olayı';
+
+  @override
+  String get apmSortShare => 'Süre payı';
+
+  @override
+  String get apmSortStart => 'Başlangıç';
+
+  @override
+  String get apmSortDuration => 'Süre';
+
+  @override
+  String get deploymentsWindowLabel => 'Pencere';
+
+  @override
+  String get deploymentsWindow15m => '15 dakika';
+
+  @override
+  String get deploymentsWindow30m => '30 dakika';
+
+  @override
+  String get deploymentsWindow1h => '1 saat';
+
+  @override
+  String get deploymentsWindow3h => '3 saat';
+
+  @override
+  String get deploymentsNoNewErrors => 'Yeni hata grubu yok.';
+
+  @override
+  String get txRelatedLogs => 'İlgili loglar';
+
+  @override
+  String get txTraces => 'Bu işlemin izleri';
+
+  @override
+  String get txHistogram => 'Gecikme dağılımı';
+
+  @override
+  String get txLatency => 'Gecikme';
+
+  @override
+  String get txSlowest => 'En yavaş izler';
+
+  @override
+  String get txNoTraces => 'Bu aralıkta iz yok.';
+
+  @override
   String get containersHost => 'Sunucu';
 
   @override
@@ -4134,6 +4983,230 @@ class LTr extends L {
 
   @override
   String get rumTabFunnel => 'Huni';
+
+  @override
+  String get rumTabCrashes => 'Çökmeler';
+
+  @override
+  String get rumTabAnalytics => 'Analitik';
+
+  @override
+  String get rumServerTooOld =>
+      'Bu sunucudaki openlog bunun için fazla eski. Burada görmek için sunucuyu güncelleyin.';
+
+  @override
+  String get rumCrashesEmpty =>
+      'Bu aralıkta çökme yok. Çökme yakalama SDK\'larda varsayılan olarak kapalıdır.';
+
+  @override
+  String rumCrashesSummary(String sessions, String version, String when) {
+    return '$sessions oturum · son sürüm $version · $when';
+  }
+
+  @override
+  String get rumCrashesStack => 'Yığın';
+
+  @override
+  String rumCrashesMissingSymbols(String what) {
+    return 'Sembolü yüklenmemiş: $what';
+  }
+
+  @override
+  String get rumCrashKindUncaught => 'Yakalanmamış istisna';
+
+  @override
+  String get rumCrashKindSignal => 'Sinyal';
+
+  @override
+  String get rumCrashKindAnr => 'Yanıt vermiyor';
+
+  @override
+  String get rumCrashKindOom => 'Bellek yetersiz';
+
+  @override
+  String get rumSortApp => 'Uygulama';
+
+  @override
+  String get rumSortEnvironment => 'Ortam';
+
+  @override
+  String get rumSortLastSeen => 'Son görülme';
+
+  @override
+  String get rumSortFirstSeen => 'İlk görülme';
+
+  @override
+  String get rumSortVersion => 'Sürüm';
+
+  @override
+  String get rumSortCrashFree => 'Çökmesiz';
+
+  @override
+  String get rumReleaseNoVersions => 'Bu aralıkta oturum taşıyan sürüm yok.';
+
+  @override
+  String get rumReleaseNoDeployments => 'Bu aralıkta dağıtım görülmedi.';
+
+  @override
+  String get rumReleaseNoCrashCapture => 'Bu sürüm çökmeleri raporlayamıyor.';
+
+  @override
+  String get analyticsPeriodLabel => 'Dönem';
+
+  @override
+  String analyticsLastDays(int days) {
+    return 'Son $days gün';
+  }
+
+  @override
+  String analyticsComparedWith(String from, String to) {
+    return '$from – $to ile karşılaştırılıyor. Tamamlanmış günler, UTC.';
+  }
+
+  @override
+  String get analyticsPreviousPartial =>
+      'Bu uygulamanın önceki dönemin başından verisi yok, yani artış yalnızca o zamandan beri veri göndermeye başlamasından kaynaklanıyor olabilir.';
+
+  @override
+  String get analyticsNoChange => 'Değişim yok';
+
+  @override
+  String get analyticsFromNothing => '(yeni)';
+
+  @override
+  String get analyticsNewUsers => 'Yeni kullanıcı';
+
+  @override
+  String get analyticsAvgDailyUsers => 'Günlük ortalama kullanıcı';
+
+  @override
+  String get analyticsPageViews => 'Sayfa görüntüleme';
+
+  @override
+  String get analyticsDau => 'DAU';
+
+  @override
+  String get analyticsWau => 'WAU';
+
+  @override
+  String get analyticsMau => 'MAU';
+
+  @override
+  String get analyticsStickiness => 'DAU / MAU';
+
+  @override
+  String get analyticsActivityChart => 'Aktif kullanıcılar';
+
+  @override
+  String get analyticsRetention => 'Elde tutma';
+
+  @override
+  String get analyticsCohort => 'İlk görülme';
+
+  @override
+  String get analyticsSize => 'Kişi';
+
+  @override
+  String get analyticsGrainLabel => 'Dönem';
+
+  @override
+  String get analyticsGrainDay => 'Gün';
+
+  @override
+  String get analyticsGrainWeek => 'Hafta';
+
+  @override
+  String get analyticsGrainMonth => 'Ay';
+
+  @override
+  String analyticsPeriodDay(int n) {
+    return '$n. gün';
+  }
+
+  @override
+  String analyticsPeriodWeek(int n) {
+    return '$n. hafta';
+  }
+
+  @override
+  String analyticsPeriodMonth(int n) {
+    return '$n. ay';
+  }
+
+  @override
+  String get analyticsEvents => 'Olaylar';
+
+  @override
+  String get analyticsEventName => 'Olay';
+
+  @override
+  String get analyticsCount => 'Adet';
+
+  @override
+  String get analyticsSessions => 'Oturum';
+
+  @override
+  String get analyticsUsers => 'Kullanıcı';
+
+  @override
+  String get analyticsAcquisition => 'Trafik kaynakları';
+
+  @override
+  String get analyticsBy => 'Kırılım';
+
+  @override
+  String get analyticsAudience => 'Kitle';
+
+  @override
+  String get analyticsAudienceCountry => 'Ülke';
+
+  @override
+  String get analyticsAudienceDevice => 'Cihaz türü';
+
+  @override
+  String get analyticsAudienceModel => 'Cihaz modeli';
+
+  @override
+  String get analyticsAudienceOs => 'İşletim sistemi';
+
+  @override
+  String get analyticsAudienceBrowser => 'Tarayıcı';
+
+  @override
+  String get analyticsAudienceVersion => 'Uygulama sürümü';
+
+  @override
+  String get analyticsUnknown => '(bilinmiyor)';
+
+  @override
+  String get analyticsNoCountry =>
+      'Bu sunucu henüz ülke kaydetmiyor. OPENLOG_RUM_GEOIP_DB veya OPENLOG_RUM_GEO_HEADER ayarla: ürün analitiği kılavuzuna bak.';
+
+  @override
+  String get analyticsSourceReferrer => 'Yönlendiren';
+
+  @override
+  String get analyticsSourceSource => 'Kaynak';
+
+  @override
+  String get analyticsSourceMedium => 'Ortam';
+
+  @override
+  String get analyticsSourceCampaign => 'Kampanya';
+
+  @override
+  String get analyticsDirect => '(doğrudan)';
+
+  @override
+  String get analyticsNoRows => 'Son 30 günde kayıt yok.';
+
+  @override
+  String get analyticsSamplingChanged =>
+      'Bu aralıkta anahtarın örnekleme oranı değişti; düşüşün bir kısmı ürünü değil örneklemi terk eden kişilerden kaynaklanıyor.';
+
+  @override
+  String get analyticsNotCollecting =>
+      'Bu uygulama için ziyaretçi tanınmıyor. Ayarlar → Tarayıcı anahtarları altında anahtarının Analitik ayarını \"Ziyaretçiler\" yapın ve bunu destekleyen bir SDK sürümü kullanın.';
 
   @override
   String get rumPagesEmpty => 'Bu aralıkta sayfa görüntüleme yok.';

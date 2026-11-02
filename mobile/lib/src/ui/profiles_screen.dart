@@ -13,6 +13,8 @@ import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'flame_view.dart';
+import 'infra_sort.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'sections_screen.dart';
 import 'theme.dart';
@@ -37,6 +39,15 @@ class ProfilesBody extends StatelessWidget {
     searchHint: (l) => l.profilesSearch,
     active: active,
     emptyTitle: (l) => l.profilesEmpty,
+    sort: ListenableBuilder(
+      listenable: sections.profiles,
+      builder: (context, _) => ListSortBar(
+        controller: sections.profiles,
+        columns: profileSorts,
+        label: (c) => infraSortLabel(L.of(context), c),
+      ),
+    ),
+    footer: LoadMoreTile(controller: sections.profiles),
     card: (context, p) => _ProfileCard(
       profile: p,
       onOpen: () => Navigator.of(context).push(

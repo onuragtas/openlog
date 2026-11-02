@@ -1,6 +1,366 @@
 {
   "@@locale": "tr",
   "appTitle": "openlog",
+  "serverNotOffered": "Bu sunucu bunu henüz sunmuyor. Sunucudaki openlog güncellendiğinde gelecek.",
+  "detailEditOnWeb": "Bunu değiştirmek web'den yapılır.",
+  "infraSortName": "Ad",
+  "infraSortOs": "İşletim sistemi",
+  "infraSortCpu": "CPU",
+  "infraSortMemory": "Bellek",
+  "infraSortDisk": "Disk",
+  "infraSortLoad": "Yük",
+  "infraSortAgent": "Ajan",
+  "infraSortLastSeen": "Son görülme",
+  "infraSortState": "Durum",
+  "infraSortImage": "İmaj",
+  "infraSortCompose": "Compose",
+  "infraSortHost": "Host",
+  "infraSortStatus": "Durum",
+  "infraSortRestarts": "Yeniden başlatma",
+  "infraSortWorkload": "Workload",
+  "infraSortNode": "Node",
+  "infraSortIp": "IP",
+  "infraSortAge": "Yaş",
+  "infraSortCluster": "Küme",
+  "infraSortKind": "Tür",
+  "infraSortHealth": "Sağlık",
+  "infraSortReplicas": "Replika",
+  "infraSortKubelet": "Kubelet",
+  "infraSortInstance": "Örnek",
+  "infraSortCost": "Maliyet",
+  "infraSortIdle": "Atıl",
+  "infraSortService": "Servis",
+  "infraSortEnvironment": "Ortam",
+  "infraSortContainers": "Konteyner",
+  "infraSortType": "Tür",
+  "infraSortTotal": "Toplam",
+  "infraSortSamples": "Örnek sayısı",
+  "infraSortAdvisory": "Duyuru",
+  "infraSortSeverity": "Önem",
+  "infraSortScore": "CVSS",
+  "infraSortHosts": "Host",
+  "infraSortPackage": "Paket",
+  "infraSortVersion": "Kurulu → düzeltilmiş",
+  "infraSortEcosystem": "Sürüm",
+  "sloStatusHealthy": "Sağlıklı",
+  "sloStatusWarning": "Bütçe azaldı",
+  "sloStatusExhausted": "Bütçe tükendi",
+  "sloStatusNone": "Veri yok",
+  "sloWindowDays": "{count} gün",
+  "@sloWindowDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sloSliAvailability": "Erişilebilirlik",
+  "sloSliLatency": "Gecikme",
+  "sloObjective": "Hedef değer",
+  "sloRemaining": "Kalan bütçe",
+  "sloBurnRate": "Yanma hızı",
+  "sloRequests": "İstek",
+  "sloBad": "Başarısız istek",
+  "sloBudgetTitle": "Hata bütçesi",
+  "sloSeriesEmpty": "Bu pencerede henüz istek yok.",
+  "sloBudgetFull": "Bütçe dolu",
+  "sloBudgetEmpty": "Tükendi",
+  "sloBurnTitle": "Yanma hızı pencereleri",
+  "sloBurnHint": "Bir pencere, bütçe hem uzun hem kısa penceresinde bu katın üstünde tükeniyorsa alarm verir.",
+  "sloBurnFast": "Hızlı (1 sa / 5 dk)",
+  "sloBurnSlow": "Yavaş (6 sa / 30 dk)",
+  "sloBurnBreaching": "Hızlı tükeniyor",
+  "sloBurnOk": "Bütçe içinde",
+  "sloBurnThreshold": "Alarm eşiği",
+  "sloBurnLong": "Uzun pencere",
+  "sloBurnShort": "Kısa pencere",
+  "jobStateOk": "Tamam",
+  "jobStateLate": "Gecikti",
+  "jobStateFailing": "Başarısız",
+  "jobStateRunning": "Çalışıyor",
+  "jobStatePaused": "Duraklatıldı",
+  "jobStateUnknown": "Veri yok",
+  "jobRunSuccess": "Başarılı",
+  "jobRunFailure": "Başarısız",
+  "jobRunMissed": "Kaçırıldı",
+  "jobRunOverrun": "Aşım",
+  "jobRunRunning": "Çalışıyor",
+  "jobEvery": "her {interval}",
+  "@jobEvery": {
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      }
+    }
+  },
+  "jobRuns": "Koşu (7 g)",
+  "jobFailures": "Başarısız",
+  "jobMissed": "Kaçırılan",
+  "jobAvg": "Ortalama",
+  "jobMax": "En uzun",
+  "jobNextRun": "Sıradaki",
+  "jobPingUrl": "Ping URL'si",
+  "jobLastOutput": "Son çıktı",
+  "jobRunsTitle": "Koşular",
+  "jobRunsEmpty": "Bu aralıkta henüz koşu yok.",
+  "jobDuration": "Süre",
+  "jobLate": "Gecikme",
+  "jobExit": "Çıkış",
+  "vulnSeverityCritical": "Kritik",
+  "vulnSeverityHigh": "Yüksek",
+  "vulnSeverityMedium": "Orta",
+  "vulnSeverityLow": "Düşük",
+  "vulnSeverityNone": "Derecesiz",
+  "vulnFilterAll": "Tümü ({count})",
+  "@vulnFilterAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnNoFindings": "Bu duyurunun açık bulgusu yok.",
+  "vulnNoFix": "{count, plural, other{{count} host, duyurunun henüz düzeltmesi olmayan bir sürümü çalıştırıyor; yükseltmek bunu çözmez.}}",
+  "@vulnNoFix": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnHostEmpty": "Bu host'ta açık paket yok.",
+  "vulnHostEmptyHint": "En son envanter anlık görüntüsündeki her paket, sürümünün duyurularıyla karşılaştırıldı.",
+  "hostTabMetrics": "Metrikler",
+  "hostTabInventory": "Envanter",
+  "hostTabVulns": "Güvenlik açıkları",
+  "hostChartCpu": "Moda göre CPU kullanımı",
+  "hostChartLoad": "Yük ortalaması",
+  "hostChartMemory": "Duruma göre bellek kullanımı",
+  "hostChartFilesystem": "Bağlama noktasına göre dosya sistemi doluluğu",
+  "hostChartDisk": "Disk G/Ç",
+  "hostChartNetwork": "Ağ G/Ç",
+  "hostChartBusy": "Meşgul",
+  "hostInvNoSnapshot": "Bu sunucu henüz tam bir envanter anlık görüntüsü göndermedi.",
+  "hostInvEmpty": "Envanter öğesi yok.",
+  "hostInvAll": "Tümü",
+  "hostInvSearch": "Anahtar veya değere göre filtrele…",
+  "hostInvCount": "{total} öğeden {shown}",
+  "@hostInvCount": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "hostInvNoMatch": "Filtreyle eşleşen öğe yok.",
+  "costHostTitle": "Maliyet",
+  "costHostPerHour": "saatte {value}",
+  "@costHostPerHour": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "costHostIdleShare": "%{percent} atıl",
+  "@costHostIdleShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "costHostNotPriced": "openlog bu sunucuyu fiyatlayamadı: bulut örnek tipi ve CPU/bellek kapasitesi bildirilmemiş.",
+  "costHostFallback": "vCPU ve bellekten tahmin",
+  "costHostOversubscribed": "Konteynerlerinin toplamı sunucunun kullandığını aştı, bu yüzden payları küçültüldü.",
+  "costHostServices": "Bu sunucudaki servisler",
+  "costHostContainers": "Bu sunucudaki konteynerler",
+  "costHostShare": "sunucunun %{percent}'i",
+  "@costHostShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "workloadReplicas": "Hazır / istenen",
+  "workloadAvailable": "Kullanılabilir",
+  "workloadUpdated": "Güncel",
+  "workloadSucceeded": "Başarılı",
+  "workloadFailed": "Başarısız",
+  "workloadHpa": "Otomatik ölçekleyici",
+  "workloadHpaValue": "{name}: {current} → {desired} (en az {min}, en çok {max})",
+  "@workloadHpaValue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "current": {
+        "type": "String"
+      },
+      "desired": {
+        "type": "String"
+      },
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "workloadPods": "Pod'lar",
+  "workloadPodsEmpty": "Bu zaman aralığında bu workload'a ait pod yok.",
+  "workloadAllPods": "Pod listesinde aç",
+  "workloadEvents": "Olaylar",
+  "workloadEventsEmpty": "Bu zaman aralığında bu workload'a ait olay yok.",
+  "containerServicesTitle": "APM servisleri",
+  "containerServicesEmpty": "Bu aralıkta bu konteynerden bildirim yapan APM servisi yok.",
+  "ruleTypeMetricThreshold": "Metrik eşiği",
+  "ruleTypeLogMatch": "Log eşleşme sayısı",
+  "ruleTypeNoData": "Veri yok",
+  "ruleTypeDiscovery": "Keşif olayı",
+  "ruleTypeApm": "APM",
+  "ruleTypeApmNoData": "APM servisi sessiz",
+  "ruleTypeApmError": "APM hata grubu",
+  "ruleTypeOql": "OQL sorgusu",
+  "ruleTypeSloBurn": "SLO yanma hızı",
+  "ruleTypeAnomaly": "Temel çizgi (anomali)",
+  "ruleLastEvaluated": "Son değerlendirme",
+  "ruleNotEvaluated": "henüz yok",
+  "ruleNextEvaluation": "Sonraki değerlendirme",
+  "ruleConditionTitle": "Koşul",
+  "ruleSeriesTitle": "Seriler",
+  "ruleSeriesEmpty": "Henüz izlediği bir seri yok.",
+  "ruleChannels": "Kanallar",
+  "ruleLabels": "Etiketler",
+  "ruleRunbook": "Runbook",
+  "ruleHistoryTitle": "Değerlendirme geçmişi",
+  "ruleHistoryHours": "{hours} sa",
+  "@ruleHistoryHours": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleHistoryEmpty": "Bu aralıkta henüz kayıtlı değerlendirme yok.",
+  "ruleHistorySummary": "{count} değerlendirme, {errors} hata; sonuncusu {ms} ms sürdü.",
+  "@ruleHistorySummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "errors": {
+        "type": "int"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleHistoryTruncated": "Serilerin yalnızca bir kısmı gösteriliyor.",
+  "muteDayMon": "Pzt",
+  "muteDayTue": "Sal",
+  "muteDayWed": "Çar",
+  "muteDayThu": "Per",
+  "muteDayFri": "Cum",
+  "muteDaySat": "Cmt",
+  "muteDaySun": "Paz",
+  "muteOrdinalFirst": "İlk",
+  "muteOrdinalSecond": "İkinci",
+  "muteOrdinalThird": "Üçüncü",
+  "muteOrdinalFourth": "Dördüncü",
+  "muteOrdinalLast": "Son",
+  "muteOpEq": "eşittir",
+  "muteOpNeq": "eşit değildir",
+  "muteOpContains": "içerir",
+  "muteSummaryMonthday": "Her ayın {days}. günü",
+  "@muteSummaryMonthday": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "muteSummaryNthDay": "Ayın {ordinal} {day} günü",
+  "@muteSummaryNthDay": {
+    "placeholders": {
+      "ordinal": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "muteSummaryNthWeekday": "Ayın {ordinal} iş günü",
+  "@muteSummaryNthWeekday": {
+    "placeholders": {
+      "ordinal": {
+        "type": "String"
+      }
+    }
+  },
+  "muteExceptionsSummary": "İstisnalar: {dates} tarih, {calendars} takvim",
+  "@muteExceptionsSummary": {
+    "placeholders": {
+      "dates": {
+        "type": "int"
+      },
+      "calendars": {
+        "type": "int"
+      }
+    }
+  },
+  "muteEditTitle": "Susturmayı düzenle",
+  "muteName": "Ad",
+  "muteComment": "Açıklama",
+  "muteRecurringToggle": "Seçili günlerde tekrarla",
+  "muteCreate": "Susturma oluştur",
+  "muteSave": "Susturmayı kaydet",
+  "muteCreatedBy": "Oluşturan: {email}",
+  "@muteCreatedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "muteStarts": "Başlangıç",
+  "muteEnds": "Bitiş",
+  "muteWeekly": "Haftalık",
+  "muteMonthly": "Aylık",
+  "muteTimezone": "Saat dilimi",
+  "muteStartTime": "Başlangıç (yerel saat)",
+  "muteEndTime": "Bitiş (yerel saat)",
+  "muteEndTimeHint": "Başlangıçtan önceyse ertesi gün.",
+  "muteModeMonthday": "Ayın günü",
+  "muteModeWeekday": "Ayın haftanın günü",
+  "muteCustomRule": "Özel kural",
+  "muteMonthDays": "Ayın günleri",
+  "muteMonthDaysHint": "Virgülle ayrılmış, 1–31; -1 ayın son günü.",
+  "muteMonthDaysInvalid": "1 ile 31 veya -1 … -31 arasında günler girin.",
+  "muteAnyWeekday": "İş günü (Pzt–Cum)",
+  "muteExceptions": "İstisnalar",
+  "muteExceptionsHint": "Bu yerel tarihlerde ve seçili tatil takvimlerinin tarihlerinde tekrar başlamaz.",
+  "muteAddException": "Tarih ekle",
+  "muteUpcoming": "Sonraki tekrarlar",
+  "muteUpcomingInvalid": "Sonraki tekrarları görmek için takvimi tamamlayın.",
+  "muteUpcomingNone": "Başka tekrar yok.",
+  "muteRules": "Kurallar",
+  "muteRulesHint": "Hiçbiri seçilmezse tüm kurallar.",
+  "muteMatchers": "Etiket eşleştiricileri",
+  "muteAddMatcher": "Eşleştirici ekle",
+  "muteRemoveMatcher": "Eşleştiriciyi kaldır",
+  "mutesEdit": "Düzenle",
+  "mutesDelete": "Sil",
+  "mutesDetailed": "Tüm seçeneklerle yeni susturma",
+  "mutesStatusScheduled": "planlandı",
+  "mutesStatusEnded": "bitti",
   "serverTitle": "openlog'a bağlan",
   "serverDescription": "openlog kendi sunucunuzda çalışır. Aşağıdaki adres barındırılan kurulumdur — kendi sunucunuzu çalıştırıyorsanız onunla değiştirin.",
   "serverAddressLabel": "Sunucu adresi",
@@ -122,7 +482,7 @@
   "hostsEmpty": "Bildirim yapan sunucu yok.",
   "containersEmpty": "Bildirim yapan konteyner yok.",
   "podsEmpty": "Pod bulunamadı.",
-  "databasesEmpty": "Bildirim yapan veritabanı örneği yok.",
+  "databasesEmpty": "Henüz sorgu istatistiği gönderen veritabanı yok. Veritabanı sunucusundaki infra agent'ta sorgu izlemeyi açıp (config.yaml) yeniden başlatın:\nintegrations.postgresql.query_stats.enabled: true",
   "slosEmpty": "Tanımlı SLO yok.",
   "syntheticsEmpty": "Tanımlı sentetik kontrol yok.",
   "jobsEmpty": "Tanımlı iş izleyici yok.",
@@ -747,7 +1107,7 @@
       }
     }
   },
-  "mutesRecurring": "tekrarlayan; webden düzenlenir",
+  "mutesRecurring": "tekrarlayan",
   "mutesDuration30m": "30 dk",
   "mutesDuration1h": "1 saat",
   "mutesDuration2h": "2 saat",
@@ -2158,6 +2518,47 @@
   "dbPlanChanged": "plan değişti",
   "dbPlanCost": "maliyet",
   "dbCallers": "Çağıran servisler",
+  "dbSourceApplications": "Uygulamalardan",
+  "dbSourceServers": "Sunuculardan",
+  "dbAppHint": "Bu süreler uygulamaların ölçtüğü sürelerdir, ağı ve bağlantı beklemeyi de içerir. Bekleme nedenleri ve oturumlar sunucuya bağlantı ister: Sunuculardan sekmesine bak.",
+  "dbAppSearch": "Statement ara",
+  "dbAppServices": "Servisler",
+  "dbAppPlan": "Çalıştırma planı",
+  "dbAppGeneric": "Genel plan: parametre değerleri olmadan üretildi, bu yüzden yavaş çağrının kullandığından farklı olabilir.",
+  "dbAppNoPlan": "Yakalanmış plan yok. Planlar, açıklaması açık bir ajandan gelir; örneğin Go pgx paketindeki WithExplain.",
+  "dbAppEmpty": "Bu aralıkta hiçbir uygulama veritabanı çağrısı göndermedi. APM ajanları bunları veritabanına bağlanmadan kendiliğinden raporlar.",
+  "dbServerView": "Sunucu görünümü",
+  "dbNotMonitored": "Veritabanı sunucusunda izlenmiyor",
+  "apmSortService": "Servis",
+  "apmSortEnvironment": "Ortam",
+  "apmSortThroughput": "İstek hızı",
+  "apmSortErrorRate": "Hata oranı",
+  "apmSortLastSeen": "Son görülme",
+  "apmSortTransaction": "İşlem",
+  "apmSortStatement": "Sorgu",
+  "apmSortDatabase": "Veritabanı",
+  "apmSortInstance": "Instance",
+  "apmSortHost": "Sunucu",
+  "apmSortCalls": "Çağrı",
+  "apmSortAas": "Ort. aktif oturum",
+  "apmSortTopWait": "Baskın bekleme",
+  "apmSortWaitType": "Bekleme türü",
+  "apmSortWaitEvent": "Bekleme olayı",
+  "apmSortShare": "Süre payı",
+  "apmSortStart": "Başlangıç",
+  "apmSortDuration": "Süre",
+  "deploymentsWindowLabel": "Pencere",
+  "deploymentsWindow15m": "15 dakika",
+  "deploymentsWindow30m": "30 dakika",
+  "deploymentsWindow1h": "1 saat",
+  "deploymentsWindow3h": "3 saat",
+  "deploymentsNoNewErrors": "Yeni hata grubu yok.",
+  "txRelatedLogs": "İlgili loglar",
+  "txTraces": "Bu işlemin izleri",
+  "txHistogram": "Gecikme dağılımı",
+  "txLatency": "Gecikme",
+  "txSlowest": "En yavaş izler",
+  "txNoTraces": "Bu aralıkta iz yok.",
   "containersHost": "Sunucu",
   "containersAllHosts": "Tüm sunucular",
   "containersProject": "Proje",
@@ -2590,6 +2991,81 @@
   "rumTabSessions": "Oturumlar",
   "rumTabReleases": "Sürümler",
   "rumTabFunnel": "Huni",
+  "rumTabCrashes": "Çökmeler",
+  "rumTabAnalytics": "Analitik",
+  "rumServerTooOld": "Bu sunucudaki openlog bunun için fazla eski. Burada görmek için sunucuyu güncelleyin.",
+  "rumCrashesEmpty": "Bu aralıkta çökme yok. Çökme yakalama SDK'larda varsayılan olarak kapalıdır.",
+  "rumCrashesSummary": "{sessions} oturum · son sürüm {version} · {when}",
+  "@rumCrashesSummary": {"placeholders": {"sessions": {"type": "String"}, "version": {"type": "String"}, "when": {"type": "String"}}},
+  "rumCrashesStack": "Yığın",
+  "rumCrashesMissingSymbols": "Sembolü yüklenmemiş: {what}",
+  "@rumCrashesMissingSymbols": {"placeholders": {"what": {"type": "String"}}},
+  "rumCrashKindUncaught": "Yakalanmamış istisna",
+  "rumCrashKindSignal": "Sinyal",
+  "rumCrashKindAnr": "Yanıt vermiyor",
+  "rumCrashKindOom": "Bellek yetersiz",
+  "rumSortApp": "Uygulama",
+  "rumSortEnvironment": "Ortam",
+  "rumSortLastSeen": "Son görülme",
+  "rumSortFirstSeen": "İlk görülme",
+  "rumSortVersion": "Sürüm",
+  "rumSortCrashFree": "Çökmesiz",
+  "rumReleaseNoVersions": "Bu aralıkta oturum taşıyan sürüm yok.",
+  "rumReleaseNoDeployments": "Bu aralıkta dağıtım görülmedi.",
+  "rumReleaseNoCrashCapture": "Bu sürüm çökmeleri raporlayamıyor.",
+  "analyticsPeriodLabel": "Dönem",
+  "analyticsLastDays": "Son {days} gün",
+  "@analyticsLastDays": {"placeholders": {"days": {"type": "int"}}},
+  "analyticsComparedWith": "{from} – {to} ile karşılaştırılıyor. Tamamlanmış günler, UTC.",
+  "@analyticsComparedWith": {"placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}},
+  "analyticsPreviousPartial": "Bu uygulamanın önceki dönemin başından verisi yok, yani artış yalnızca o zamandan beri veri göndermeye başlamasından kaynaklanıyor olabilir.",
+  "analyticsNoChange": "Değişim yok",
+  "analyticsFromNothing": "(yeni)",
+  "analyticsNewUsers": "Yeni kullanıcı",
+  "analyticsAvgDailyUsers": "Günlük ortalama kullanıcı",
+  "analyticsPageViews": "Sayfa görüntüleme",
+  "analyticsDau": "DAU",
+  "analyticsWau": "WAU",
+  "analyticsMau": "MAU",
+  "analyticsStickiness": "DAU / MAU",
+  "analyticsActivityChart": "Aktif kullanıcılar",
+  "analyticsRetention": "Elde tutma",
+  "analyticsCohort": "İlk görülme",
+  "analyticsSize": "Kişi",
+  "analyticsGrainLabel": "Dönem",
+  "analyticsGrainDay": "Gün",
+  "analyticsGrainWeek": "Hafta",
+  "analyticsGrainMonth": "Ay",
+  "analyticsPeriodDay": "{n}. gün",
+  "@analyticsPeriodDay": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsPeriodWeek": "{n}. hafta",
+  "@analyticsPeriodWeek": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsPeriodMonth": "{n}. ay",
+  "@analyticsPeriodMonth": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsEvents": "Olaylar",
+  "analyticsEventName": "Olay",
+  "analyticsCount": "Adet",
+  "analyticsSessions": "Oturum",
+  "analyticsUsers": "Kullanıcı",
+  "analyticsAcquisition": "Trafik kaynakları",
+  "analyticsBy": "Kırılım",
+  "analyticsAudience": "Kitle",
+  "analyticsAudienceCountry": "Ülke",
+  "analyticsAudienceDevice": "Cihaz türü",
+  "analyticsAudienceModel": "Cihaz modeli",
+  "analyticsAudienceOs": "İşletim sistemi",
+  "analyticsAudienceBrowser": "Tarayıcı",
+  "analyticsAudienceVersion": "Uygulama sürümü",
+  "analyticsUnknown": "(bilinmiyor)",
+  "analyticsNoCountry": "Bu sunucu henüz ülke kaydetmiyor. OPENLOG_RUM_GEOIP_DB veya OPENLOG_RUM_GEO_HEADER ayarla: ürün analitiği kılavuzuna bak.",
+  "analyticsSourceReferrer": "Yönlendiren",
+  "analyticsSourceSource": "Kaynak",
+  "analyticsSourceMedium": "Ortam",
+  "analyticsSourceCampaign": "Kampanya",
+  "analyticsDirect": "(doğrudan)",
+  "analyticsNoRows": "Son 30 günde kayıt yok.",
+  "analyticsSamplingChanged": "Bu aralıkta anahtarın örnekleme oranı değişti; düşüşün bir kısmı ürünü değil örneklemi terk eden kişilerden kaynaklanıyor.",
+  "analyticsNotCollecting": "Bu uygulama için ziyaretçi tanınmıyor. Ayarlar → Tarayıcı anahtarları altında anahtarının Analitik ayarını \"Ziyaretçiler\" yapın ve bunu destekleyen bir SDK sürümü kullanın.",
   "rumPagesEmpty": "Bu aralıkta sayfa görüntüleme yok.",
   "rumPageViews": "Görüntüleme",
   "rumPageMax": "En yavaş",

@@ -5,8 +5,13 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
+import '../sections.dart';
 import '../session.dart';
+import 'cost_host_screen.dart';
 import 'detail_scaffold.dart';
+import 'failure_text.dart';
+import 'infra_sort.dart';
+import 'list_paging.dart';
 import 'sparkline.dart';
 import 'theme.dart';
 import 'severity.dart';
@@ -17,11 +22,15 @@ class CostsBody extends StatefulWidget {
     required this.session,
     required this.costs,
     required this.active,
+    this.sections,
   });
 
   final SessionController session;
   final CostsController costs;
   final bool active;
+
+  /// What a host row opens needs these. Null leaves the rows untappable.
+  final Sections? sections;
 
   @override
   State<CostsBody> createState() => _CostsBodyState();
@@ -51,7 +60,11 @@ class _CostsBodyState extends State<CostsBody> {
     final l = L.of(context);
 
     return ListenableBuilder(
-      listenable: widget.costs,
+      listenable: Listenable.merge([
+        widget.costs,
+        widget.costs.hostList,
+        widget.costs.serviceList,
+      ]),
       builder: (context, _) => DetailBody<CostHostPage>(
         controller: widget.costs,
         baseUrl: widget.session.baseUrl ?? '',
@@ -62,7 +75,9 @@ class _CostsBodyState extends State<CostsBody> {
 
   List<Widget> _body(BuildContext context, L l, CostHostPage page) {
     final theme = Theme.of(context);
-    final s = page.summary;
+    // `/costs/summary`, or the hosts answer's own from a server without it.
+    final s = widget.costs.summary ?? page.summary;
+    final pricing = widget.costs.pricing ?? page.pricing;
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
@@ -117,10 +132,7 @@ class _CostsBodyState extends State<CostsBody> {
       const SizedBox(height: 16),
       // Never let an estimate be mistaken for a bill: the server sends this
       // provenance with every answer and it belongs next to the figures.
-      Text(
-        l.costsEstimate(page.pricing.updated, page.pricing.note),
-        style: muted,
-      ),
+      Text(l.costsEstimate(pricing.updated, pricing.note), style: muted),
       if (s.unpricedHosts > 0)
         Padding(
           padding: const EdgeInsets.only(top: 4),
@@ -150,6 +162,15 @@ class _CostsBodyState extends State<CostsBody> {
         DetailSection(
           title: '${l.costsByService} (${s.currency})',
           children: [
+            ListSortBar(
+              controller: widget.costs.serviceList,
+              columns: costServiceSorts,
+              label: (c) => infraSortLabel(l, c),
+            ),
+            FailureBanner(
+              failure: widget.costs.serviceList.failure,
+              baseUrl: widget.session.baseUrl ?? '',
+            ),
             for (final svc in widget.costs.services)
               Padding(
                 key: Key('cost-service-${svc.serviceName}-${svc.environment}'),
@@ -188,22 +209,50 @@ class _CostsBodyState extends State<CostsBody> {
                   ],
                 ),
               ),
+            LoadMoreTile(controller: widget.costs.serviceList),
           ],
         ),
 
       DetailSection(
         title: '${l.costsHostsTitle} (${s.currency})',
         children: [
-          for (final h in page.hosts)
-            _HostRow(host: h, key: Key('cost-${h.hostId}')),
-          if (page.total > page.hosts.length)
+          ListSortBar(
+            controller: widget.costs.hostList,
+            columns: costHostSorts,
+            label: (c) => infraSortLabel(l, c),
+          ),
+          FailureBanner(
+            failure: widget.costs.hostList.failure,
+            baseUrl: widget.session.baseUrl ?? '',
+          ),
+          for (final h in widget.costs.hostList.items)
+            InkWell(
+              key: Key('cost-open-${h.hostId}'),
+              onTap: widget.sections == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CostHostScreen(
+                          session: widget.session,
+                          sections: widget.sections!,
+                          hostId: h.hostId,
+                          hostName: h.hostName.isEmpty ? h.hostId : h.hostName,
+                        ),
+                      ),
+                    ),
+              child: _HostRow(host: h, key: Key('cost-${h.hostId}')),
+            ),
+          if (page.total > widget.costs.hostList.items.length)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                l.costsMoreHosts(page.total - page.hosts.length),
+                l.costsMoreHosts(
+                  page.total - widget.costs.hostList.items.length,
+                ),
                 style: muted,
               ),
             ),
+          LoadMoreTile(controller: widget.costs.hostList),
         ],
       ),
     ];

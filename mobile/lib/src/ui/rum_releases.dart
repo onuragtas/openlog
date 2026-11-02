@@ -3,16 +3,29 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../analytics.dart' show formatCount;
 import '../api/schema.g.dart';
 import '../rum.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'failure_text.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart' show formatNumber;
 import 'severity.dart';
 import 'theme.dart';
+
+/// The columns of the web's list, with its default first.
+const rumReleaseSorts = [
+  'last_seen',
+  'first_seen',
+  'version',
+  'crash_free',
+  'error_free',
+  'sessions',
+  'error_sessions',
+];
 
 class RumReleasesTab extends StatefulWidget {
   const RumReleasesTab({
@@ -45,59 +58,123 @@ class _RumReleasesTabState extends State<RumReleasesTab> {
     super.dispose();
   }
 
+  String _sortLabel(L l, String sort) => switch (sort) {
+    'first_seen' => l.rumSortFirstSeen,
+    'version' => l.rumSortVersion,
+    'crash_free' => l.rumSortCrashFree,
+    'error_free' => l.rumReleaseCrashFree,
+    'sessions' => l.rumReleaseSessions,
+    'error_sessions' => l.rumReleaseErrorSessions,
+    _ => l.rumSortLastSeen,
+  };
+
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
 
     return ListenableBuilder(
       listenable: _c,
-      builder: (context, _) => DetailBody<RumReleaseList>(
-        controller: _c,
-        baseUrl: widget.session.baseUrl ?? '',
-        builder: (context, v) => _body(context, l, v),
+      builder: (context, _) => RefreshIndicator(
+        onRefresh: _c.refresh,
+        child: _c.loadingFirst
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+                children: _body(context, l),
+              ),
       ),
     );
   }
 
-  List<Widget> _body(BuildContext context, L l, RumReleaseList v) {
+  List<Widget> _body(BuildContext context, L l) {
     final theme = Theme.of(context);
-    if (v.releases.isEmpty && v.deployments.isEmpty) {
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final banner = FailureBanner(
+      failure: _c.failure,
+      baseUrl: widget.session.baseUrl ?? '',
+    );
+    if (_c.items.isEmpty && _c.deployments.isEmpty) {
       return [
+        banner,
         const SizedBox(height: 48),
-        Text(
-          l.rumReleasesEmpty,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.titleMedium,
-        ),
+        if (_c.loaded)
+          Text(
+            l.rumReleasesEmpty,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleMedium,
+          ),
       ];
     }
     return [
+      banner,
       DetailSection(
         title: l.rumReleaseVersions,
         children: [
           // The two halves of this screen see different distances, and a
           // version with no sessions is a gap in what is kept rather than a
           // quiet week.
-          Text(
-            l.rumReleaseRetention,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+          Text(l.rumReleaseRetention, style: muted),
+          if (_c.items.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                l.rumReleaseNoVersions,
+                style: theme.textTheme.bodyMedium,
+              ),
+            )
+          else ...[
+            ListSortBar(
+              controller: _c,
+              columns: rumReleaseSorts,
+              label: (s) => _sortLabel(l, s),
             ),
-          ),
-          const SizedBox(height: 10),
-          for (final r in v.releases)
-            _ReleaseRow(release: r, key: Key('rum-release-${r.version}')),
+            for (final r in _c.items)
+              _ReleaseRow(release: r, key: Key('rum-release-${r.version}')),
+            LoadMoreTile(controller: _c),
+          ],
         ],
       ),
       DetailSection(
         title: l.rumReleaseDeployments,
         children: [
-          for (final d in v.deployments)
-            _DeploymentRow(deployment: d, key: Key('rum-deploy-${d.t}')),
+          if (_c.deployments.isEmpty)
+            Text(l.rumReleaseNoDeployments, style: theme.textTheme.bodyMedium)
+          else
+            for (final d in _c.deployments)
+              _DeploymentRow(deployment: d, key: Key('rum-deploy-${d.t}')),
         ],
       ),
     ];
   }
+}
+
+/// A version as the web writes it: `1.4.2` is `v1.4.2`.
+String versionLabel(String version) {
+  if (version.isEmpty) return '–';
+  return RegExp(r'^v\d', caseSensitive: false).hasMatch(version)
+      ? version
+      : 'v$version';
+}
+
+/// Below 99% is worth a colour, below 95% the loud one. The bands are this
+/// screen's own, as the web's: nothing in the contract says what a good
+/// release is. One decimal, because 99.6% rounded would read as no problems.
+class _Rate extends StatelessWidget {
+  const _Rate({required this.rate});
+
+  final double rate;
+
+  @override
+  Widget build(BuildContext context) => Tag(
+    label: '${(rate * 100).toStringAsFixed(1)}%',
+    level: rate >= 0.99
+        ? SeverityLevel.good
+        : rate >= 0.95
+        ? SeverityLevel.warning
+        : SeverityLevel.critical,
+  );
 }
 
 class _ReleaseRow extends StatelessWidget {
@@ -109,44 +186,81 @@ class _ReleaseRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = L.of(context);
     final theme = Theme.of(context);
+    final language = Localizations.localeOf(context).languageCode;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
     final measured = release.sessions > 0;
-    // Below 99% is worth a colour, below 95% the loud one. The bands are this
-    // screen's own: nothing in the contract says what a good release is.
-    final level = !measured
-        ? SeverityLevel.unknown
-        : release.crashFreeRate >= 0.99
-        ? SeverityLevel.good
-        : release.crashFreeRate >= 0.95
-        ? SeverityLevel.warning
-        : SeverityLevel.critical;
+    final crashFree = release.sessionCrashFreeRate;
+
+    Widget labelled(String label, Widget value) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: muted),
+        value,
+      ],
+    );
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Text(
-              release.version.isEmpty ? l.rumReleaseNoVersion : release.version,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
           Text(
-            measured
-                ? '${formatNumber(release.sessions.toDouble())} · '
-                      '${formatNumber(release.errorSessions.toDouble())}'
-                : l.rumReleaseNoSessions,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            release.version.isEmpty
+                ? l.rumReleaseNoVersion
+                : versionLabel(release.version),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 10),
-          Tag(
-            label: measured
-                ? '${(release.crashFreeRate * 100).toStringAsFixed(1)}%'
-                : '-',
-            level: level,
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 16,
+            runSpacing: 6,
+            children: [
+              // The crash-free rate leads, because that is what a release is
+              // judged on. A version that cannot report a crash shows a dash:
+              // 100% would claim something nobody measured.
+              labelled(
+                l.rumSortCrashFree,
+                !measured
+                    ? Text(l.rumReleaseNoSessions, style: muted)
+                    : crashFree == null
+                    ? Tooltip(
+                        message: l.rumReleaseNoCrashCapture,
+                        child: Text('—', style: muted),
+                      )
+                    : _Rate(rate: crashFree),
+              ),
+              // The error-free rate counts errors the application handled too.
+              if (measured)
+                labelled(
+                  l.rumReleaseCrashFree,
+                  _Rate(rate: release.errorFreeRate ?? release.crashFreeRate),
+                ),
+              labelled(
+                l.rumReleaseSessions,
+                Text(
+                  formatCount(release.sessions.toDouble(), language),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+              labelled(
+                l.rumReleaseErrorSessions,
+                Text(
+                  formatCount(release.errorSessions.toDouble(), language),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${l.rumSortFirstSeen}: ${relativeTimeOf(l, release.firstSeen)} · '
+            '${l.rumSortLastSeen}: ${relativeTimeOf(l, release.lastSeen)}',
+            style: muted,
           ),
         ],
       ),
@@ -170,10 +284,13 @@ class _DeploymentRow extends StatelessWidget {
         runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text(deployment.version, style: theme.textTheme.bodyMedium),
+          Text(
+            versionLabel(deployment.version),
+            style: theme.textTheme.bodyMedium,
+          ),
           if (deployment.previousVersion.isNotEmpty)
             Text(
-              '← ${deployment.previousVersion}',
+              '← ${versionLabel(deployment.previousVersion)}',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),

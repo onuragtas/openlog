@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../apm_format.dart';
 import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
 import 'agents_screen.dart';
 import 'errors_screen.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
 import 'theme.dart';
@@ -57,14 +59,32 @@ class _ServicesBodyState extends State<ServicesBody> {
       builder: (context, _) => ListScreen(
         controller: c,
         baseUrl: widget.session.baseUrl ?? '',
-        search: SearchField(
-          fieldKey: const Key('services-search'),
-          controller: _search,
-          hint: l.servicesSearch,
-          onSubmitted: (value) {
-            c.query = value;
-            c.refresh();
-          },
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SearchField(
+              fieldKey: const Key('services-search'),
+              controller: _search,
+              hint: l.servicesSearch,
+              onSubmitted: (value) {
+                c.query = value;
+                c.refresh();
+              },
+            ),
+            ListSortBar(
+              controller: c,
+              columns: serviceSorts,
+              label: (s) => switch (s) {
+                'environment' => l.apmSortEnvironment,
+                'throughput' => l.apmSortThroughput,
+                'error_rate' => l.apmSortErrorRate,
+                'p95' => 'p95',
+                'apdex' => l.svcApdex,
+                'last_seen' => l.apmSortLastSeen,
+                _ => l.apmSortService,
+              },
+            ),
+          ],
         ),
         header: Wrap(
           spacing: 4,
@@ -98,6 +118,7 @@ class _ServicesBodyState extends State<ServicesBody> {
           ],
         ),
         emptyTitle: l.servicesEmpty,
+        footer: LoadMoreTile(controller: c),
         itemBuilder: (context, i) => _ServiceCard(
           service: c.items[i],
           onOpen: () => Navigator.of(context).push(
@@ -159,8 +180,8 @@ class _ServiceCard extends StatelessWidget {
                 runSpacing: 6,
                 children: [
                   _Stat(
-                    label: l.svcThroughput,
-                    value: service.throughput.toStringAsFixed(0),
+                    label: l.apmSortThroughput,
+                    value: formatApmRpm(service.throughput),
                   ),
                   _Stat(
                     label: l.svcErrorRate,
@@ -175,6 +196,10 @@ class _ServiceCard extends StatelessWidget {
                   _Stat(
                     label: l.svcApdex,
                     value: service.apdex?.toStringAsFixed(2) ?? l.svcNoData,
+                  ),
+                  _Stat(
+                    label: l.apmSortLastSeen,
+                    value: relativeTimeOf(l, service.lastSeen),
                   ),
                 ],
               ),

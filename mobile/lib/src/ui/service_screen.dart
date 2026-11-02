@@ -3,13 +3,16 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../api/client.dart';
 import '../api/schema.g.dart';
 import '../detail.dart';
+import '../errors.dart';
 import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
 import 'deployments_card.dart';
 import 'detail_scaffold.dart';
+import 'error_group_screen.dart';
 import 'list_scaffold.dart';
 import 'service_about.dart';
 import 'service_lists_tabs.dart';
@@ -19,6 +22,7 @@ import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
 import 'trace_screen.dart';
+import 'transaction_screen.dart';
 
 class ServiceScreen extends StatefulWidget {
   const ServiceScreen({
@@ -71,6 +75,55 @@ class _ServiceScreenState extends State<ServiceScreen>
       // Where the service runs, which the web shows above the tabs.
       _about.load();
     });
+  }
+
+  void _openTransaction(String name) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => TransactionScreen(
+        session: widget.session,
+        sections: widget.sections,
+        serviceName: widget.serviceName,
+        name: name,
+        // Back to this screen, on the traces tab, narrowed to it.
+        onShowTraces: () {
+          _traces.showTransaction(name);
+          _tabs.animateTo(5);
+        },
+      ),
+    ),
+  );
+
+  /// A comparison names a group by its id, and the group's screen starts from
+  /// the whole row, which the detail has.
+  Future<void> _openErrorGroup(String groupId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l = L.of(context);
+    try {
+      final detail = await widget.sections.client.apmErrorGroup(
+        service: widget.serviceName,
+        groupId: groupId,
+      );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ErrorGroupScreen(
+            session: widget.session,
+            sections: widget.sections,
+            group: errorGroupOfDetail(detail),
+          ),
+        ),
+      );
+    } on ApiUnreachable {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l.serverUnreachable(widget.session.baseUrl ?? '')),
+        ),
+      );
+    } on ApiException catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(l.errorUnexpected(e.message))),
+      );
+    }
   }
 
   /// A tab is asked for the first time it is looked at. Every tab is built at
@@ -152,6 +205,7 @@ class _ServiceScreenState extends State<ServiceScreen>
           ServiceTransactionsTab(
             session: widget.session,
             controller: _transactions,
+            onOpen: _openTransaction,
           ),
           ListenableBuilder(
             listenable: _errors,
@@ -161,7 +215,11 @@ class _ServiceScreenState extends State<ServiceScreen>
               builder: (context, inbox) => _errorList(context, l, inbox),
             ),
           ),
-          ServiceDatabasesTab(session: widget.session, controller: _databases),
+          ServiceDatabasesTab(
+            session: widget.session,
+            sections: widget.sections,
+            controller: _databases,
+          ),
           ServiceMapTab(
             session: widget.session,
             sections: widget.sections,
@@ -324,7 +382,11 @@ class _ServiceScreenState extends State<ServiceScreen>
             for (final p in o.series) p.apdex ?? 0,
           ], colors.primary),
       ],
-      DeploymentsCard(session: widget.session, controller: _deployments),
+      DeploymentsCard(
+        session: widget.session,
+        controller: _deployments,
+        onOpenError: _openErrorGroup,
+      ),
       _topTransactions(context, l),
     ];
   }
@@ -335,7 +397,7 @@ class _ServiceScreenState extends State<ServiceScreen>
     listenable: _transactions,
     builder: (context, _) {
       final theme = Theme.of(context);
-      final top = _transactions.items.take(5).toList();
+      final top = _transactions.topByTime;
       if (top.isEmpty) return const SizedBox.shrink();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -357,27 +419,30 @@ class _ServiceScreenState extends State<ServiceScreen>
             ],
           ),
           for (final t in top)
-            Padding(
+            InkWell(
               key: Key('top-transaction-${t.transactionName}'),
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      t.transactionName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium,
+              onTap: () => _openTransaction(t.transactionName),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        t.transactionName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    l.transactionsShare(_share(t.timeShare)),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(width: 8),
+                    Text(
+                      l.transactionsShare(_share(t.timeShare)),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
         ],

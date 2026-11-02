@@ -113,14 +113,72 @@ void main() {
     },
   );
 
-  test('a delta needs something to compare with', () {
-    expect(deltaRatio(40, 120), closeTo(2, 0.0001));
-    expect(deltaRatio(120, 60), closeTo(-0.5, 0.0001));
-    // Null before, null after, or a zero before: dividing by that zero says
-    // infinity, and reading it as "no change" would say the deployment did
-    // nothing.
-    expect(deltaRatio(null, 10), isNull);
-    expect(deltaRatio(10, null), isNull);
-    expect(deltaRatio(0, 10), isNull);
+  test(
+    'a comparison is of the deployment\'s own scope, over the chosen window',
+    () async {
+      final queries = <Map<String, String>>[];
+      final server = await FakeServer.start((req, seen) {
+        queries.add(Uri.splitQueryString(seen.query));
+        writeJson(req, 200, {
+          'at': '2026-10-09T10:00:00.000000000Z',
+          'window_seconds': 1800,
+          'apdex_t_ms': 500.0,
+          'before': period(0.001, 40.0),
+          'after': period(0.02, 120.0),
+          'new_error_groups': <Object>[],
+        });
+      });
+      addTearDown(server.stop);
+      final c = ServiceDeploymentsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'checkout',
+      );
+
+      await c.toggleCompare(1000, namespace: '', environment: 'prod');
+      expect(queries.last['window'], '30m');
+      // A blank namespace goes out as blank: to the server that is "the rows
+      // that have none", where leaving it out would mean all of them.
+      expect(queries.last.containsKey('namespace'), isTrue);
+      expect(queries.last['environment'], 'prod');
+
+      await c.setCompareWindow('3h');
+      expect(queries.last['window'], '3h');
+      expect(queries.last['environment'], 'prod');
+      expect(queries.last['at'], '1000');
+    },
+  );
+
+  // The same values as web/src/lib/apm-ga.test.ts.
+  group('how a number moved', () {
+    test('worse and better, as the web says them', () {
+      expect(compareDelta('p95_ms', 100, 150).verdict, 'bad');
+      expect(compareDelta('apdex', 0.8, 0.9).verdict, 'good');
+      expect(compareDelta('error_rate', 0.02, 0.01).verdict, 'good');
+      expect(compareDelta('p95_ms', null, 10).delta, isNull);
+    });
+
+    test('throughput moving is neither', () {
+      final d = compareDelta('throughput', 100, 300);
+      expect(d.direction, 'up');
+      expect(d.verdict, 'neutral');
+    });
+
+    test('below the tolerance it reads as no change', () {
+      expect(compareDelta('p95_ms', 100, 101).direction, 'flat');
+      expect(compareDelta('apdex', 0.9, 0.9005).direction, 'flat');
+      expect(compareDelta('error_rate', 0.01, 0.02).direction, 'up');
+    });
+
+    test('a zero before has a change but no percentage', () {
+      final d = compareDelta('p95_ms', 0, 10);
+      expect(d.delta, 10);
+      expect(d.ratio, isNull);
+      expect(d.verdict, 'bad');
+    });
+
+    test('nothing to compare with is not "no change"', () {
+      expect(compareDelta('p95_ms', 10, null).delta, isNull);
+      expect(compareDelta('p95_ms', null, null).ratio, isNull);
+    });
   });
 }

@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 
 import 'api/client.dart';
 import 'api/schema.g.dart';
+import 'detail.dart';
 import 'list_controller.dart';
 import 'session.dart';
 
@@ -138,8 +139,13 @@ class KubernetesClusterController extends ChangeNotifier {
 }
 
 /// The nodes of the window, filtered like the web's page.
-class KubernetesNodesController extends ListController<KubernetesNode> {
-  KubernetesNodesController(this.client);
+class KubernetesNodesController extends PagedListController<KubernetesNode> {
+  KubernetesNodesController(this.client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {'name', 'kubelet', 'cluster'},
+      );
 
   final OpenlogClient client;
 
@@ -154,16 +160,29 @@ class KubernetesNodesController extends ListController<KubernetesNode> {
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<KubernetesNode>> fetch() async {
-    final page = await client.k8sNodes(clusterUid: clusterUid, q: query.trim());
+  Future<ListPage<KubernetesNode>> fetchPage(int offset) async {
+    final page = await client.k8sNodes(
+      clusterUid: clusterUid,
+      q: query.trim(),
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
     total = page.total;
-    return page.nodes;
+    return ListPage(page.nodes, hasMore: page.hasMore ?? false);
   }
 }
 
 /// The workloads of the window: the web's filters, the web's order.
-class KubernetesWorkloadsController extends ListController<KubernetesWorkload> {
-  KubernetesWorkloadsController(this.client);
+class KubernetesWorkloadsController
+    extends PagedListController<KubernetesWorkload> {
+  KubernetesWorkloadsController(this.client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {'name', 'kind', 'cluster'},
+      );
 
   final OpenlogClient client;
 
@@ -183,18 +202,103 @@ class KubernetesWorkloadsController extends ListController<KubernetesWorkload> {
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<KubernetesWorkload>> fetch() async {
+  Future<ListPage<KubernetesWorkload>> fetchPage(int offset) async {
     final page = await client.k8sWorkloads(
       clusterUid: clusterUid,
       namespace: namespace,
       kind: kind,
       health: health,
       q: query.trim(),
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
     );
     total = page.total;
-    return page.workloads;
+    return ListPage(page.workloads, hasMore: page.hasMore ?? false);
   }
 }
+
+/// One workload: its pods, its autoscaler, what it has been doing and what
+/// happened to it. Three requests, each allowed to fail apart: the workload
+/// without a chart is still worth reading.
+class KubernetesWorkloadController
+    extends DetailController<KubernetesWorkloadDetail> {
+  KubernetesWorkloadController(
+    this.client, {
+    required this.clusterUid,
+    required this.namespace,
+    required this.kind,
+    required this.name,
+  });
+
+  final OpenlogClient client;
+  final String clusterUid;
+  final String namespace;
+  final String kind;
+  final String name;
+
+  KubernetesWorkloadTimeseries? series;
+  List<KubernetesEvent> events = const [];
+
+  /// Kept apart so one missing piece does not hide the others.
+  String? seriesError;
+  String? eventsError;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  bool get endpointMayBeMissing => true;
+
+  @override
+  Future<KubernetesWorkloadDetail> fetch() async {
+    final workload = await client.k8sWorkload(
+      clusterUid: clusterUid,
+      namespace: namespace,
+      kind: kind,
+      name: name,
+    );
+    seriesError = null;
+    eventsError = null;
+    series = null;
+    events = const [];
+    try {
+      series = await client.k8sWorkloadTimeseries(
+        clusterUid: clusterUid,
+        namespace: namespace,
+        kind: kind,
+        name: name,
+      );
+    } on ApiException catch (e) {
+      seriesError = e.message;
+    } on ApiShapeError catch (e) {
+      seriesError = e.toString();
+    }
+    try {
+      events = (await client.k8sEvents(
+        clusterUid: clusterUid,
+        namespace: namespace,
+        objectKind: kind,
+        objectName: name,
+      )).events;
+    } on ApiException catch (e) {
+      eventsError = e.message;
+    } on ApiShapeError catch (e) {
+      eventsError = e.toString();
+    }
+    return workload;
+  }
+}
+
+/// `ready / desired`, as the web prints it.
+String replicasText(int ready, int desired) => '$ready / $desired';
+
+/// The value column of a `[unix ms, value]` series.
+List<double> pointValues(List<List<double>> points) => [
+  for (final p in points)
+    if (p.length > 1) p[1],
+];
 
 /// The cluster's events, newest first.
 class KubernetesEventsController extends ListController<KubernetesEvent> {

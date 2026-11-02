@@ -1,6 +1,366 @@
 {
   "@@locale": "en",
   "appTitle": "openlog",
+  "serverNotOffered": "This server does not offer this yet. It comes with a newer openlog on the server.",
+  "detailEditOnWeb": "Changing this is done on the web.",
+  "infraSortName": "Name",
+  "infraSortOs": "Operating system",
+  "infraSortCpu": "CPU",
+  "infraSortMemory": "Memory",
+  "infraSortDisk": "Disk",
+  "infraSortLoad": "Load",
+  "infraSortAgent": "Agent",
+  "infraSortLastSeen": "Last seen",
+  "infraSortState": "State",
+  "infraSortImage": "Image",
+  "infraSortCompose": "Compose",
+  "infraSortHost": "Host",
+  "infraSortStatus": "Status",
+  "infraSortRestarts": "Restarts",
+  "infraSortWorkload": "Workload",
+  "infraSortNode": "Node",
+  "infraSortIp": "IP",
+  "infraSortAge": "Age",
+  "infraSortCluster": "Cluster",
+  "infraSortKind": "Kind",
+  "infraSortHealth": "Health",
+  "infraSortReplicas": "Replicas",
+  "infraSortKubelet": "Kubelet",
+  "infraSortInstance": "Instance",
+  "infraSortCost": "Cost",
+  "infraSortIdle": "Idle",
+  "infraSortService": "Service",
+  "infraSortEnvironment": "Environment",
+  "infraSortContainers": "Containers",
+  "infraSortType": "Type",
+  "infraSortTotal": "Total",
+  "infraSortSamples": "Samples",
+  "infraSortAdvisory": "Advisory",
+  "infraSortSeverity": "Severity",
+  "infraSortScore": "CVSS",
+  "infraSortHosts": "Hosts",
+  "infraSortPackage": "Package",
+  "infraSortVersion": "Installed → fixed",
+  "infraSortEcosystem": "Release",
+  "sloStatusHealthy": "Healthy",
+  "sloStatusWarning": "Budget low",
+  "sloStatusExhausted": "Budget exhausted",
+  "sloStatusNone": "No data",
+  "sloWindowDays": "{count} d",
+  "@sloWindowDays": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "sloSliAvailability": "Availability",
+  "sloSliLatency": "Latency",
+  "sloObjective": "Target",
+  "sloRemaining": "Budget left",
+  "sloBurnRate": "Burn rate",
+  "sloRequests": "Requests",
+  "sloBad": "Bad requests",
+  "sloBudgetTitle": "Error budget",
+  "sloSeriesEmpty": "No requests in this window yet.",
+  "sloBudgetFull": "Full budget",
+  "sloBudgetEmpty": "Exhausted",
+  "sloBurnTitle": "Burn rate windows",
+  "sloBurnHint": "A window alerts when the budget burns at least this many times too fast over both its long and its short window.",
+  "sloBurnFast": "Fast (1 h / 5 m)",
+  "sloBurnSlow": "Slow (6 h / 30 m)",
+  "sloBurnBreaching": "Burning",
+  "sloBurnOk": "Within budget",
+  "sloBurnThreshold": "Alerts at",
+  "sloBurnLong": "Long window",
+  "sloBurnShort": "Short window",
+  "jobStateOk": "OK",
+  "jobStateLate": "Late",
+  "jobStateFailing": "Failing",
+  "jobStateRunning": "Running",
+  "jobStatePaused": "Paused",
+  "jobStateUnknown": "No data",
+  "jobRunSuccess": "Success",
+  "jobRunFailure": "Failed",
+  "jobRunMissed": "Missed",
+  "jobRunOverrun": "Overrun",
+  "jobRunRunning": "Running",
+  "jobEvery": "every {interval}",
+  "@jobEvery": {
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      }
+    }
+  },
+  "jobRuns": "Runs (7 d)",
+  "jobFailures": "Failures",
+  "jobMissed": "Missed",
+  "jobAvg": "Average",
+  "jobMax": "Longest",
+  "jobNextRun": "Next due",
+  "jobPingUrl": "Ping URL",
+  "jobLastOutput": "Last output",
+  "jobRunsTitle": "Runs",
+  "jobRunsEmpty": "No run in this range yet.",
+  "jobDuration": "Duration",
+  "jobLate": "Late",
+  "jobExit": "Exit",
+  "vulnSeverityCritical": "Critical",
+  "vulnSeverityHigh": "High",
+  "vulnSeverityMedium": "Medium",
+  "vulnSeverityLow": "Low",
+  "vulnSeverityNone": "Unrated",
+  "vulnFilterAll": "All ({count})",
+  "@vulnFilterAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnNoFindings": "No open findings of this advisory.",
+  "vulnNoFix": "{count, plural, =1{{count} host runs a version the advisory has no fix for yet; upgrading will not resolve it.} other{{count} hosts run a version the advisory has no fix for yet; upgrading will not resolve it.}}",
+  "@vulnNoFix": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "vulnHostEmpty": "No vulnerable package on this host.",
+  "vulnHostEmptyHint": "Every package of its latest inventory snapshot was compared with the advisories of its release.",
+  "hostTabMetrics": "Metrics",
+  "hostTabInventory": "Inventory",
+  "hostTabVulns": "Vulnerabilities",
+  "hostChartCpu": "CPU utilization by mode",
+  "hostChartLoad": "Load average",
+  "hostChartMemory": "Memory usage by state",
+  "hostChartFilesystem": "Filesystem utilization by mountpoint",
+  "hostChartDisk": "Disk I/O",
+  "hostChartNetwork": "Network I/O",
+  "hostChartBusy": "Busy",
+  "hostInvNoSnapshot": "This host has not sent a complete inventory snapshot yet.",
+  "hostInvEmpty": "No inventory items.",
+  "hostInvAll": "All",
+  "hostInvSearch": "Filter by key or value…",
+  "hostInvCount": "{shown} of {total}",
+  "@hostInvCount": {
+    "placeholders": {
+      "shown": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "hostInvNoMatch": "No items match the filter.",
+  "costHostTitle": "Cost",
+  "costHostPerHour": "{value} per hour",
+  "@costHostPerHour": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "costHostIdleShare": "{percent}% idle",
+  "@costHostIdleShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "costHostNotPriced": "openlog could not price this host: it reported no cloud instance type and no CPU or memory capacity.",
+  "costHostFallback": "Estimated from vCPU and memory",
+  "costHostOversubscribed": "Its containers added up to more than the host used, so their shares were scaled down.",
+  "costHostServices": "Services on this host",
+  "costHostContainers": "Containers on this host",
+  "costHostShare": "{percent}% of the host",
+  "@costHostShare": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "workloadReplicas": "Ready / desired",
+  "workloadAvailable": "Available",
+  "workloadUpdated": "Up to date",
+  "workloadSucceeded": "Succeeded",
+  "workloadFailed": "Failed",
+  "workloadHpa": "Autoscaler",
+  "workloadHpaValue": "{name}: {current} → {desired} (min {min}, max {max})",
+  "@workloadHpaValue": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "current": {
+        "type": "String"
+      },
+      "desired": {
+        "type": "String"
+      },
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "workloadPods": "Pods",
+  "workloadPodsEmpty": "No pods of this workload in this time range.",
+  "workloadAllPods": "Open in pod list",
+  "workloadEvents": "Events",
+  "workloadEventsEmpty": "No events of this workload in this time range.",
+  "containerServicesTitle": "APM services",
+  "containerServicesEmpty": "No APM service reported from this container in this range.",
+  "ruleTypeMetricThreshold": "Metric threshold",
+  "ruleTypeLogMatch": "Log match count",
+  "ruleTypeNoData": "No data",
+  "ruleTypeDiscovery": "Discovery event",
+  "ruleTypeApm": "APM",
+  "ruleTypeApmNoData": "APM service silent",
+  "ruleTypeApmError": "APM error group",
+  "ruleTypeOql": "OQL query",
+  "ruleTypeSloBurn": "SLO burn rate",
+  "ruleTypeAnomaly": "Baseline (anomaly)",
+  "ruleLastEvaluated": "Last evaluated",
+  "ruleNotEvaluated": "not yet",
+  "ruleNextEvaluation": "Next evaluation",
+  "ruleConditionTitle": "Condition",
+  "ruleSeriesTitle": "Series",
+  "ruleSeriesEmpty": "It is not watching any series yet.",
+  "ruleChannels": "Channels",
+  "ruleLabels": "Labels",
+  "ruleRunbook": "Runbook",
+  "ruleHistoryTitle": "Evaluation history",
+  "ruleHistoryHours": "{hours} h",
+  "@ruleHistoryHours": {
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleHistoryEmpty": "No evaluations recorded in this range yet.",
+  "ruleHistorySummary": "{count} evaluations, {errors} errors; the last one took {ms} ms.",
+  "@ruleHistorySummary": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "errors": {
+        "type": "int"
+      },
+      "ms": {
+        "type": "int"
+      }
+    }
+  },
+  "ruleHistoryTruncated": "Only part of the series is shown.",
+  "muteDayMon": "Mon",
+  "muteDayTue": "Tue",
+  "muteDayWed": "Wed",
+  "muteDayThu": "Thu",
+  "muteDayFri": "Fri",
+  "muteDaySat": "Sat",
+  "muteDaySun": "Sun",
+  "muteOrdinalFirst": "First",
+  "muteOrdinalSecond": "Second",
+  "muteOrdinalThird": "Third",
+  "muteOrdinalFourth": "Fourth",
+  "muteOrdinalLast": "Last",
+  "muteOpEq": "equals",
+  "muteOpNeq": "not equals",
+  "muteOpContains": "contains",
+  "muteSummaryMonthday": "Monthly on day {days}",
+  "@muteSummaryMonthday": {
+    "placeholders": {
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "muteSummaryNthDay": "{ordinal} {day} of the month",
+  "@muteSummaryNthDay": {
+    "placeholders": {
+      "ordinal": {
+        "type": "String"
+      },
+      "day": {
+        "type": "String"
+      }
+    }
+  },
+  "muteSummaryNthWeekday": "{ordinal} weekday of the month",
+  "@muteSummaryNthWeekday": {
+    "placeholders": {
+      "ordinal": {
+        "type": "String"
+      }
+    }
+  },
+  "muteExceptionsSummary": "Exceptions: {dates} dates, {calendars} calendars",
+  "@muteExceptionsSummary": {
+    "placeholders": {
+      "dates": {
+        "type": "int"
+      },
+      "calendars": {
+        "type": "int"
+      }
+    }
+  },
+  "muteEditTitle": "Edit mute",
+  "muteName": "Name",
+  "muteComment": "Comment",
+  "muteRecurringToggle": "Repeat on selected days",
+  "muteCreate": "Create mute",
+  "muteSave": "Save mute",
+  "muteCreatedBy": "Created by {email}",
+  "@muteCreatedBy": {
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
+  },
+  "muteStarts": "Starts",
+  "muteEnds": "Ends",
+  "muteWeekly": "Weekly",
+  "muteMonthly": "Monthly",
+  "muteTimezone": "Time zone",
+  "muteStartTime": "From (local time)",
+  "muteEndTime": "To (local time)",
+  "muteEndTimeHint": "Earlier than the start = next day.",
+  "muteModeMonthday": "Day of the month",
+  "muteModeWeekday": "Weekday of the month",
+  "muteCustomRule": "Custom rule",
+  "muteMonthDays": "Days of the month",
+  "muteMonthDaysHint": "Comma-separated, 1–31; -1 is the last day.",
+  "muteMonthDaysInvalid": "Enter days between 1 and 31 or -1 … -31.",
+  "muteAnyWeekday": "Weekday (Mon–Fri)",
+  "muteExceptions": "Exceptions",
+  "muteExceptionsHint": "No occurrence starts on these local dates or on the dates of the selected holiday calendars.",
+  "muteAddException": "Add date",
+  "muteUpcoming": "Next occurrences",
+  "muteUpcomingInvalid": "Complete the schedule to see its next occurrences.",
+  "muteUpcomingNone": "No further occurrences.",
+  "muteRules": "Rules",
+  "muteRulesHint": "None selected = all rules.",
+  "muteMatchers": "Label matchers",
+  "muteAddMatcher": "Add matcher",
+  "muteRemoveMatcher": "Remove matcher",
+  "mutesEdit": "Edit",
+  "mutesDelete": "Delete",
+  "mutesDetailed": "New mute, with every option",
+  "mutesStatusScheduled": "scheduled",
+  "mutesStatusEnded": "ended",
   "serverTitle": "Connect to openlog",
   "serverDescription": "openlog runs on your own server. The address below is the hosted one — replace it with yours if you run your own.",
   "serverAddressLabel": "Server address",
@@ -219,7 +579,7 @@
   "hostsEmpty": "No host is reporting.",
   "containersEmpty": "No container is reporting.",
   "podsEmpty": "No pod found.",
-  "databasesEmpty": "No database instance is reporting.",
+  "databasesEmpty": "No database sends query statistics yet. Enable query monitoring on the infra agent of the database host (config.yaml) and restart it:\nintegrations.postgresql.query_stats.enabled: true",
   "slosEmpty": "No SLO defined.",
   "syntheticsEmpty": "No synthetic check defined.",
   "jobsEmpty": "No job monitor defined.",
@@ -844,7 +1204,7 @@
       }
     }
   },
-  "mutesRecurring": "recurring; edited on the web",
+  "mutesRecurring": "recurring",
   "mutesDuration30m": "30 min",
   "mutesDuration1h": "1 hour",
   "mutesDuration2h": "2 hours",
@@ -2255,6 +2615,47 @@
   "dbPlanChanged": "plan changed",
   "dbPlanCost": "cost",
   "dbCallers": "Calling services",
+  "dbSourceApplications": "From applications",
+  "dbSourceServers": "From servers",
+  "dbAppHint": "These durations are what the applications measured, so they include the network and waiting for a connection. Wait events and sessions need a connection to the server: see From servers.",
+  "dbAppSearch": "Search statements",
+  "dbAppServices": "Services",
+  "dbAppPlan": "Execution plan",
+  "dbAppGeneric": "Generic plan: made without the parameter values, so it can differ from what the slow call used.",
+  "dbAppNoPlan": "No plan captured. Plans come from an agent with explaining turned on, such as WithExplain in the Go pgx package.",
+  "dbAppEmpty": "No application sent a database call in this range. APM agents report them on their own, with no connection to the database.",
+  "dbServerView": "Server view",
+  "dbNotMonitored": "Not monitored on the database server",
+  "apmSortService": "Service",
+  "apmSortEnvironment": "Environment",
+  "apmSortThroughput": "Throughput",
+  "apmSortErrorRate": "Error rate",
+  "apmSortLastSeen": "Last seen",
+  "apmSortTransaction": "Transaction",
+  "apmSortStatement": "Statement",
+  "apmSortDatabase": "Database",
+  "apmSortInstance": "Instance",
+  "apmSortHost": "Host",
+  "apmSortCalls": "Calls",
+  "apmSortAas": "Avg active sessions",
+  "apmSortTopWait": "Top wait",
+  "apmSortWaitType": "Wait type",
+  "apmSortWaitEvent": "Wait event",
+  "apmSortShare": "Share of time",
+  "apmSortStart": "Start",
+  "apmSortDuration": "Duration",
+  "deploymentsWindowLabel": "Window",
+  "deploymentsWindow15m": "15 minutes",
+  "deploymentsWindow30m": "30 minutes",
+  "deploymentsWindow1h": "1 hour",
+  "deploymentsWindow3h": "3 hours",
+  "deploymentsNoNewErrors": "No new error groups.",
+  "txRelatedLogs": "Related logs",
+  "txTraces": "Traces of this transaction",
+  "txHistogram": "Latency distribution",
+  "txLatency": "Latency",
+  "txSlowest": "Slowest traces",
+  "txNoTraces": "No traces in this range.",
   "containersHost": "Host",
   "containersAllHosts": "All hosts",
   "containersProject": "Project",
@@ -2687,6 +3088,81 @@
   "rumTabSessions": "Sessions",
   "rumTabReleases": "Releases",
   "rumTabFunnel": "Funnel",
+  "rumTabCrashes": "Crashes",
+  "rumTabAnalytics": "Analytics",
+  "rumServerTooOld": "This server's openlog is too old for this. Update the server to see it here.",
+  "rumCrashesEmpty": "No crashes in this range. Crash capture is off by default in the SDKs.",
+  "rumCrashesSummary": "{sessions} sessions · last on {version} · {when}",
+  "@rumCrashesSummary": {"placeholders": {"sessions": {"type": "String"}, "version": {"type": "String"}, "when": {"type": "String"}}},
+  "rumCrashesStack": "Stack",
+  "rumCrashesMissingSymbols": "No symbols uploaded for: {what}",
+  "@rumCrashesMissingSymbols": {"placeholders": {"what": {"type": "String"}}},
+  "rumCrashKindUncaught": "Uncaught exception",
+  "rumCrashKindSignal": "Signal",
+  "rumCrashKindAnr": "Not responding",
+  "rumCrashKindOom": "Out of memory",
+  "rumSortApp": "Application",
+  "rumSortEnvironment": "Environment",
+  "rumSortLastSeen": "Last seen",
+  "rumSortFirstSeen": "First seen",
+  "rumSortVersion": "Version",
+  "rumSortCrashFree": "Crash-free",
+  "rumReleaseNoVersions": "No version carried sessions in this range.",
+  "rumReleaseNoDeployments": "No deployment was seen in this range.",
+  "rumReleaseNoCrashCapture": "This version cannot report crashes.",
+  "analyticsPeriodLabel": "Period",
+  "analyticsLastDays": "Last {days} days",
+  "@analyticsLastDays": {"placeholders": {"days": {"type": "int"}}},
+  "analyticsComparedWith": "Compared with {from} to {to}. Complete days, in UTC.",
+  "@analyticsComparedWith": {"placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}},
+  "analyticsPreviousPartial": "This application has no data from the start of the previous period, so a rise may only mean it started reporting since.",
+  "analyticsNoChange": "No change",
+  "analyticsFromNothing": "(new)",
+  "analyticsNewUsers": "New users",
+  "analyticsAvgDailyUsers": "Average daily users",
+  "analyticsPageViews": "Page views",
+  "analyticsDau": "DAU",
+  "analyticsWau": "WAU",
+  "analyticsMau": "MAU",
+  "analyticsStickiness": "DAU / MAU",
+  "analyticsActivityChart": "Active users",
+  "analyticsRetention": "Retention",
+  "analyticsCohort": "First seen",
+  "analyticsSize": "People",
+  "analyticsGrainLabel": "Per",
+  "analyticsGrainDay": "Day",
+  "analyticsGrainWeek": "Week",
+  "analyticsGrainMonth": "Month",
+  "analyticsPeriodDay": "Day {n}",
+  "@analyticsPeriodDay": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsPeriodWeek": "Week {n}",
+  "@analyticsPeriodWeek": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsPeriodMonth": "Month {n}",
+  "@analyticsPeriodMonth": {"placeholders": {"n": {"type": "int"}}},
+  "analyticsEvents": "Events",
+  "analyticsEventName": "Event",
+  "analyticsCount": "Count",
+  "analyticsSessions": "Sessions",
+  "analyticsUsers": "Users",
+  "analyticsAcquisition": "Traffic sources",
+  "analyticsBy": "By",
+  "analyticsAudience": "Audience",
+  "analyticsAudienceCountry": "Country",
+  "analyticsAudienceDevice": "Device type",
+  "analyticsAudienceModel": "Device model",
+  "analyticsAudienceOs": "Operating system",
+  "analyticsAudienceBrowser": "Browser",
+  "analyticsAudienceVersion": "App version",
+  "analyticsUnknown": "(unknown)",
+  "analyticsNoCountry": "This server records no country yet. Set OPENLOG_RUM_GEOIP_DB or OPENLOG_RUM_GEO_HEADER: see the product analytics guide.",
+  "analyticsSourceReferrer": "Referrer",
+  "analyticsSourceSource": "Source",
+  "analyticsSourceMedium": "Medium",
+  "analyticsSourceCampaign": "Campaign",
+  "analyticsDirect": "(direct)",
+  "analyticsNoRows": "Nothing in the last 30 days.",
+  "analyticsSamplingChanged": "The key's sampling rate changed in this range, so part of the drop is people leaving the sample rather than the product.",
+  "analyticsNotCollecting": "No visitors are being recognised for this application. Set Analytics to \"Visitors\" on its key under Settings → Browser keys, and use an SDK version that supports it.",
   "rumPagesEmpty": "No page views in this range.",
   "rumPageViews": "Views",
   "rumPageMax": "Slowest",

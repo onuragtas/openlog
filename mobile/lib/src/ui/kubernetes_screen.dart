@@ -14,6 +14,8 @@ import '../sections.dart';
 import '../usage.dart' show formatBytes;
 import '../session.dart';
 import 'failure_text.dart';
+import 'infra_sort.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'pick_sheet.dart';
 import 'pod_screen.dart';
@@ -21,6 +23,7 @@ import 'sections_screen.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
+import 'workload_screen.dart';
 
 /// What the app bar's refresh button reloads here.
 ///
@@ -408,7 +411,7 @@ class _Overview extends StatelessWidget {
                   ),
                 )
               else
-                for (final e in detail.warningEvents) _EventRow(event: e),
+                for (final e in detail.warningEvents) K8sEventRow(event: e),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -647,8 +650,8 @@ class _KindRow extends StatelessWidget {
   }
 }
 
-class _EventRow extends StatelessWidget {
-  const _EventRow({required this.event});
+class K8sEventRow extends StatelessWidget {
+  const K8sEventRow({super.key, required this.event});
 
   final KubernetesEvent event;
 
@@ -715,14 +718,25 @@ class _Workloads extends StatelessWidget {
       builder: (context, _) => ListScreen<KubernetesWorkload>(
         controller: c,
         baseUrl: session.baseUrl ?? '',
-        search: _Search(
-          fieldKey: const Key('k8s-workloads-search'),
-          hint: l.k8sWorkloadSearch,
-          onSubmitted: (v) {
-            c.query = v;
-            c.refresh();
-          },
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Search(
+              fieldKey: const Key('k8s-workloads-search'),
+              hint: l.k8sWorkloadSearch,
+              onSubmitted: (v) {
+                c.query = v;
+                c.refresh();
+              },
+            ),
+            ListSortBar(
+              controller: c,
+              columns: workloadSorts,
+              label: (s) => infraSortLabel(l, s),
+            ),
+          ],
         ),
+        footer: LoadMoreTile(controller: c),
         header: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -771,14 +785,13 @@ class _Workloads extends StatelessWidget {
           c.items[i],
           onOpen: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
-              builder: (_) => ScopedPodsScreen(
+              builder: (_) => WorkloadScreen(
                 session: session,
                 sections: sections,
-                title: c.items[i].name,
                 clusterUid: c.items[i].clusterUid,
                 namespace: c.items[i].namespace,
-                workloadKind: c.items[i].kind,
-                workloadName: c.items[i].name,
+                kind: c.items[i].kind,
+                name: c.items[i].name,
               ),
             ),
           ),
@@ -804,14 +817,25 @@ class _Pods extends StatelessWidget {
       builder: (context, _) => ListScreen<KubernetesPod>(
         controller: c,
         baseUrl: session.baseUrl ?? '',
-        search: _Search(
-          fieldKey: const Key('pods-search'),
-          hint: l.k8sPodSearch,
-          onSubmitted: (v) {
-            c.query = v;
-            c.refresh();
-          },
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Search(
+              fieldKey: const Key('pods-search'),
+              hint: l.k8sPodSearch,
+              onSubmitted: (v) {
+                c.query = v;
+                c.refresh();
+              },
+            ),
+            ListSortBar(
+              controller: c,
+              columns: podSorts,
+              label: (s) => infraSortLabel(l, s),
+            ),
+          ],
         ),
+        footer: LoadMoreTile(controller: c),
         header: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -880,14 +904,25 @@ class _Nodes extends StatelessWidget {
       builder: (context, _) => ListScreen<KubernetesNode>(
         controller: c,
         baseUrl: session.baseUrl ?? '',
-        search: _Search(
-          fieldKey: const Key('k8s-nodes-search'),
-          hint: l.k8sNodeSearch,
-          onSubmitted: (v) {
-            c.query = v;
-            c.refresh();
-          },
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Search(
+              fieldKey: const Key('k8s-nodes-search'),
+              hint: l.k8sNodeSearch,
+              onSubmitted: (v) {
+                c.query = v;
+                c.refresh();
+              },
+            ),
+            ListSortBar(
+              controller: c,
+              columns: nodeSorts,
+              label: (s) => infraSortLabel(l, s),
+            ),
+          ],
         ),
+        footer: LoadMoreTile(controller: c),
         header: _Shown(shown: c.items.length, total: c.total),
         emptyTitle: l.k8sNoNodes,
         itemBuilder: (context, i) => nodeCard(
@@ -1033,6 +1068,15 @@ class _ScopedPodsScreenState extends State<ScopedPodsScreen> {
           controller: _c,
           baseUrl: widget.session.baseUrl ?? '',
           emptyTitle: l.podsEmpty,
+          search: Align(
+            alignment: Alignment.centerLeft,
+            child: ListSortBar(
+              controller: _c,
+              columns: podSorts,
+              label: (s) => infraSortLabel(l, s),
+            ),
+          ),
+          footer: LoadMoreTile(controller: _c),
           itemBuilder: (context, i) => podCard(
             context,
             _c.items[i],

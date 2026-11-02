@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../apm_format.dart';
 import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
@@ -10,6 +11,7 @@ import 'detail_scaffold.dart';
 import 'list_scaffold.dart';
 import 'logs_screen.dart';
 import 'oql_view.dart';
+import 'service_screen.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
@@ -217,6 +219,50 @@ class _ContainerScreenState extends State<ContainerScreen> {
           legend: l.containerReadWrite,
         ),
       ],
+
+      DetailSection(
+        key: const Key('container-services'),
+        title: l.containerServicesTitle,
+        children: [
+          if (_c.servicesNotOffered)
+            const NotOfferedNote(padding: EdgeInsets.zero)
+          else if (_c.servicesError != null)
+            Text(
+              _c.servicesError!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
+          else if (_c.services.isEmpty)
+            Text(l.containerServicesEmpty, style: muted),
+          for (final s in _c.services)
+            ListTile(
+              key: Key('container-service-${s.serviceName}'),
+              contentPadding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              title: Text(s.serviceName, style: theme.textTheme.bodyMedium),
+              subtitle: Text(
+                [
+                  if (s.environment.isNotEmpty) s.environment,
+                  formatApmRpm(s.throughput),
+                  formatApmRate(s.errorRate),
+                  'p95 ${formatApmMs(s.p95Ms)}',
+                ].join(' · '),
+                style: theme.textTheme.bodySmall,
+              ),
+              trailing: const Icon(Icons.chevron_right, size: 18),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ServiceScreen(
+                    session: widget.session,
+                    sections: widget.sections,
+                    serviceName: s.serviceName,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
 
       if (x.attributes.isNotEmpty)
         DetailSection(

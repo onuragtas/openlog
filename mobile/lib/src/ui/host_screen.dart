@@ -10,7 +10,9 @@ import '../detail.dart';
 import '../discovery.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'cost_host_screen.dart';
 import 'detail_scaffold.dart';
+import 'host_tabs.dart';
 import 'list_scaffold.dart';
 import 'service_screen.dart';
 import 'severity.dart';
@@ -131,6 +133,79 @@ class _HostScreenState extends State<HostScreen> {
           Text(relativeTimeOf(l, host.lastSeen), style: muted),
         ],
       ),
+
+      // The web's cost card. No answer, no card: estimates are optional.
+      if (_c.cost != null)
+        DetailSection(
+          key: const Key('host-cost'),
+          title: l.costHostTitle,
+          children: [
+            InkWell(
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => CostHostScreen(
+                    session: widget.session,
+                    sections: widget.sections,
+                    hostId: widget.hostId,
+                    hostName: host.hostName.isEmpty
+                        ? host.hostId
+                        : host.hostName,
+                  ),
+                ),
+              ),
+              child: HostCostSummary(cost: _c.cost!),
+            ),
+          ],
+        ),
+
+      const SizedBox(height: 12),
+      for (final (key, title, icon, open)
+          in <(String, String, IconData, Widget)>[
+            (
+              'host-open-metrics',
+              l.hostTabMetrics,
+              Icons.show_chart,
+              HostMetricsScreen(
+                session: widget.session,
+                sections: widget.sections,
+                hostId: widget.hostId,
+                hostName: host.hostName,
+              ),
+            ),
+            (
+              'host-open-inventory',
+              l.hostTabInventory,
+              Icons.inventory_2_outlined,
+              HostInventoryScreen(
+                session: widget.session,
+                sections: widget.sections,
+                hostId: widget.hostId,
+                hostName: host.hostName,
+              ),
+            ),
+            (
+              'host-open-vulnerabilities',
+              l.hostTabVulns,
+              Icons.gpp_maybe_outlined,
+              HostVulnerabilitiesScreen(
+                session: widget.session,
+                sections: widget.sections,
+                hostId: widget.hostId,
+                hostName: host.hostName,
+              ),
+            ),
+          ])
+        ListTile(
+          key: Key(key),
+          contentPadding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          leading: Icon(icon, size: 20),
+          title: Text(title, style: theme.textTheme.bodyMedium),
+          trailing: const Icon(Icons.chevron_right, size: 18),
+          onTap: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute<void>(builder: (_) => open)),
+        ),
 
       DetailSection(
         title: l.hostRuns,

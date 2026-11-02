@@ -198,3 +198,31 @@ class ErrorGroupController extends ChangeNotifier {
 
 /// The longest a comment may be, in bytes, as the contract says.
 const commentMaxBytes = 4000;
+
+/// The list row of a group, from its detail: what opens the group's screen when
+/// all that was at hand is its id, as on a deployment's new errors.
+ApmErrorGroup errorGroupOfDetail(ApmErrorGroupDetail d) => ApmErrorGroup(
+  status: d.status,
+  assignee: d.assignee,
+  resolvedAt: d.resolvedAt,
+  resolvedInVersion: d.resolvedInVersion,
+  resolvedByEmail: d.resolvedByEmail,
+  regressedAt: d.regressedAt,
+  regressionCount: d.regressionCount,
+  commentCount: d.commentCount,
+  updatedAt: d.updatedAt,
+  updatedByEmail: d.updatedByEmail,
+  groupId: d.groupId,
+  serviceName: d.serviceName,
+  serviceNamespace: d.serviceNamespace,
+  environment: d.environment,
+  errorType: d.errorType,
+  message: d.message,
+  count: d.count,
+  totalCount: d.totalCount,
+  firstSeen: d.firstSeen,
+  lastSeen: d.lastSeen,
+  lastTraceId: d.lastTraceId,
+  lastSpanName: d.lastSpanName,
+  sparkline: d.series,
+);

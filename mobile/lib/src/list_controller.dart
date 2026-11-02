@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'api/client.dart';
+import 'api/schema.g.dart' show ApiShapeError;
 import 'session.dart';
 
 /// A screen's worth of rows, loaded from one installation.
@@ -41,6 +42,11 @@ abstract class ListController<T> extends ChangeNotifier {
       failure = e.status == 403
           ? SessionFailure(forbiddenKind, '')
           : SessionFailure('unexpected', e.message);
+    } on ApiShapeError catch (e) {
+      // A field this build needs and the server does not send. Said where
+      // the list is rather than thrown past it, which would leave a screen
+      // that looks empty and an error nobody sees.
+      failure = SessionFailure('unexpected', e.toString());
     } finally {
       loadingFirst = false;
       notifyListeners();
@@ -125,6 +131,8 @@ abstract class PagedListController<T> extends ListController<T> {
     } on ApiUnreachable {
       loadMoreFailed = true;
     } on ApiException {
+      loadMoreFailed = true;
+    } on ApiShapeError {
       loadMoreFailed = true;
     } finally {
       loadingMore = false;

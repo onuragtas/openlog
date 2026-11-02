@@ -7,11 +7,14 @@
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../api/client.dart';
 import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'container_screen.dart' hide formatBytes;
 import '../usage.dart' show formatBytes;
+import 'infra_sort.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'pick_sheet.dart';
 import 'sections_screen.dart';
@@ -61,11 +64,20 @@ class _ContainersBodyState extends State<ContainersBody> {
 
   /// The hosts to filter by. They are a section of their own, so they may
   /// not have been asked for yet when somebody opens this filter.
+  ///
+  /// Asked for here rather than read from that section, which holds one page.
   Future<List<Host>> _hosts() async {
-    final hosts = widget.sections.hosts;
-    if (!hosts.loaded && !hosts.loadingFirst) await hosts.refresh();
-    return hosts.items;
+    try {
+      return _pickerHosts = await widget.sections.hosts.forPicker();
+    } on ApiUnreachable {
+      return widget.sections.hosts.items;
+    } on ApiException {
+      // A filter that offers what is known beats a chip that does nothing.
+      return widget.sections.hosts.items;
+    }
   }
+
+  List<Host> _pickerHosts = const [];
 
   @override
   Widget build(BuildContext context) {
@@ -80,15 +92,29 @@ class _ContainersBodyState extends State<ContainersBody> {
         return ListScreen<ApiContainer>(
           controller: c,
           baseUrl: widget.session.baseUrl ?? '',
-          search: SearchField(
-            fieldKey: const Key('containers-search'),
-            controller: _search,
-            hint: l.sectionSearch,
-            onSubmitted: (v) {
-              c.query = v;
-              c.refresh();
-            },
+          search: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SearchField(
+                fieldKey: const Key('containers-search'),
+                controller: _search,
+                hint: l.sectionSearch,
+                onSubmitted: (v) {
+                  c.query = v;
+                  c.refresh();
+                },
+              ),
+              // Not while grouped: groups come in the API's order, on the web
+              // as here, and a group cut by a page would add up wrong.
+              if (!c.grouped)
+                ListSortBar(
+                  controller: c,
+                  columns: containerSorts,
+                  label: (s) => infraSortLabel(l, s),
+                ),
+            ],
           ),
+          footer: LoadMoreTile(controller: c),
           header: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -223,7 +249,7 @@ class _ContainersBodyState extends State<ContainersBody> {
 
   String _hostName(String hostId) {
     if (hostId.isEmpty) return '';
-    for (final h in widget.sections.hosts.items) {
+    for (final h in [..._pickerHosts, ...widget.sections.hosts.items]) {
       if (h.hostId == hostId) {
         return h.hostName.isEmpty ? h.hostId : h.hostName;
       }

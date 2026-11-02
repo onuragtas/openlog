@@ -15,6 +15,8 @@ import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
 import 'failure_text.dart';
+import '../list_controller.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'sparkline.dart';
 import 'theme.dart';
@@ -43,6 +45,8 @@ class DatabaseScreen extends StatefulWidget {
 class _DatabaseScreenState extends State<DatabaseScreen>
     with SingleTickerProviderStateMixin {
   late final DbActivityController _activity;
+  late final DbActivityWaitsController _waits;
+  late final DbActivityQueriesController _top;
   late final DbQueriesController _queries;
   late final DbSessionsController _sessions;
   late final TabController _tabs;
@@ -51,6 +55,8 @@ class _DatabaseScreenState extends State<DatabaseScreen>
   void initState() {
     super.initState();
     _activity = widget.sections.dbActivity(widget.instance);
+    _waits = widget.sections.dbActivityWaits(widget.instance);
+    _top = widget.sections.dbActivityQueries(widget.instance);
     _queries = widget.sections.dbQueries(widget.instance);
     _sessions = widget.sections.dbSessions(widget.instance);
     _tabs = TabController(length: 3, vsync: this)
@@ -58,7 +64,13 @@ class _DatabaseScreenState extends State<DatabaseScreen>
         if (_tabs.indexIsChanging) return;
         _loadTab();
       });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _activity.refresh());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshActivity());
+  }
+
+  /// The tab's three reads: the chart and its two lists, which are apart so
+  /// that sorting a list does not draw the chart again.
+  Future<void> _refreshActivity() async {
+    await Future.wait([_activity.refresh(), _waits.refresh(), _top.refresh()]);
   }
 
   void _loadTab() {
@@ -74,6 +86,8 @@ class _DatabaseScreenState extends State<DatabaseScreen>
   void dispose() {
     _tabs.dispose();
     _activity.dispose();
+    _waits.dispose();
+    _top.dispose();
     _queries.dispose();
     _sessions.dispose();
     super.dispose();
@@ -124,6 +138,9 @@ class _DatabaseScreenState extends State<DatabaseScreen>
           _Activity(
             session: widget.session,
             controller: _activity,
+            waits: _waits,
+            top: _top,
+            onRefresh: _refreshActivity,
             onOpenQuery: _openQuery,
           ),
           _Queries(
@@ -146,11 +163,17 @@ class _Activity extends StatelessWidget {
   const _Activity({
     required this.session,
     required this.controller,
+    required this.waits,
+    required this.top,
+    required this.onRefresh,
     required this.onOpenQuery,
   });
 
   final SessionController session;
   final DbActivityController controller;
+  final DbActivityWaitsController waits;
+  final DbActivityQueriesController top;
+  final Future<void> Function() onRefresh;
   final ValueChanged<String> onOpenQuery;
 
   @override
@@ -166,6 +189,7 @@ class _Activity extends StatelessWidget {
       builder: (context, _) => DetailBody<DbActivity>(
         controller: controller,
         baseUrl: session.baseUrl ?? '',
+        onRefresh: onRefresh,
         builder: (context, a) => [
           Text(l.dbActivityTitle, style: theme.textTheme.titleSmall),
           Text(l.dbActivityAbout, style: muted),
@@ -177,68 +201,186 @@ class _Activity extends StatelessWidget {
           DetailSection(
             title: l.dbWaits,
             children: [
-              if (a.waits.isEmpty)
-                Text(l.dbNoSamples, style: muted)
-              else
-                for (final w in a.waits)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            w.event.isEmpty ? w.type : '${w.type} · ${w.event}',
-                            style: theme.textTheme.bodyMedium,
-                          ),
-                        ),
-                        Text(
-                          '%${(w.share * 100).toStringAsFixed(1)}',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+              _ActivityList<DbWait>(
+                controller: waits,
+                baseUrl: session.baseUrl ?? '',
+                sorts: dbWaitSorts,
+                sortLabel: (s) => switch (s) {
+                  'type' => l.apmSortWaitType,
+                  'event' => l.apmSortWaitEvent,
+                  _ => l.apmSortShare,
+                },
+                // What an older server has: the top ones, unsortable.
+                fallback: a.waits,
+                row: (w) => _WaitRow(wait: w),
+              ),
             ],
           ),
           DetailSection(
             title: l.dbTopQueries,
             children: [
-              if (a.topQueries.isEmpty)
-                Text(l.dbNoSamples, style: muted)
-              else
-                for (final q in a.topQueries)
-                  InkWell(
-                    key: Key('db-top-${q.fingerprint}'),
-                    onTap: () => onOpenQuery(q.fingerprint),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            q.text,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${l.dbAas} '
-                            '${q.avgActiveSessions.toStringAsFixed(2)} · '
-                            '${q.topWait}',
-                            style: muted,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+              _ActivityList<DbActivityQuery>(
+                controller: top,
+                baseUrl: session.baseUrl ?? '',
+                sorts: dbActivityQuerySorts,
+                sortLabel: (s) => switch (s) {
+                  'statement' => l.apmSortStatement,
+                  'wait' => l.apmSortTopWait,
+                  _ => l.apmSortAas,
+                },
+                fallback: a.topQueries,
+                row: (q) => _TopQueryRow(query: q, onOpen: onOpenQuery),
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One of the activity tab's two lists, inside its scrolling body: the sort,
+/// the rows, and the foot that fetches the next page.
+///
+/// A server older than these lists still sends the short ones on the activity
+/// answer, so it keeps those and says why they cannot be sorted.
+class _ActivityList<T> extends StatelessWidget {
+  const _ActivityList({
+    required this.controller,
+    required this.baseUrl,
+    required this.sorts,
+    required this.sortLabel,
+    required this.fallback,
+    required this.row,
+  });
+
+  final PagedListController<T> controller;
+  final String baseUrl;
+  final List<String> sorts;
+  final String Function(String) sortLabel;
+  final List<T> fallback;
+  final Widget Function(T) row;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final c = controller;
+
+    return ListenableBuilder(
+      listenable: c,
+      builder: (context, _) {
+        if (c.loadingFirst) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (notOfferedNow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const NotOfferedNote(padding: EdgeInsets.only(bottom: 8)),
+              if (fallback.isEmpty)
+                Text(l.dbNoSamples, style: muted)
+              else
+                for (final item in fallback) row(item),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FailureBanner(failure: c.failure, baseUrl: baseUrl),
+            if (c.items.isEmpty && c.failure == null)
+              Text(l.dbNoSamples, style: muted)
+            else if (c.items.isNotEmpty) ...[
+              ListSortBar(controller: c, columns: sorts, label: sortLabel),
+              for (final item in c.items) row(item),
+              LoadMoreTile(controller: c),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  bool get notOfferedNow {
+    final c = controller;
+    return c is OlderServerList<T> && c.notOffered;
+  }
+}
+
+class _WaitRow extends StatelessWidget {
+  const _WaitRow({required this.wait});
+
+  final DbWait wait;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              wait.event.isEmpty ? wait.type : '${wait.type} · ${wait.event}',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ),
+          Text(
+            '%${(wait.share * 100).toStringAsFixed(1)}',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopQueryRow extends StatelessWidget {
+  const _TopQueryRow({required this.query, required this.onOpen});
+
+  final DbActivityQuery query;
+  final ValueChanged<String> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l = L.of(context);
+    final theme = Theme.of(context);
+    return InkWell(
+      key: Key('db-top-${query.fingerprint}'),
+      onTap: () => onOpen(query.fingerprint),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              query.text,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '${l.dbAas} '
+              '${query.avgActiveSessions.toStringAsFixed(2)} · '
+              '${query.topWait}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -318,28 +460,19 @@ class _Queries extends StatelessWidget {
       builder: (context, _) => ListScreen<DbQuery>(
         controller: c,
         baseUrl: session.baseUrl ?? '',
-        search: _QuerySearch(controller: c),
-        header: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              for (final s in dbQuerySorts)
-                Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: ChoiceChip(
-                    key: Key('db-sort-$s'),
-                    label: Text(_sortLabel(l, s)),
-                    selected: c.sort == s,
-                    onSelected: (_) {
-                      c.sort = s;
-                      c.refresh();
-                    },
-                  ),
-                ),
-            ],
-          ),
+        search: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _QuerySearch(controller: c),
+            ListSortBar(
+              controller: c,
+              columns: dbQuerySorts,
+              label: (s) => _sortLabel(l, s),
+            ),
+          ],
         ),
         emptyTitle: l.dbNoQueries,
+        footer: LoadMoreTile(controller: c),
         itemBuilder: (context, i) => _QueryRow(
           query: c.items[i],
           onOpen: () => onOpenQuery(c.items[i].fingerprint),
@@ -351,8 +484,10 @@ class _Queries extends StatelessWidget {
 
 String _sortLabel(L l, String sort) => switch (sort) {
   'time' => l.dbSortTime,
+  'statement' => l.apmSortStatement,
   'calls' => l.dbSortCalls,
   'avg' => l.dbSortAvg,
+  'rows_per_call' => l.dbRowsPerCall,
   'rows' => l.dbSortRows,
   'errors' => l.dbSortErrors,
   _ => l.dbSortReads,
@@ -456,6 +591,8 @@ class _QueryRow extends StatelessWidget {
                       ? '—'
                       : query.rowsPerCall!.toStringAsFixed(1),
                 ),
+                _Stat(label: l.dbRows, value: '${query.rows}'),
+                _Stat(label: l.dbSortReads, value: '${query.blocksRead}'),
                 if (query.errors > 0)
                   _Stat(
                     label: l.dbErrors,

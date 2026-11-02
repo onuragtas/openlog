@@ -132,7 +132,7 @@ void main() {
     );
     expect(
       Uri.decodeQueryComponent(server.requests[1].query),
-      'instance=db1.internal:5432&sort=avg&limit=50&q=orders',
+      'instance=db1.internal:5432&sort=avg&dir=desc&limit=50&q=orders',
     );
     expect(
       Uri.decodeQueryComponent(server.requests[2].query),

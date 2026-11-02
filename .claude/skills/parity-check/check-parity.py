@@ -24,6 +24,19 @@ def normal(path: str) -> str:
     return path.rstrip("/") or "/"
 
 
+def call_arguments(text: str, start: int) -> str:
+    """The rest of a call whose opening parenthesis is before `start`: its own arguments and nobody else's."""
+    depth = 1
+    for i in range(start, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if not depth:
+                return text[start:i]
+    return text[start:]
+
+
 def web_calls() -> dict[str, set[str]]:
     calls: dict[str, set[str]] = {}
     for f in Path("web/src").rglob("*.ts*"):
@@ -34,10 +47,10 @@ def web_calls() -> dict[str, set[str]]:
         for m in re.finditer(r'api\.(GET|POST|PUT|PATCH|DELETE)\(\s*"(/api/v1/[^"]+)"', text):
             key = f"{m.group(1)} {normal(m.group(2))}"
             params = calls.setdefault(key, set())
-            near = text[m.end() : m.end() + 400]
+            near = call_arguments(text, m.end())
             params.update(p for p in LIST_PARAMS if re.search(rf"\b{p}\b", near))
-            # A list's state is spread into the query, and carries all of these.
-            if re.search(r"\.\.\.(list|state)\b", near):
+            # A list's state is spread into the query, as ...list or ...p.list, and carries all of these.
+            if re.search(r"\.\.\.(?:\w+\.)?(list|state)\b", near):
                 params.update(("sort", "dir", "offset"))
     return calls
 
@@ -56,7 +69,13 @@ def dart_paths(text: str) -> list[str]:
                 depth -= 1
                 chars.append(c)
             elif not depth and c == "'":
-                break
+                # Dart joins adjacent strings, and a long path is written as two: '/api/v1/x/$id'\n  '/comments'.
+                j = i + 1
+                while j < len(text) and text[j].isspace():
+                    j += 1
+                if j >= len(text) or text[j] != "'":
+                    break
+                i = j
             else:
                 chars.append(c)
             i += 1
@@ -76,13 +95,17 @@ def mobile_calls() -> dict[str, set[str]]:
     # Read a method at a time. Its path is often built first, in a variable or through _listPath, and only then sent.
     chunks = re.split(r"\n  (?=(?:static )?(?:Future|Stream|String|Uri|void|Map|List|bool|int|[A-Z]\w*)[<\w, ?>]* \w+[(<{ ])", text)
     for chunk in chunks:
+        # A doc comment belongs to the next method but lands in this chunk, and "sorted by [sort]" sends nothing.
+        chunk = re.sub(r"^\s*//.*$", "", chunk, flags=re.M)
         verbs = re.findall(r"'(GET|POST|PUT|PATCH|DELETE)'", chunk)
         if not verbs:
             continue
         for path in dart_paths(chunk):
             for verb in set(verbs):
                 params = calls.setdefault(f"{verb} {normal(path)}", set())
-                params.update(p for p in LIST_PARAMS if re.search(rf"\b{p}\b", chunk))
+                # The path itself is not a parameter: /deployments/compare sends no `compare`.
+                sent = re.sub(r"'/[^'?]*'", "", chunk)
+                params.update(p for p in LIST_PARAMS if re.search(rf"\b{p}\b", sent))
     return calls
 
 

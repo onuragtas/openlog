@@ -70,9 +70,10 @@ class RumRouteVitalsController extends DetailController<RumVitalList> {
       _client.rumVitals(app, route: route, deviceType: deviceType);
 }
 
-/// Visits of one application, newest first.
-class RumSessionsController extends ListController<RumSession> {
-  RumSessionsController(this._client, this.app);
+/// Visits of one application, newest first, as on the web.
+class RumSessionsController extends PagedListController<RumSession> {
+  RumSessionsController(this._client, this.app)
+    : super(sort: 'started', ascendingSorts: const {'entry', 'browser'});
 
   final OpenlogClient _client;
   final String app;
@@ -89,12 +90,19 @@ class RumSessionsController extends ListController<RumSession> {
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<List<RumSession>> fetch() async => (await _client.rumSessions(
-    app,
-    deviceType: deviceType,
-    browser: browser,
-    userId: userId,
-  )).sessions;
+  Future<ListPage<RumSession>> fetchPage(int offset) async {
+    final page = await _client.rumSessions(
+      app,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+      deviceType: deviceType,
+      browser: browser,
+      userId: userId,
+    );
+    return ListPage(page.sessions, hasMore: page.hasMore ?? false);
+  }
 }
 
 /// One visit: its summary and the events it produced.
@@ -112,17 +120,62 @@ class RumSessionController extends DetailController<RumSessionDetail> {
 }
 
 /// The versions of one application and the deployments that introduced them.
-class RumReleasesController extends DetailController<RumReleaseList> {
-  RumReleasesController(this._client, this.app);
+///
+/// The versions are the rows. The deployments come with every answer and are
+/// not paged, so the first page's stay while later pages add versions.
+class RumReleasesController extends PagedListController<RumRelease> {
+  RumReleasesController(this._client, this.app) : super(sort: 'last_seen');
 
   final OpenlogClient _client;
   final String app;
+
+  List<ApmDeployment> deployments = const [];
 
   @override
   String get forbiddenKind => 'sectionForbidden';
 
   @override
-  Future<RumReleaseList> fetch() => _client.rumReleases(app);
+  Future<ListPage<RumRelease>> fetchPage(int offset) async {
+    final page = await _client.rumReleases(
+      app,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    if (offset == 0) deployments = page.deployments;
+    return ListPage(page.releases, hasMore: page.hasMore ?? false);
+  }
+}
+
+/// What crashed a mobile application.
+///
+/// The endpoint is newer than the app's oldest servers. [serverTooOld] keeps
+/// "this server cannot say" apart from "nothing crashed", which an empty list
+/// would claim, and a 404 here is not a failure worth a red banner.
+class RumCrashesController extends ListController<RumCrash> {
+  RumCrashesController(this._client, this.app);
+
+  final OpenlogClient _client;
+  final String app;
+
+  bool serverTooOld = false;
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<List<RumCrash>> fetch() async {
+    try {
+      final crashes = (await _client.rumCrashes(app)).crashes;
+      serverTooOld = false;
+      return crashes;
+    } on ApiException catch (e) {
+      if (e.status != 404) rethrow;
+      serverTooOld = true;
+      return const [];
+    }
+  }
 }
 
 /// A funnel over the application's own custom events.

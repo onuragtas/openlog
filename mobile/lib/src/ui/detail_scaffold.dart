@@ -2,6 +2,7 @@
 // failure banner, pull-to-refresh.
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../detail.dart';
 import 'failure_text.dart';
 
@@ -57,17 +58,22 @@ class DetailBody<T> extends StatelessWidget {
     required this.controller,
     required this.baseUrl,
     required this.builder,
+    this.onRefresh,
   });
 
   final DetailController<T> controller;
   final String baseUrl;
   final List<Widget> Function(BuildContext, T) builder;
 
+  /// What a pull does, for a body showing more than this one record. Null
+  /// reloads the record.
+  final Future<void> Function()? onRefresh;
+
   @override
   Widget build(BuildContext context) {
     final value = controller.value;
     return RefreshIndicator(
-      onRefresh: controller.refresh,
+      onRefresh: onRefresh ?? controller.refresh,
       child: controller.loadingFirst
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -77,9 +83,35 @@ class DetailBody<T> extends StatelessWidget {
                 // screen the failure is usually about the whole screen rather
                 // than about one row of it.
                 FailureBanner(failure: controller.failure, baseUrl: baseUrl),
-                if (value != null) ...builder(context, value),
+                if (controller.notOffered)
+                  const NotOfferedNote()
+                else if (value != null)
+                  ...builder(context, value),
               ],
             ),
+    );
+  }
+}
+
+/// This server is older than this app and has not got the thing yet. Plain text
+/// rather than a banner: nothing failed, and a retry will not change it.
+class NotOfferedNote extends StatelessWidget {
+  const NotOfferedNote({super.key, this.padding = const EdgeInsets.all(16)});
+
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      key: const Key('not-offered'),
+      padding: padding,
+      child: Text(
+        L.of(context).serverNotOffered,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }

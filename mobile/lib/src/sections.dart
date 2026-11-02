@@ -25,6 +25,7 @@ import 'kubernetes.dart';
 import 'list_controller.dart';
 import 'logs.dart';
 import 'members.dart';
+import 'mute_schedule.dart';
 import 'session.dart';
 import 'volume.dart';
 import 'sso.dart';
@@ -32,6 +33,7 @@ import 'usage.dart';
 import 'version.dart';
 import 'oql.dart';
 import 'query.dart';
+import 'analytics.dart';
 import 'rum.dart';
 import 'sampling.dart';
 import 'saved_views.dart';
@@ -48,7 +50,7 @@ import 'services.dart';
 /// two widgets is a list that will one day be missing an entry.
 class Sections {
   Sections({
-    required OpenlogClient client,
+    required this.client,
     TimeRangeController? range,
     HostsController? hosts,
     ContainersController? containers,
@@ -152,6 +154,8 @@ class Sections {
     RumSessionsController Function(String app)? rumSessions,
     RumReleasesController Function(String app)? rumReleases,
     RumFunnelController Function(String app)? rumFunnel,
+    RumCrashesController Function(String app)? rumCrashes,
+    AnalyticsController Function(String app)? analytics,
     RumRouteVitalsController Function(
       String app,
       String route,
@@ -211,6 +215,8 @@ class Sections {
        rumReleases =
            rumReleases ?? ((app) => RumReleasesController(client, app)),
        rumFunnel = rumFunnel ?? ((app) => RumFunnelController(client, app)),
+       rumCrashes = rumCrashes ?? ((app) => RumCrashesController(client, app)),
+       analytics = analytics ?? ((app) => AnalyticsController(client, app)),
        rumRouteVitals =
            rumRouteVitals ??
            ((app, route, device) => RumRouteVitalsController(
@@ -358,6 +364,8 @@ class Sections {
     client.window = () => this.range.value;
   }
 
+  final OpenlogClient client;
+
   /// The window every screen is about, as the web's URL range is.
   final TimeRangeController range;
 
@@ -379,6 +387,26 @@ class Sections {
   final KubernetesEventsController k8sEvents;
   final ServicesController services;
   final DatabasesController databases;
+
+  /// The Databases section's other side: the statements as the applications
+  /// measured them, needing no connection to the database server.
+  late final AppDbQueriesController appDbQueries = AppDbQueriesController(
+    client,
+  );
+
+  /// Made per screen, like the instance's: each is about one statement, one
+  /// instance or one transaction the person opened.
+  AppDbPlansController appDbPlans(String dbSystem, String statement) =>
+      AppDbPlansController(client, dbSystem: dbSystem, statement: statement);
+  DbLookupController dbLookup() => DbLookupController(client);
+  DbActivityWaitsController dbActivityWaits(String instance) =>
+      DbActivityWaitsController(client, instance);
+  DbActivityQueriesController dbActivityQueries(String instance) =>
+      DbActivityQueriesController(client, instance);
+  ApmTransactionController apmTransaction(String service, String name) =>
+      ApmTransactionController(client, service, name);
+  LogsController transactionLogs(String service, String name) =>
+      LogsController(client, transaction: name, transactionService: service);
 
   /// One instance's three tabs and one statement, made per screen: they
   /// are about an instance the person opened, not about the section.
@@ -558,6 +586,8 @@ class Sections {
   final RumSessionsController Function(String app) rumSessions;
   final RumReleasesController Function(String app) rumReleases;
   final RumFunnelController Function(String app) rumFunnel;
+  final RumCrashesController Function(String app) rumCrashes;
+  final AnalyticsController Function(String app) analytics;
   final RumRouteVitalsController Function(
     String app,
     String route,
@@ -622,6 +652,7 @@ class Sections {
     statusPage,
     profiles,
     databases,
+    appDbQueries,
     slos,
     synthetics,
     jobs,
@@ -685,15 +716,59 @@ abstract class SectionController<T> extends ListController<T> {
   String get forbiddenKind => 'sectionForbidden';
 }
 
-class HostsController extends SectionController<Host> {
-  HostsController(super.client);
+/// A section the server sorts and cuts, with the same search box.
+abstract class PagedSectionController<T> extends PagedListController<T>
+    implements SectionController<T> {
+  PagedSectionController(
+    this.client, {
+    required super.sort,
+    super.dir,
+    super.ascendingSorts,
+  });
 
   @override
-  Future<List<Host>> fetch() async => (await client.hosts(q: query)).hosts;
+  final OpenlogClient client;
+
+  @override
+  String query = '';
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
 }
 
-class ContainersController extends SectionController<ApiContainer> {
-  ContainersController(super.client);
+class HostsController extends PagedSectionController<Host> {
+  HostsController(super.client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {'name', 'os', 'agent'},
+      );
+
+  @override
+  Future<ListPage<Host>> fetchPage(int offset) async {
+    final page = await client.hosts(
+      q: query,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.hosts, hasMore: page.hasMore ?? false);
+  }
+
+  /// The hosts a filter chooses from, as many as the web's own picker asks
+  /// for: the list above holds one page of them.
+  Future<List<Host>> forPicker() async =>
+      (await client.hosts(limit: 1000)).hosts;
+}
+
+class ContainersController extends PagedSectionController<ApiContainer> {
+  ContainersController(super.client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {'name', 'state', 'image', 'compose', 'host'},
+      );
 
   /// The web's filters. [composeProject] is null for every project and ""
   /// for the containers that belong to none, which is a filter the web
@@ -716,19 +791,30 @@ class ContainersController extends SectionController<ApiContainer> {
   String _projectsOf = '-';
 
   @override
-  Future<List<ApiContainer>> fetch() async {
+  Future<ListPage<ApiContainer>> fetchPage(int offset) async {
     if (_projectsOf != hostId) {
       projects = (await client.containerGroups(hostId: hostId)).projects;
       _projectsOf = hostId;
     }
+    // A group's running count and summed CPU are of the rows it holds, so a
+    // group cut by a page would add up wrong. The grouped view takes what one
+    // request gives, in the API's order, as the web's does, and says when
+    // there were more.
     final page = await client.containers(
       q: query,
       hostId: hostId,
       composeProject: composeProject,
       state: state,
+      sort: grouped ? 'name' : sort,
+      dir: grouped ? 'asc' : dir,
+      limit: grouped ? 0 : limit,
+      offset: offset,
     );
     total = page.total;
-    return page.containers;
+    return ListPage(
+      page.containers,
+      hasMore: !grouped && (page.hasMore ?? false),
+    );
   }
 }
 
@@ -789,8 +875,20 @@ List<ContainerGroup> groupByComposeService(List<ApiContainer> containers) {
   ];
 }
 
-class PodsController extends SectionController<KubernetesPod> {
-  PodsController(super.client);
+class PodsController extends PagedSectionController<KubernetesPod> {
+  PodsController(super.client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {
+          'name',
+          'status',
+          'workload',
+          'node',
+          'ip',
+          'cluster',
+        },
+      );
 
   /// The web's own filters. Empty means "every one of them", which is what
   /// the server does with a missing parameter.
@@ -808,7 +906,7 @@ class PodsController extends SectionController<KubernetesPod> {
   int total = 0;
 
   @override
-  Future<List<KubernetesPod>> fetch() async {
+  Future<ListPage<KubernetesPod>> fetchPage(int offset) async {
     final page = await client.pods(
       q: query,
       clusterUid: clusterUid,
@@ -817,9 +915,13 @@ class PodsController extends SectionController<KubernetesPod> {
       node: node,
       workloadKind: workloadKind,
       workloadName: workloadName,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
     );
     total = page.total;
-    return page.pods;
+    return ListPage(page.pods, hasMore: page.hasMore ?? false);
   }
 }
 
@@ -855,8 +957,20 @@ class JobsController extends SectionController<JobMonitor> {
       (await client.jobMonitors(q: query)).monitors;
 }
 
-class VulnerabilitiesController extends SectionController<VulnGroup> {
-  VulnerabilitiesController(super.client);
+class VulnerabilitiesController extends PagedSectionController<VulnGroup> {
+  VulnerabilitiesController(super.client)
+    : super(
+        sort: 'severity',
+        dir: 'asc',
+        ascendingSorts: const {'advisory', 'severity'},
+      );
+
+  /// One severity's advisories, or empty for all of them. The web's counters
+  /// double as this filter.
+  String severity = '';
+
+  /// How many of each severity, of the whole list rather than of the page.
+  Map<String, int> severityCounts = const {};
 
   /// What the advisory catalog holds, read with the list.
   ///
@@ -868,29 +982,54 @@ class VulnerabilitiesController extends SectionController<VulnGroup> {
   bool catalogUnavailable = false;
 
   @override
-  Future<List<VulnGroup>> fetch() async {
-    final groups = (await client.vulnerabilities(q: query)).vulnerabilities;
-    try {
-      catalog = await client.vulnCatalogStatus();
-      catalogUnavailable = false;
-    } on ApiException catch (e) {
-      // The catalog is a note under the list, not the list: its failure
-      // must not blank the findings.
-      if (e.status == 404) catalogUnavailable = true;
-      catalog = null;
-    } on ApiUnreachable {
-      catalog = null;
+  Future<ListPage<VulnGroup>> fetchPage(int offset) async {
+    final page = await client.vulnerabilities(
+      severity: severity,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    severityCounts = page.severityCounts;
+    // Once per list, not once per page: it says nothing about which page.
+    if (offset == 0) {
+      try {
+        catalog = await client.vulnCatalogStatus();
+        catalogUnavailable = false;
+      } on ApiException catch (e) {
+        // The catalog is a note under the list, not the list: its failure
+        // must not blank the findings.
+        if (e.status == 404) catalogUnavailable = true;
+        catalog = null;
+      } on ApiUnreachable {
+        catalog = null;
+      }
     }
-    return groups;
+    return ListPage(page.vulnerabilities, hasMore: page.hasMore ?? false);
   }
 }
 
-class DatabasesController extends SectionController<DbInstance> {
-  DatabasesController(super.client);
+/// The instances with query monitoring in the range, heaviest first. No search
+/// box: the endpoint takes no query, as the web's list has none.
+class DatabasesController extends PagedListController<DbInstance> {
+  DatabasesController(this.client)
+    : super(sort: 'time', ascendingSorts: const {'instance', 'host', 'wait'});
+
+  final OpenlogClient client;
 
   @override
-  Future<List<DbInstance>> fetch() async =>
-      (await client.dbInstances(q: query)).instances;
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ListPage<DbInstance>> fetchPage(int offset) async {
+    final page = await client.dbInstances(
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.instances, hasMore: page.hasMore ?? false);
+  }
 }
 
 /// Entry spans: the traces section, which is a list of requests.
@@ -923,16 +1062,34 @@ class MetricsController extends SectionController<MetricInfo> {
 }
 
 /// Browser applications, for the RUM section.
-class RumController extends SectionController<RumApp> {
-  RumController(super.client);
+///
+/// Busiest first, as on the web: the application with the page views is the
+/// one whose vitals anybody is going to look at. Paged like the routes, and
+/// a section all the same, so it `implements` what a section adds.
+class RumController extends PagedListController<RumApp>
+    implements SectionController<RumApp> {
+  RumController(this.client)
+    : super(sort: 'views', ascendingSorts: const {'app', 'environment'});
 
   @override
-  Future<List<RumApp>> fetch() async {
-    final apps = [...(await client.rumApps()).apps];
-    // Busiest first: the application with the page views is the one whose
-    // vitals anybody is going to look at.
-    apps.sort((a, b) => b.views.compareTo(a.views));
-    return apps;
+  final OpenlogClient client;
+
+  /// The endpoint takes no search; here because a section has one.
+  @override
+  String query = '';
+
+  @override
+  String get forbiddenKind => 'sectionForbidden';
+
+  @override
+  Future<ListPage<RumApp>> fetchPage(int offset) async {
+    final page = await client.rumApps(
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.apps, hasMore: page.hasMore ?? false);
   }
 }
 
@@ -1122,25 +1279,34 @@ class IntegrationsController extends SectionController<IntegrationInstance> {
 }
 
 /// What has been profiled, one row per service, environment and type.
-class ProfilesController extends SectionController<ProfileService> {
-  ProfilesController(super.client);
+class ProfilesController extends PagedSectionController<ProfileService> {
+  ProfilesController(super.client)
+    : super(
+        sort: 'samples',
+        ascendingSorts: const {'service', 'environment', 'type'},
+      );
 
   @override
-  Future<List<ProfileService>> fetch() async {
-    final all = [...(await client.profileServices()).services];
-    // Where the samples are: a profile with four samples cannot say anything,
-    // and on a phone the first screenful has to be the one worth opening.
-    all.sort((a, b) => b.samples.compareTo(a.samples));
-    // Nothing is filtered here -- the server takes no query for this list, so
-    // the search box filters what arrived rather than pretending to ask.
+  Future<ListPage<ProfileService>> fetchPage(int offset) async {
+    // The server takes no query for this list, so a search filters here. Over
+    // a page it would answer "nothing" about a row on the next one, so a search
+    // reads as many as the list can sensibly be, and has no next page.
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) return all;
-    return [
-      for (final p in all)
+    final page = await client.profileServices(
+      sort: sort,
+      dir: dir,
+      limit: q.isEmpty ? limit : 1000,
+      offset: offset,
+    );
+    if (q.isEmpty) {
+      return ListPage(page.services, hasMore: page.hasMore ?? false);
+    }
+    return ListPage([
+      for (final p in page.services)
         if (p.service.toLowerCase().contains(q) ||
             p.type.toLowerCase().contains(q))
           p,
-    ];
+    ]);
   }
 }
 
@@ -1278,9 +1444,8 @@ class AlertChannelsController extends SectionController<AlertChannel> {
 /// The mute windows: what is silenced, and until when.
 ///
 /// The on-call write this screen exists for is "silence everything for the
-/// next two hours while we deploy". Recurring schedules are read here and
-/// edited on the web; building a weekly-recurrence editor on a phone would
-/// produce a worse one than the web already has.
+/// next two hours while we deploy". The whole form, schedule and all, is a
+/// screen of its own for when that is not enough.
 class AlertMutesController extends SectionController<AlertMute> {
   AlertMutesController(super.client);
 
@@ -1289,6 +1454,56 @@ class AlertMutesController extends SectionController<AlertMute> {
 
   /// True while a new one is being created.
   bool creating = false;
+
+  /// True while the form is saving.
+  bool saving = false;
+
+  /// Why the form could not save: kept apart from [failure], which is about
+  /// the list behind it.
+  SessionFailure? saveFailure;
+
+  /// This server has no editing of mutes yet, which is not a failure.
+  bool saveNotOffered = false;
+
+  /// Creates one from the whole form, or writes over [id].
+  ///
+  /// Returns whether it was saved, so the form closes only when the server
+  /// took it: closing on failure would lose what somebody just typed.
+  Future<bool> save(String? id, Map<String, Object?> input) async {
+    saving = true;
+    saveFailure = null;
+    saveNotOffered = false;
+    notifyListeners();
+    try {
+      if (id == null) {
+        await client.createAlertMuteFrom(input);
+      } else {
+        await client.updateAlertMute(id, input);
+      }
+      await refresh();
+      return true;
+    } on ApiUnreachable {
+      saveFailure = const SessionFailure('unreachable', '');
+      return false;
+    } on ApiException catch (e) {
+      if (e.noSuchEndpoint) {
+        saveNotOffered = true;
+      } else {
+        saveFailure = switch (e.status) {
+          403 => const SessionFailure('alertsForbidden', ''),
+          404 => const SessionFailure('detailGone', ''),
+          _ => SessionFailure('unexpected', e.message),
+        };
+      }
+      return false;
+    } on ApiShapeError catch (e) {
+      saveFailure = SessionFailure('unexpected', e.toString());
+      return false;
+    } finally {
+      saving = false;
+      notifyListeners();
+    }
+  }
 
   @override
   String get forbiddenKind => 'alertsForbidden';
@@ -1305,10 +1520,13 @@ class AlertMutesController extends SectionController<AlertMute> {
                   m.comment.toLowerCase().contains(q))
                 m,
           ];
-    // Active first, then by when they end: what is silencing alerts right now
-    // is the thing somebody came here to find.
+    // Active, then scheduled, then ended, the web's order, and by when they end
+    // within each: what is silencing alerts right now is the thing somebody
+    // came here to find.
+    final now = DateTime.now();
     matched.sort((a, b) {
-      if (a.active != b.active) return a.active ? -1 : 1;
+      final rank = muteStatus(a, now).index - muteStatus(b, now).index;
+      if (rank != 0) return rank;
       return a.endsAt.compareTo(b.endsAt);
     });
     return matched;

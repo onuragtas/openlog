@@ -8,8 +8,11 @@ import '../detail.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'detail_scaffold.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'oql_view.dart';
+import 'rum_analytics.dart';
+import 'rum_crashes.dart';
 import 'rum_pages.dart';
 import 'rum_releases.dart';
 import 'rum_sessions.dart';
@@ -18,6 +21,16 @@ import 'sections_screen.dart';
 import 'severity.dart';
 import 'sparkline.dart';
 import 'theme.dart';
+
+/// The columns of the web's list, with its default first.
+const rumAppSorts = [
+  'views',
+  'sessions',
+  'errors',
+  'last_seen',
+  'app',
+  'environment',
+];
 
 class RumBody extends StatelessWidget {
   const RumBody({
@@ -31,10 +44,36 @@ class RumBody extends StatelessWidget {
   final Sections sections;
   final bool active;
 
+  String _sortLabel(L l, String sort) => switch (sort) {
+    'sessions' => l.rumSessions,
+    'errors' => l.rumErrors,
+    'last_seen' => l.rumSortLastSeen,
+    'app' => l.rumSortApp,
+    'environment' => l.rumSortEnvironment,
+    _ => l.rumViews,
+  };
+
   @override
   Widget build(BuildContext context) => SectionBody<RumApp>(
     session: session,
     controller: sections.rum,
+    // Each on its own listener: the section rebuilds its list when the
+    // controller changes, but hands these on as the same widgets.
+    header: ListenableBuilder(
+      listenable: sections.rum,
+      builder: (context, _) => Align(
+        alignment: Alignment.centerLeft,
+        child: ListSortBar(
+          controller: sections.rum,
+          columns: rumAppSorts,
+          label: (s) => _sortLabel(L.of(context), s),
+        ),
+      ),
+    ),
+    footer: ListenableBuilder(
+      listenable: sections.rum,
+      builder: (context, _) => LoadMoreTile(controller: sections.rum),
+    ),
     searchKey: 'rum-search',
     // The endpoint takes no query, and a box that does nothing is worse than
     // no box at all.
@@ -175,7 +214,7 @@ class RumAppScreen extends StatefulWidget {
 class _RumAppScreenState extends State<RumAppScreen>
     with SingleTickerProviderStateMixin {
   late final RumOverviewController _c;
-  late final TabController _tabs = TabController(length: 5, vsync: this);
+  late final TabController _tabs = TabController(length: 7, vsync: this);
 
   @override
   void initState() {
@@ -195,7 +234,7 @@ class _RumAppScreenState extends State<RumAppScreen>
   Widget build(BuildContext context) {
     final l = L.of(context);
 
-    // The web's five tabs, in its order. Each one is its own endpoint, so
+    // The web's seven tabs, in its order. Each one is its own endpoint, so
     // each loads when it is first looked at rather than all at once.
     return Scaffold(
       appBar: AppBar(
@@ -209,7 +248,9 @@ class _RumAppScreenState extends State<RumAppScreen>
             Tab(key: const Key('rum-tab-pages'), text: l.rumTabPages),
             Tab(key: const Key('rum-tab-sessions'), text: l.rumTabSessions),
             Tab(key: const Key('rum-tab-releases'), text: l.rumTabReleases),
+            Tab(key: const Key('rum-tab-crashes'), text: l.rumTabCrashes),
             Tab(key: const Key('rum-tab-funnel'), text: l.rumTabFunnel),
+            Tab(key: const Key('rum-tab-analytics'), text: l.rumTabAnalytics),
           ],
         ),
       ),
@@ -239,7 +280,17 @@ class _RumAppScreenState extends State<RumAppScreen>
             sections: widget.sections,
             app: widget.app,
           ),
+          RumCrashesTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
           RumFunnelTab(
+            session: widget.session,
+            sections: widget.sections,
+            app: widget.app,
+          ),
+          RumAnalyticsTab(
             session: widget.session,
             sections: widget.sections,
             app: widget.app,

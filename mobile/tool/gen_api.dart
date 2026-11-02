@@ -48,6 +48,7 @@ const schemaTargets = <String>[
   'FleetRollout', // one upgrade or rollback, wave by wave
   'DbActivity', // what a database instance is busy with
   'DbQueryDetail', // one statement: its series, its plans, who runs it
+  'ApmTransactionDetail', // one transaction: totals, series, histogram, slowest
   'FieldKeysResponse', // the keys a filter can be built from
   'FieldValuesResponse', // and the values each one has, with counts
   'DataExportList', // the exports it asked for, which the web downloads
@@ -107,6 +108,17 @@ const schemaTargets = <String>[
   'OqlValidation', // what is wrong with a query, before it is run
   'OqlSchema', // the event types, attributes and functions of the language
   'SyntheticResults', // one check: its schedule per location, its summary and what failed
+  'SloResults', // one SLO: its budget, its burn windows and its burndown
+  'VulnFinding', // one package on one host that an advisory is about
+  'VulnAdvisorySummary', // one advisory over every page of its findings
+  'KubernetesWorkloadDetail', // one workload, its pods and its autoscaler
+  'KubernetesWorkloadTimeseries', // and what it has been doing
+  'ContainerService', // the APM services a container runs
+  'CostContainer', // what one container costs of its host
+  'AlertRuleDetail', // one rule and the series it is watching
+  'AlertRuleEvaluations', // what a rule's evaluations found over a window
+  'AlertMuteOccurrence', // when a recurring mute would next start
+  'MetricSeriesResponse', // the series of one host metric
 ];
 
 /// Schema names that would collide with something Flutter already owns.
@@ -165,6 +177,13 @@ const responseTargets = <String>[
   'get /api/v1/rum/sessions/{session_id} 200 RumSessionDetail',
   'get /api/v1/rum/releases 200 RumReleaseList',
   'get /api/v1/rum/funnel 200 RumFunnelResponse',
+  'get /api/v1/rum/crashes 200 RumCrashList',
+  'get /api/v1/analytics/compare 200 AnalyticsCompareResponse',
+  'get /api/v1/analytics/activity 200 AnalyticsActivityResponse',
+  'get /api/v1/analytics/retention 200 AnalyticsRetentionResponse',
+  'get /api/v1/analytics/events 200 AnalyticsEventList',
+  'get /api/v1/analytics/acquisition 200 AnalyticsAcquisitionResponse',
+  'get /api/v1/analytics/audience 200 AnalyticsAudienceResponse',
   'get /api/v1/costs/hosts 200 CostHostPage',
   'get /api/v1/costs/services 200 CostServicePage',
   'get /api/v1/costs/trend 200 CostTrend',
@@ -186,10 +205,21 @@ const responseTargets = <String>[
   'get /api/v1/slos 200 SloPage',
   'get /api/v1/synthetics/checks 200 SyntheticPage',
   'get /api/v1/jobs/monitors 200 JobMonitorPage',
+  'get /api/v1/jobs/monitors/{id}/runs 200 JobRunPage',
+  'get /api/v1/vulnerabilities/{id} 200 VulnAdvisoryPage',
+  'get /api/v1/hosts/{host_id}/vulnerabilities 200 HostVulnPage',
+  'get /api/v1/containers/{container_id}/services 200 ContainerServicePage',
+  'get /api/v1/costs/hosts/{host_id} 200 CostHostDetail',
+  'get /api/v1/costs/summary 200 CostSummaryAnswer',
+  'post /api/v1/alerts/mutes/preview 200 AlertMuteOccurrencePage',
   'get /api/v1/vulnerabilities 200 VulnPage',
   'get /api/v1/db/instances 200 DbInstancePage',
   'get /api/v1/db/queries 200 DbQueryPage',
   'get /api/v1/db/sessions 200 DbSessionPage',
+  'get /api/v1/db/activity/waits 200 DbWaitPage',
+  'get /api/v1/db/activity/queries 200 DbActivityQueryPage',
+  'get /api/v1/db/lookup 200 DbLookupPage',
+  'get /api/v1/apm/db-queries/plans 200 ApmDbQueryPlanPage',
 ];
 
 void main(List<String> args) {
@@ -436,6 +466,24 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
     throw ApiShapeError(path, 'expected an array of 2, got \${v.length}');
   }
   return (a(v[0], '\$path[0]'), b(v[1], '\$path[1]'));
+}
+
+/// The same with three positions, such as an evaluation's
+/// `[unix ms, value, state]`.
+(A, B, C) _tuple3<A, B, C>(
+  Object? v,
+  String path,
+  A Function(Object?, String) a,
+  B Function(Object?, String) b,
+  C Function(Object?, String) c,
+) {
+  if (v is! List) {
+    throw ApiShapeError(path, 'expected an array, got \${v.runtimeType}');
+  }
+  if (v.length != 3) {
+    throw ApiShapeError(path, 'expected an array of 3, got \${v.length}');
+  }
+  return (a(v[0], '\$path[0]'), b(v[1], '\$path[1]'), c(v[2], '\$path[2]'));
 }''';
 
   void _queue(String name) {
@@ -728,8 +776,10 @@ Map<String, T> _map<T>(Object? v, String path, T Function(Object?, String) read)
               'minItems/maxItems at $context',
             );
           }
-          if (prefix.length != 2) {
-            _fail('prefixItems of ${prefix.length} at $context: only 2 so far');
+          if (prefix.length != 2 && prefix.length != 3) {
+            _fail(
+              'prefixItems of ${prefix.length} at $context: only 2 and 3 so far',
+            );
           }
           final parts = [
             for (var i = 0; i < prefix.length; i++)

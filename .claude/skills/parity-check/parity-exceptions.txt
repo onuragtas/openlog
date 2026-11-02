@@ -4,6 +4,14 @@ POST /api/v1/auth/device  # A phone keeps a device token, and a browser has a se
 POST /api/v1/auth/login  # The browser's cookie session. A phone signs in through /auth/device.
 POST /api/v1/auth/logout  # Ends the browser's cookie session. A phone revokes its device token.
 
+# The same data reached another way, so a second path would add nothing.
+GET /api/v1/logs  # Mobile reads logs through POST /logs/query, which is the explorer's endpoint and the only one that applies filters. Scoped logs (a trace, a pod, a container) go the same way.
+GET /api/v1/metrics/names  # On the web only the rule editor's metric picker reads it, and writing a rule stays on the web. Both metric lists read GET /metrics.
+GET /api/v1/slos/{}  # Only a query factory on the web, which no screen uses: both consoles read the SLO from /slos/{id}/results.
+GET /api/v1/jobs/monitors/{}  # Only a query factory on the web, which no screen uses: both consoles read the monitor from /jobs/monitors/{id}/runs.
+GET /api/v1/synthetics/checks/{}  # Only a query factory on the web, which no screen uses: both consoles read the check from /synthetics/checks/{id}/results.
+GET /api/v1/cloud/connections/{}  # Only a query factory on the web, which no screen uses: both consoles read the connection from /cloud/connections/{id}/runs.
+
 # The user's decision on 2026-11-02 (option A): what a person sets up once at a desk stays on the web. Seeing and day-to-day acting does not.
 DELETE /api/v1/admin/status/incidents/{}  # Installation administration.
 DELETE /api/v1/alerts/channels/{}  # Writing a configuration: rule, channel, SLO or monitor.
@@ -30,7 +38,6 @@ GET /api/v1/admin/deletion-certificates  # Installation administration.
 GET /api/v1/admin/org-deletions  # Installation administration.
 GET /api/v1/admin/orgs/{}/plan  # Installation administration.
 GET /api/v1/admin/status/incidents  # Installation administration.
-GET /api/v1/apm/db-queries/plans  # Plan and support settings of the organization.
 GET /api/v1/auth/sso/session  # Setting up single sign-on.
 GET /api/v1/cloud/providers  # Setting up a cloud connection.
 GET /api/v1/dashboards/{}/export  # Building and sharing a dashboard. Viewing one is on both.
@@ -118,3 +125,5 @@ PUT /api/v1/sso/domains/{}  # Setting up single sign-on.
 PUT /api/v1/storage/disk/settings  # Exporting and storage settings.
 PUT /api/v1/synthetics/checks/{}  # Writing a configuration: rule, channel, SLO or monitor.
 PUT /api/v1/usage/query-limits  # Exporting and storage settings.
+GET /api/v1/apm/errors/groups/{}/comments  # The web reads comments from the group's detail, and the phone asks for them when they are opened: the same data.
+PATCH /api/v1/sso/connections/{}  # Mobile's enforcement switch; the web sets it through PUT .../enforcement. To be checked if single sign-on ever comes to the phone.

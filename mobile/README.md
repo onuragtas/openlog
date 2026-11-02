@@ -8,6 +8,10 @@ and `agents/dart` — which send telemetry *from* someone's app *to* openlog and
 implement [mobile-agent.md](../docs/contracts/mobile-agent.md). This reads an
 openlog installation; it touches none of them.
 
+## Same as the web
+
+The two consoles are one product: same abilities, same answers, not the same layout. What a person sets up once at a desk stays on the web, and `.claude/skills/parity-check/parity-exceptions.txt` lists it with the reasons. `.claude/skills/parity-check/check-parity.py` reports the rest of any gap.
+
 ## What is here
 
 | Path | What |
@@ -19,6 +23,8 @@ openlog installation; it touches none of them.
 | `lib/src/storage/token_store.dart` | The device token in Keychain / EncryptedSharedPreferences |
 | `lib/src/list_controller.dart` | What every list screen does the same way when things go wrong |
 | `lib/src/alerts.dart` | What is firing, and taking one of them |
+| `lib/src/list_controller.dart`, `lib/src/ui/list_paging.dart` | Lists the server sorts and cuts: the sort control and "load more" |
+| `lib/src/analytics.dart`, `lib/src/ui/rum_analytics.dart` | Product analytics, compared with the previous period |
 | `lib/src/services.dart`, `logs.dart`, `dashboards.dart` | The other three lists |
 | `lib/src/ui/` | Server address, sign in and sign up, the alerts list, the account drawer |
 | `lib/l10n/` | `app_en.arb`, `app_tr.arb`, and what gen-l10n makes of them |

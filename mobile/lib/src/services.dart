@@ -1,13 +1,21 @@
 // Service health: where to look once an alert says something is wrong.
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 
 import 'api/client.dart';
 import 'api/schema.g.dart';
+import 'detail.dart';
 import 'list_controller.dart';
 import 'session.dart';
 
-class ServicesController extends ListController<ApmService> {
-  ServicesController(this._client);
+class ServicesController extends PagedListController<ApmService> {
+  ServicesController(this._client)
+    : super(
+        sort: 'name',
+        dir: 'asc',
+        ascendingSorts: const {'name', 'environment'},
+      );
 
   final OpenlogClient _client;
 
@@ -18,26 +26,36 @@ class ServicesController extends ListController<ApmService> {
   String get forbiddenKind => 'servicesForbidden';
 
   @override
-  Future<List<ApmService>> fetch() async {
-    final page = await _client.services(q: query.trim());
-    // Worst first: on a phone the list is read from the top and rarely
-    // scrolled, so the service that is actually broken has to be there.
-    final list = [...page.services]
-      ..sort((a, b) {
-        final byError = b.errorRate.compareTo(a.errorRate);
-        if (byError != 0) return byError;
-        return b.throughput.compareTo(a.throughput);
-      });
-    return list;
+  Future<ListPage<ApmService>> fetchPage(int offset) async {
+    final page = await _client.services(
+      q: query.trim(),
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.services, hasMore: page.hasMore ?? false);
   }
 }
+
+/// The sorts of the services list, in the web's order.
+const serviceSorts = [
+  'name',
+  'environment',
+  'throughput',
+  'error_rate',
+  'p95',
+  'apdex',
+  'last_seen',
+];
 
 /// The entry spans of one service, with the filters the web's traces tab has.
 ///
 /// A controller per service screen, like the overview and the inbox: the
 /// filters belong to that visit.
-class ServiceTracesController extends ListController<ApmTraceResult> {
-  ServiceTracesController(this.client, this.serviceName);
+class ServiceTracesController extends PagedListController<ApmTraceResult> {
+  ServiceTracesController(this.client, this.serviceName)
+    : super(sort: 'timestamp');
 
   final OpenlogClient client;
   final String serviceName;
@@ -47,9 +65,6 @@ class ServiceTracesController extends ListController<ApmTraceResult> {
   String maxDurationMs = '';
   bool errorsOnly = false;
 
-  /// 'timestamp' (newest first) or 'duration' (slowest first).
-  String sort = 'timestamp';
-
   /// `attr.<key>=<value>` filters, as typed. Parsed rather than sent raw so
   /// a typo becomes an empty filter here instead of a 400 there.
   Map<String, String> attributes = const {};
@@ -58,16 +73,33 @@ class ServiceTracesController extends ListController<ApmTraceResult> {
   String get forbiddenKind => 'servicesForbidden';
 
   @override
-  Future<List<ApmTraceResult>> fetch() async => (await client.apmTraces(
-    service: serviceName,
-    transaction: transaction,
-    minDurationMs: minDurationMs,
-    maxDurationMs: maxDurationMs,
-    errorsOnly: errorsOnly,
-    sort: sort,
-    attributes: attributes,
-  )).traces;
+  Future<ListPage<ApmTraceResult>> fetchPage(int offset) async {
+    final page = await client.apmTraces(
+      service: serviceName,
+      transaction: transaction,
+      minDurationMs: minDurationMs,
+      maxDurationMs: maxDurationMs,
+      errorsOnly: errorsOnly,
+      sort: sort,
+      dir: dir,
+      attributes: attributes,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.traces, hasMore: page.hasMore ?? false);
+  }
+
+  /// "Traces of this transaction": its slowest ones, as the web opens them.
+  Future<void> showTransaction(String name) {
+    transaction = name;
+    sort = 'duration';
+    dir = 'desc';
+    return refresh();
+  }
 }
+
+/// Timestamp and duration are the only two the server sorts traces by.
+const serviceTraceSorts = ['timestamp', 'duration'];
 
 /// `k=v k2=v2` as typed into one field, as the server's `attr.` parameters.
 ///
@@ -175,48 +207,141 @@ class ServiceMapController extends ListController<ApmMapEdge> {
 /// Sorted by the server, because "by time consumed" is a product of the
 /// calls and their durations over the whole range -- not something the
 /// hundred rows on this page could be re-sorted into.
-class ServiceTransactionsController extends ListController<ApmTransaction> {
-  ServiceTransactionsController(this.client, this.serviceName);
+class ServiceTransactionsController
+    extends PagedListController<ApmTransaction> {
+  ServiceTransactionsController(this.client, this.serviceName)
+    : super(sort: 'time', ascendingSorts: const {'name'});
 
   final OpenlogClient client;
   final String serviceName;
-
-  /// 'time', 'throughput', 'slowest' or 'errors'.
-  String sort = 'time';
 
   /// The Apdex threshold the server used, which the rows are judged against.
   double apdexTMs = 0;
 
+  /// What the overview shows: the first few by time consumed, whichever way
+  /// the list on the transactions tab was sorted afterwards.
+  List<ApmTransaction> topByTime = const [];
+
   @override
   String get forbiddenKind => 'servicesForbidden';
 
   @override
-  Future<List<ApmTransaction>> fetch() async {
-    final page = await client.apmTransactions(service: serviceName, sort: sort);
+  Future<ListPage<ApmTransaction>> fetchPage(int offset) async {
+    final page = await client.apmTransactions(
+      service: serviceName,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
     apdexTMs = page.apdexTMs;
-    return page.transactions;
+    if (offset == 0 && sort == 'time' && dir == 'desc') {
+      topByTime = page.transactions.take(5).toList();
+    }
+    return ListPage(page.transactions, hasMore: page.hasMore ?? false);
   }
 }
 
+/// The sorts of the transactions list, in the web's order, starting on the one
+/// it opens on.
+const transactionSorts = [
+  'time',
+  'name',
+  'throughput',
+  'avg',
+  'slowest',
+  'error_rate',
+  'apdex',
+];
+
+/// One transaction: what the web opens above the list when a row is clicked.
+class ApmTransactionController extends DetailController<ApmTransactionDetail> {
+  ApmTransactionController(this.client, this.serviceName, this.name);
+
+  final OpenlogClient client;
+  final String serviceName;
+  final String name;
+
+  @override
+  String get forbiddenKind => 'servicesForbidden';
+
+  @override
+  bool get endpointMayBeMissing => true;
+
+  @override
+  Future<ApmTransactionDetail> fetch() =>
+      client.apmTransaction(service: serviceName, name: name);
+}
+
+/// A latency distribution ready to draw: the empty buckets between the first
+/// and the last filled in, and neighbours merged down to at most [maxBins]
+/// bars. A port of `shapeHistogram` in `web/src/lib/apm.ts`, because the server
+/// sends only the buckets that have something in them and a gap in the bars is
+/// part of the shape.
+List<ApmHistogramBin> shapeHistogram(
+  List<ApmHistogramBin> bins, {
+  int maxBins = 32,
+}) {
+  if (bins.isEmpty) return const [];
+  const perOctave = 8;
+  double upper(int index) => math.pow(2, index / perOctave).toDouble();
+  final byIndex = <int, double>{};
+  for (final b in bins) {
+    final i = (perOctave * math.log(b.toMs) / math.ln2).round();
+    byIndex[i] = (byIndex[i] ?? 0) + b.count;
+  }
+  final indexes = byIndex.keys.toList()..sort();
+  final first = indexes.first;
+  final last = indexes.last;
+  final group = math.max(1, ((last - first + 1) / maxBins).ceil());
+  return [
+    for (var start = first; start <= last; start += group)
+      ApmHistogramBin(
+        fromMs: start <= -80 ? 0 : upper(start - 1),
+        toMs: upper(math.min(last, start + group - 1)),
+        count: [
+          for (var i = start; i <= math.min(last, start + group - 1); i++)
+            byIndex[i] ?? 0,
+        ].reduce((a, b) => a + b),
+      ),
+  ];
+}
+
 /// The database statements one service runs.
-class ServiceDatabasesController extends ListController<ApmDbQuery> {
-  ServiceDatabasesController(this.client, this.serviceName);
+class ServiceDatabasesController extends PagedListController<ApmDbQuery> {
+  ServiceDatabasesController(this.client, this.serviceName)
+    : super(sort: 'time', ascendingSorts: const {'statement', 'database'});
 
   final OpenlogClient client;
   final String serviceName;
 
-  /// 'time', 'calls', 'slowest' or 'errors'.
-  String sort = 'time';
-
   @override
   String get forbiddenKind => 'servicesForbidden';
 
   @override
-  Future<List<ApmDbQuery>> fetch() async => (await client.apmServiceDatabases(
-    service: serviceName,
-    sort: sort,
-  )).queries;
+  Future<ListPage<ApmDbQuery>> fetchPage(int offset) async {
+    final page = await client.apmServiceDatabases(
+      service: serviceName,
+      sort: sort,
+      dir: dir,
+      limit: limit,
+      offset: offset,
+    );
+    return ListPage(page.queries, hasMore: page.hasMore ?? false);
+  }
 }
+
+/// The sorts of a service's database list, in the web's order. The server says
+/// `calls` where transactions say `throughput`, and `error_rate` is the column
+/// the web shows.
+const serviceDatabaseSorts = [
+  'time',
+  'statement',
+  'database',
+  'calls',
+  'slowest',
+  'error_rate',
+];
 
 /// When each version of a service first appeared, and what one of them did.
 ///
@@ -234,6 +359,15 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
   int? comparing;
   bool comparingBusy = false;
 
+  /// How far either side of the deployment the comparison looks.
+  String compareWindow = '30m';
+
+  /// The deployment's own namespace and environment. A service in staging and
+  /// in production has one version line each, and without these the numbers
+  /// would be of both together.
+  String? _namespace;
+  String? _environment;
+
   @override
   String get forbiddenKind => 'servicesForbidden';
 
@@ -245,7 +379,11 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
 
   /// Asks what the deployment at [atMillis] did. Tapping the open one closes
   /// it, because a comparison nobody is looking at is a panel in the way.
-  Future<void> toggleCompare(int atMillis) async {
+  Future<void> toggleCompare(
+    int atMillis, {
+    String? namespace,
+    String? environment,
+  }) async {
     if (comparing == atMillis) {
       comparing = null;
       compare = null;
@@ -253,6 +391,19 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
       return;
     }
     comparing = atMillis;
+    _namespace = namespace;
+    _environment = environment;
+    await _readCompare(atMillis);
+  }
+
+  /// Compares the open deployment over another window.
+  Future<void> setCompareWindow(String window) async {
+    compareWindow = window;
+    final at = comparing;
+    if (at != null) await _readCompare(at);
+  }
+
+  Future<void> _readCompare(int atMillis) async {
     compare = null;
     comparingBusy = true;
     failure = null;
@@ -261,6 +412,9 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
       compare = await client.apmDeploymentCompare(
         service: serviceName,
         atMillis: atMillis,
+        window: compareWindow,
+        namespace: _namespace,
+        environment: _environment,
       );
     } on ApiUnreachable {
       failure = const SessionFailure('unreachable', '');
@@ -275,15 +429,61 @@ class ServiceDeploymentsController extends ListController<ApmDeployment> {
   }
 }
 
-/// How a number moved across a deployment, as a ratio, or null when there is
-/// nothing to compare with.
-///
-/// Null before, null after, or a zero before all mean "no comparison", not
-/// "no change": dividing by the zero would say infinity and reading it as
-/// 0% would say the deployment did nothing.
-double? deltaRatio(double? before, double? after) {
-  if (before == null || after == null || before == 0) return null;
-  return (after - before) / before;
+/// The windows a comparison can look over, in the web's order.
+const compareWindows = ['15m', '30m', '1h', '3h'];
+
+/// How a number moved across a deployment. A port of `compareDelta` in
+/// `web/src/lib/deployments.ts`.
+class CompareDelta {
+  const CompareDelta({
+    this.delta,
+    this.ratio,
+    this.direction = 'flat',
+    this.verdict = 'neutral',
+  });
+
+  /// After minus before, or null when either is missing.
+  final double? delta;
+
+  /// The change relative to before, or null when before is zero or missing:
+  /// dividing by that zero would say infinity, and reading it as 0% would say
+  /// the deployment did nothing.
+  final double? ratio;
+
+  /// `up`, `down` or `flat`.
+  final String direction;
+
+  /// `good`, `bad` or `neutral`. Throughput moving is neither.
+  final String verdict;
+}
+
+/// [metric] is `throughput`, `error_rate`, `avg_ms`, `p95_ms`, `p99_ms` or
+/// `apdex`.
+CompareDelta compareDelta(String metric, double? before, double? after) {
+  if (before == null || after == null || !before.isFinite || !after.isFinite) {
+    return const CompareDelta();
+  }
+  final delta = after - before;
+  final ratio = before != 0 ? delta / before.abs() : null;
+  // An absolute tolerance for what lives between 0 and 1, a relative one for
+  // the rest: below these a change is noise and reads as no change.
+  final small = metric == 'error_rate' || metric == 'apdex'
+      ? delta.abs() < 0.001
+      : ratio != null
+      ? ratio.abs() < 0.02
+      : delta == 0;
+  if (delta == 0 || small) return CompareDelta(delta: delta, ratio: ratio);
+  final direction = delta > 0 ? 'up' : 'down';
+  if (metric == 'throughput') {
+    return CompareDelta(delta: delta, ratio: ratio, direction: direction);
+  }
+  final good = (direction == 'up') == (metric == 'apdex');
+  return CompareDelta(
+    delta: delta,
+    ratio: ratio,
+    direction: direction,
+    verdict: good ? 'good' : 'bad',
+  );
 }
 
 /// Where one service runs, and what it is judged against.

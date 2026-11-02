@@ -310,15 +310,15 @@ void main() {
 
     expect(
       Uri.decodeQueryComponent(server.requests[0].query),
-      'cluster_uid=c1&q=node',
+      'sort=name&dir=asc&limit=50&cluster_uid=c1&q=node',
     );
     expect(
       Uri.decodeQueryComponent(server.requests[1].query),
-      'cluster_uid=c1&namespace=default&kind=Deployment&health=degraded',
+      'sort=name&dir=asc&limit=50&cluster_uid=c1&namespace=default&kind=Deployment&health=degraded',
     );
     expect(
       Uri.decodeQueryComponent(server.requests[2].query),
-      'cluster_uid=c1&namespace=default&node=node-a&phase=Running',
+      'sort=name&dir=asc&limit=50&cluster_uid=c1&namespace=default&node=node-a&phase=Running',
     );
     // What was cut off is worth knowing: the list is not the whole truth.
     expect(nodes.total, 4);

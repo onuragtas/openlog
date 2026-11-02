@@ -9,7 +9,7 @@ import '../session.dart';
 import '../storage/prefs.dart';
 import 'alerts_section.dart';
 import 'dashboards_screen.dart';
-import 'database_screen.dart';
+import 'databases_section.dart';
 import 'logs_screen.dart';
 import 'nav_drawer.dart';
 import 'profiles_screen.dart';
@@ -21,10 +21,13 @@ import 'containers_screen.dart';
 import 'costs_screen.dart';
 import 'fleet_screen.dart';
 import 'host_screen.dart';
+import 'infra_sort.dart';
 import 'integrations_screen.dart';
 import 'kubernetes_screen.dart';
 import 'inventory_screen.dart';
+import 'list_paging.dart';
 import 'metrics_screen.dart';
+import 'monitor_screens.dart';
 import 'rum_screen.dart';
 import 'traces_screen.dart';
 import 'vuln_catalog.dart';
@@ -149,7 +152,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     s.services.refresh,
     s.rum.refresh,
     s.profiles.refresh,
-    s.databases.refresh,
+    () => refreshDatabases(s),
     s.slos.refresh,
     s.synthetics.refresh,
     s.jobs.refresh,
@@ -266,6 +269,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         searchKey: 'hosts-search',
         active: active,
         emptyTitle: (l) => l.hostsEmpty,
+        sort: ListenableBuilder(
+          listenable: s.hosts,
+          builder: (context, _) => ListSortBar(
+            controller: s.hosts,
+            columns: hostSorts,
+            label: (c) => infraSortLabel(L.of(context), c),
+          ),
+        ),
+        footer: LoadMoreTile(controller: s.hosts),
         card: (context, h) => hostCard(
           context,
           h,
@@ -295,6 +307,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         key: const Key('costs-body'),
         session: session,
         costs: s.costs,
+        sections: s,
         active: active,
       ),
     );
@@ -325,27 +338,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       (active) => ProfilesBody(session: session, sections: s, active: active),
     );
     add(
-      (active) => SectionBody(
-        session: session,
-        controller: s.databases,
-        searchKey: 'databases-search',
-        active: active,
-        emptyTitle: (l) => l.databasesEmpty,
-        card: (context, d) => dbCard(
-          context,
-          d,
-          onOpen: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => DatabaseScreen(
-                session: session,
-                sections: s,
-                instance: d.instance,
-                dbSystem: d.dbSystem,
-              ),
-            ),
-          ),
-        ),
-      ),
+      (active) => DatabasesBody(session: session, sections: s, active: active),
     );
     add(
       (active) => SectionBody(
@@ -354,7 +347,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         searchKey: 'slos-search',
         active: active,
         emptyTitle: (l) => l.slosEmpty,
-        card: sloCard,
+        card: (context, x) => sloCard(
+          context,
+          x,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => SloScreen(
+                session: session,
+                sections: s,
+                id: x.id,
+                name: x.name,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(
@@ -387,7 +393,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         searchKey: 'jobs-search',
         active: active,
         emptyTitle: (l) => l.jobsEmpty,
-        card: jobCard,
+        card: (context, x) => jobCard(
+          context,
+          x,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => JobScreen(
+                session: session,
+                sections: s,
+                id: x.id,
+                name: x.name,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(
@@ -395,12 +414,42 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         session: session,
         controller: s.vulnerabilities,
         searchKey: 'vulnerabilities-search',
+        // The contract has no search here and the box did nothing. What
+        // narrows this list is the severity, on the web as here.
+        searchable: false,
         active: active,
         emptyTitle: (l) => l.vulnerabilitiesEmpty,
-        // Under the search, above the findings: an empty list here means
-        // three different things and only the catalog says which.
-        header: VulnCatalogNote(controller: s.vulnerabilities),
-        card: vulnCard,
+        sort: ListenableBuilder(
+          listenable: s.vulnerabilities,
+          builder: (context, _) => ListSortBar(
+            controller: s.vulnerabilities,
+            columns: vulnerabilitySorts,
+            label: (c) => infraSortLabel(L.of(context), c),
+          ),
+        ),
+        footer: LoadMoreTile(controller: s.vulnerabilities),
+        // Above the findings: an empty list here means three different things
+        // and only the catalog says which.
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            VulnSeverityFilter(controller: s.vulnerabilities),
+            VulnCatalogNote(controller: s.vulnerabilities),
+          ],
+        ),
+        card: (context, x) => vulnCard(
+          context,
+          x,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => VulnerabilityScreen(
+                session: session,
+                sections: s,
+                id: x.vulnId,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     add(

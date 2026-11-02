@@ -1,9 +1,8 @@
 // What is silenced, and until when.
 //
 // The write this screen exists for is the one an on-call person makes with a
-// deploy about to start: silence everything for the next two hours. Recurring
-// schedules are shown but edited on the web -- a weekly-recurrence editor on
-// a phone would be a worse one than the web already has.
+// deploy about to start: silence everything for the next two hours. The whole
+// form, schedule and all, is a screen of its own (mute_form.dart).
 //
 // The holiday calendars those schedules skip are a screen of their own,
 // reached from here as on the web, because a calendar is only ever
@@ -12,10 +11,13 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../mute_schedule.dart';
+import '../roles.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'calendars_screen.dart';
 import 'list_scaffold.dart';
+import 'mute_form.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
 
@@ -61,6 +63,16 @@ class _MutesBodyState extends State<MutesBody> {
         builder: (context, _) => Column(
           children: [
             _NewMute(controller: c),
+            if (can(widget.session.me?.role, 'alerts.write'))
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('mutes-detailed'),
+                  onPressed: () => _openForm(context, null),
+                  icon: const Icon(Icons.tune),
+                  label: Text(L.of(context).mutesDetailed),
+                ),
+              ),
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
@@ -86,6 +98,33 @@ class _MutesBodyState extends State<MutesBody> {
           mute: mute,
           busy: c.busy == mute.id,
           onEnd: () => _confirmEnd(context, c, mute),
+          // The web's rule: an admin may edit any, a member the ones they made.
+          onEdit:
+              canEditOwnedMute(
+                widget.session.me?.role,
+                mute.createdByUserId,
+                widget.session.me?.user?.id,
+              )
+              ? () => _openForm(context, mute)
+              : null,
+          ruleNames: {
+            for (final r in widget.sections.rules.items) r.id: r.name,
+          },
+        ),
+      ),
+    );
+  }
+
+  void _openForm(BuildContext context, AlertMute? mute) {
+    widget.sections.mutes
+      ..saveFailure = null
+      ..saveNotOffered = false;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MuteFormScreen(
+          session: widget.session,
+          sections: widget.sections,
+          mute: mute,
         ),
       ),
     );
@@ -217,11 +256,19 @@ class _MuteCard extends StatelessWidget {
     required this.mute,
     required this.busy,
     required this.onEnd,
+    required this.onEdit,
+    required this.ruleNames,
   });
 
   final AlertMute mute;
   final bool busy;
   final VoidCallback onEnd;
+
+  /// Null where this person may not change it.
+  final VoidCallback? onEdit;
+
+  /// To name a mute's rules, where the rules have been loaded.
+  final Map<String, String> ruleNames;
 
   @override
   Widget build(BuildContext context) {
@@ -230,6 +277,11 @@ class _MuteCard extends StatelessWidget {
     final muted = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
     );
+    final status = muteStatus(mute, DateTime.now());
+    final schedule = mute.schedule;
+    final exceptions = schedule == null
+        ? 0
+        : schedule.exdates.length + schedule.holidayCalendarIds.length;
 
     return Card(
       key: Key('mute-${mute.id}'),
@@ -255,22 +307,31 @@ class _MuteCard extends StatelessWidget {
                     runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      if (mute.active)
-                        Tag(label: l.mutesActive, level: SeverityLevel.warning)
-                      else
-                        Text(
+                      switch (status) {
+                        MuteStatus.active => Tag(
+                          label: l.mutesActive,
+                          level: SeverityLevel.warning,
+                        ),
+                        MuteStatus.scheduled => Text(
                           l.mutesUpcoming(relativeTimeOf(l, mute.startsAt)),
                           style: muted,
                         ),
-                      Text(
-                        l.mutesUntil(relativeTimeOf(l, mute.endsAt)),
-                        style: muted,
-                      ),
+                        MuteStatus.ended => Tag(label: l.mutesStatusEnded),
+                      },
+                      if (status != MuteStatus.ended)
+                        Text(
+                          l.mutesUntil(relativeTimeOf(l, mute.endsAt)),
+                          style: muted,
+                        ),
                       // Which rules: "every rule" is the dangerous one and
                       // has to be legible at a glance.
                       Text(
                         mute.ruleIds.isEmpty
                             ? l.mutesAllRules
+                            : mute.ruleIds.every(ruleNames.containsKey)
+                            ? [
+                                for (final id in mute.ruleIds) ruleNames[id]!,
+                              ].join(', ')
                             : l.mutesSomeRules(mute.ruleIds.length),
                         style: mute.ruleIds.isEmpty
                             ? theme.textTheme.bodySmall?.copyWith(
@@ -281,10 +342,30 @@ class _MuteCard extends StatelessWidget {
                               )
                             : muted,
                       ),
-                      if (mute.schedule != null)
-                        Text(l.mutesRecurring, style: muted),
+                      for (final m in mute.matchers)
+                        Text(
+                          '${m.label} ${muteOp(l, m.op.wire)} ${m.value}',
+                          style: muted,
+                        ),
                     ],
                   ),
+                  if (schedule != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        muteScheduleSummary(l, schedule),
+                        key: Key('mute-schedule-${mute.id}'),
+                        style: muted,
+                      ),
+                    ),
+                  if (exceptions > 0)
+                    Text(
+                      l.muteExceptionsSummary(
+                        schedule!.exdates.length,
+                        schedule.holidayCalendarIds.length,
+                      ),
+                      style: muted,
+                    ),
                   if (mute.comment.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
@@ -305,10 +386,26 @@ class _MuteCard extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   )
-                : TextButton(
-                    key: Key('mute-end-${mute.id}'),
-                    onPressed: onEnd,
-                    child: Text(l.mutesEnd),
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        key: Key('mute-end-${mute.id}'),
+                        onPressed: onEnd,
+                        // One that already ended can only be removed.
+                        child: Text(
+                          status == MuteStatus.ended
+                              ? l.mutesDelete
+                              : l.mutesEnd,
+                        ),
+                      ),
+                      if (onEdit != null)
+                        TextButton(
+                          key: Key('mute-edit-${mute.id}'),
+                          onPressed: onEdit,
+                          child: Text(l.mutesEdit),
+                        ),
+                    ],
                   ),
           ],
         ),

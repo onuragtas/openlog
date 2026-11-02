@@ -52,6 +52,16 @@ bool can(Role? role, String permission) {
   return min != null && atLeast(role, min);
 }
 
+/// Whether [role] may change a mute [createdBy] made: an admin any of them, a
+/// member the ones they made. The web's `canEditOwned`.
+bool canEditOwnedMute(Role? role, String? createdBy, String? userId) {
+  if (can(role, 'alerts.manage')) return true;
+  return can(role, 'alerts.write') &&
+      createdBy != null &&
+      createdBy.isNotEmpty &&
+      createdBy == userId;
+}
+
 /// The roles [actor] may give a member who is [from] now. Only owners grant
 /// or take away "owner".
 List<Role> assignableRoles(Role? actor, Role from) {

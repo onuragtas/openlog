@@ -123,7 +123,7 @@ void main() {
       // containers in no project" is said on the wire.
       expect(
         Uri.decodeQueryComponent(server.requests.last.query),
-        'host_id=h1&compose_project&state=running',
+        'sort=name&dir=asc&limit=50&host_id=h1&compose_project&state=running',
       );
       expect(c.projects.single.composeProject, 'shop');
       expect(c.total, 12);

@@ -69,6 +69,7 @@ class Costs extends CostsController {
       summary: _summary,
       pricing: _pricing,
     );
+    hostList.items = value!.hosts;
     services = const [
       CostService(
         serviceName: 'checkout',

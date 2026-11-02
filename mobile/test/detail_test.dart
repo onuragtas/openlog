@@ -637,13 +637,16 @@ void main() {
 
     await c.refresh();
 
-    // One request answers all three: a summary without the hosts behind it is
-    // a number nobody can act on.
-    // Three requests, one window: the hosts, what each service costs and
-    // how the bill moved are one screen and must describe one moment.
+    // Four requests, one window: the bill, the hosts, what each service costs
+    // and how it moved are one screen and must describe one moment.
     expect(
       {for (final r in server.requests) r.path},
-      {'/api/v1/costs/hosts', '/api/v1/costs/services', '/api/v1/costs/trend'},
+      {
+        '/api/v1/costs/hosts',
+        '/api/v1/costs/services',
+        '/api/v1/costs/trend',
+        '/api/v1/costs/summary',
+      },
     );
     expect(c.services.single.serviceName, 'checkout');
     expect(c.trend!.points.length, 2);
@@ -814,7 +817,10 @@ void main() {
         '/api/v1/hosts/h1',
         '/api/v1/hosts/h1/services',
         '/api/v1/apm/hosts/h1/services',
+        '/api/v1/costs/hosts/h1',
       ]);
+      // What answers there is not a bill, so there is no cost card.
+      expect(c.cost, isNull);
       expect(snapshots, 1);
       // Same ordering as the Integrations section: what is wrong comes first.
       expect(c.services.map((s) => s.name), ['nginx', 'redis']);
@@ -921,6 +927,7 @@ void main() {
     expect(server.requests.map((r) => r.path), [
       '/api/v1/containers/c1',
       '/api/v1/containers/c1/timeseries',
+      '/api/v1/containers/c1/services',
     ]);
     expect(ContainerController.values(c.series!.series.cpuUtilization), [
       0.12,

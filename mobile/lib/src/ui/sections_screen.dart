@@ -8,9 +8,14 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
+import '../apm_format.dart';
+import '../databases.dart';
+import '../infra_detail.dart';
 import '../sections.dart';
 import '../session.dart';
 import 'list_scaffold.dart';
+import 'monitor_screens.dart';
+import 'oql_view.dart' show formatNumber;
 import 'severity.dart';
 import 'theme.dart';
 
@@ -28,7 +33,16 @@ class SectionBody<T> extends StatefulWidget {
     this.header,
     this.searchable = true,
     this.searchHint,
+    this.footer,
+    this.sort,
   });
+
+  /// Under the last row: what fetches the next page of a long list.
+  final Widget? footer;
+
+  /// Under the search box: what sorts a list the server sorts. In the floating
+  /// header with it, so changing the order never means scrolling to the top.
+  final Widget? sort;
 
   final SessionController session;
   final SectionController<T> controller;
@@ -119,26 +133,33 @@ class _SectionBodyState<T> extends State<SectionBody<T>> {
   Widget build(BuildContext context) {
     final l = L.of(context);
     final c = widget.controller;
+    final box = widget.searchable
+        ? SearchField(
+            fieldKey: Key(widget.searchKey),
+            controller: _search,
+            hint: widget.searchHint?.call(l) ?? l.sectionSearch,
+            onSubmitted: (value) {
+              c.query = value;
+              c.refresh();
+              widget.onSearch?.call();
+            },
+          )
+        : null;
 
     return ListenableBuilder(
       listenable: c,
       builder: (context, _) => ListScreen<T>(
         controller: c,
         baseUrl: widget.session.baseUrl ?? '',
-        search: widget.searchable
-            ? SearchField(
-                fieldKey: Key(widget.searchKey),
-                controller: _search,
-                hint: widget.searchHint?.call(l) ?? l.sectionSearch,
-                onSubmitted: (value) {
-                  c.query = value;
-                  c.refresh();
-                  widget.onSearch?.call();
-                },
-              )
-            : null,
+        search: widget.sort == null
+            ? box
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [?box, widget.sort!],
+              ),
         emptyTitle: widget.emptyTitle(l),
         header: widget.header,
+        footer: widget.footer,
         itemBuilder: (context, i) => widget.card(context, c.items[i]),
       ),
     );
@@ -258,7 +279,6 @@ class SectionCard extends StatelessWidget {
 }
 
 String _pct(double? v) => v == null ? '—' : '${(v * 100).toStringAsFixed(0)}%';
-String _ms(double? v) => v == null ? '—' : '${v.toStringAsFixed(0)} ms';
 
 /// A usage number is only worth colouring when it is high: colouring every row
 /// makes the colour mean nothing on the row that matters.
@@ -360,21 +380,18 @@ Widget podCard(BuildContext context, KubernetesPod p, {VoidCallback? onOpen}) {
   );
 }
 
-Widget sloCard(BuildContext context, SloListItem s) {
+Widget sloCard(BuildContext context, SloListItem s, {VoidCallback? onOpen}) {
   final l = L.of(context);
   final budget = s.status?.budget;
   final remaining = budget?.remainingRatio;
+  // The web's traffic light, so one SLO reads the same on both consoles.
+  final (budgetTag, budgetTone) = budgetLabel(l, budgetLevel(budget));
   return SectionCard(
     cardKey: Key('slo-${s.id}'),
+    onOpen: onOpen,
     title: s.name,
     subtitle: s.serviceName,
-    tags: [
-      if (budget != null)
-        Tag(
-          label: budget.met ? l.sloMet : l.sloBreached,
-          level: budget.met ? SeverityLevel.info : SeverityLevel.critical,
-        ),
-    ],
+    tags: [if (budget != null) Tag(label: budgetTag, level: budgetTone)],
     stats: [
       (
         label: l.statObjective,
@@ -424,57 +441,50 @@ Widget syntheticCard(
   );
 }
 
-Widget jobCard(BuildContext context, JobMonitor j) {
+Widget jobCard(BuildContext context, JobMonitor j, {VoidCallback? onOpen}) {
   final l = L.of(context);
   final summary = j.summary;
-  // Late counts as bad even before a run is missed: that is the whole
-  // point of monitoring a job that should already have reported.
-  final bad =
-      j.state.late || (summary?.failures ?? 0) + (summary?.missed ?? 0) > 0;
+  final failures = (summary?.failures ?? 0) + (summary?.missed ?? 0);
+  // The web's state: a disabled monitor is paused whatever its history, and
+  // late counts even before a run is missed.
+  final (stateTag, stateTone) = jobStateLabel(l, jobState(j));
   return SectionCard(
     cardKey: Key('job-${j.id}'),
+    onOpen: onOpen,
     title: j.name,
     subtitle: j.cron.isNotEmpty ? j.cron : '${j.intervalSeconds}s',
     trailing: summary?.lastAt == null
         ? null
         : relativeTimeOf(l, summary!.lastAt!),
-    tags: [
-      if (!j.enabled) Tag(label: l.stateDisabled),
-      Tag(
-        label: j.state.status,
-        level: bad ? SeverityLevel.critical : SeverityLevel.info,
-      ),
-    ],
+    tags: [Tag(label: stateTag, level: stateTone)],
     stats: [
       if (summary != null) ...[
         (label: l.statRuns, value: '${summary.runs}', emphasis: null),
         (
           label: l.statFailures,
-          value: '${summary.failures + summary.missed}',
-          emphasis: bad ? colorsOf(context).destructiveText : null,
+          value: '$failures',
+          emphasis: failures > 0 ? colorsOf(context).destructiveText : null,
         ),
       ],
     ],
   );
 }
 
-Widget vulnCard(BuildContext context, VulnGroup v) {
+Widget vulnCard(BuildContext context, VulnGroup v, {VoidCallback? onOpen}) {
   final l = L.of(context);
-  final level = switch (v.severity) {
-    VulnSeverity.critical || VulnSeverity.high => SeverityLevel.critical,
-    VulnSeverity.medium => SeverityLevel.warning,
-    _ => SeverityLevel.info,
-  };
+  final (severity, level) = vulnSeverityLabel(l, v.severity);
   return SectionCard(
     cardKey: Key('vuln-${v.vulnId}'),
-    title: v.cve.isEmpty ? v.vulnId : v.cve,
+    onOpen: onOpen,
+    title: advisoryLabel(v.vulnId, v.cve),
     subtitle: v.summary,
     tags: [
-      Tag(label: v.severity.wire, level: level),
+      Tag(label: severity, level: level),
       for (final p in v.packages.take(2)) Tag(label: p),
     ],
     stats: [
-      (label: l.statScore, value: v.score.toStringAsFixed(1), emphasis: null),
+      // Zero is "the feed carries no score", as on the web.
+      (label: l.statScore, value: formatScore(v.score), emphasis: null),
       (label: l.statHosts, value: '${v.hosts}', emphasis: null),
     ],
   );
@@ -485,12 +495,37 @@ Widget dbCard(BuildContext context, DbInstance d, {VoidCallback? onOpen}) {
   return SectionCard(
     cardKey: Key('db-${d.instance}-${d.hostId}'),
     onOpen: onOpen,
-    title: d.instance.isEmpty ? d.dbSystem : d.instance,
-    subtitle: '${d.dbSystem} · ${d.serverAddress}:${d.serverPort}',
+    title: dbInstanceLabel(d),
+    subtitle: dbSystemName(d.dbSystem),
     trailing: d.hostName,
     stats: [
-      (label: l.statCalls, value: '${d.calls}', emphasis: null),
-      (label: l.svcP95, value: _ms(d.avgMs), emphasis: null),
+      (
+        label: l.apmSortCalls,
+        value: l.dbPerSecond(formatNumber(d.throughput)),
+        emphasis: null,
+      ),
+      (
+        label: l.dbAvg,
+        value: d.avgMs == null ? '–' : formatApmMs(d.avgMs),
+        emphasis: null,
+      ),
+      (
+        label: l.apmSortAas,
+        value: d.avgActiveSessions == null
+            ? '–'
+            : formatNumber(d.avgActiveSessions!),
+        emphasis: null,
+      ),
+      (
+        label: l.apmSortTopWait,
+        value: d.topWait.isEmpty ? '–' : d.topWait,
+        emphasis: null,
+      ),
+      (
+        label: l.apmSortLastSeen,
+        value: relativeTimeOf(l, d.lastSeen),
+        emphasis: null,
+      ),
     ],
   );
 }

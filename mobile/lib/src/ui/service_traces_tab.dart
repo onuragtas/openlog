@@ -11,6 +11,7 @@ import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
 import 'failure_text.dart';
+import 'list_paging.dart';
 import 'list_scaffold.dart';
 import 'severity.dart';
 import 'theme.dart';
@@ -42,6 +43,11 @@ class _ServiceTracesTabState extends State<ServiceTracesTab> {
   final _max = TextEditingController();
   final _attributes = TextEditingController();
 
+  /// The transaction last seen on the controller, so one set from elsewhere
+  /// ("traces of this transaction") shows in the box, and applying the filters
+  /// does not quietly take it off again.
+  String _shownTransaction = '';
+
   @override
   void dispose() {
     _transaction.dispose();
@@ -68,168 +74,168 @@ class _ServiceTracesTabState extends State<ServiceTracesTab> {
 
     return ListenableBuilder(
       listenable: c,
-      builder: (context, _) => Column(
-        children: [
-          ExpansionTile(
-            key: const Key('service-traces-filters'),
-            title: Text(l.tracesFilters, style: theme.textTheme.bodyMedium),
-            childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            children: [
-              TextField(
-                key: const Key('service-traces-transaction'),
-                controller: _transaction,
-                decoration: InputDecoration(
-                  labelText: l.tracesTransaction,
-                  hintText: 'GET /orders/{id}',
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+      builder: (context, _) {
+        if (c.transaction != _shownTransaction) {
+          _shownTransaction = c.transaction;
+          _transaction.text = c.transaction;
+        }
+        return Column(
+          children: [
+            ExpansionTile(
+              key: const Key('service-traces-filters'),
+              title: Text(l.tracesFilters, style: theme.textTheme.bodyMedium),
+              childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              children: [
+                TextField(
+                  key: const Key('service-traces-transaction'),
+                  controller: _transaction,
+                  decoration: InputDecoration(
+                    labelText: l.tracesTransaction,
+                    hintText: 'GET /orders/{id}',
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      key: const Key('service-traces-min'),
-                      controller: _min,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: l.tracesMinMs,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('service-traces-max'),
-                      controller: _max,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: l.tracesMaxMs,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                key: const Key('service-traces-attributes'),
-                controller: _attributes,
-                decoration: InputDecoration(
-                  labelText: l.tracesAttributes,
-                  hintText: 'http.method=POST',
-                  helperText: l.tracesAttributesHint,
-                  helperMaxLines: 2,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: SwitchListTile(
-                      key: const Key('service-traces-errors'),
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                      title: Text(
-                        l.tracesErrorsOnly,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      value: c.errorsOnly,
-                      onChanged: (v) {
-                        setState(() => c.errorsOnly = v);
-                        c.refresh();
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              SegmentedButton<String>(
-                key: const Key('service-traces-sort'),
-                showSelectedIcon: false,
-                segments: [
-                  ButtonSegment(
-                    value: 'timestamp',
-                    label: Text(l.tracesNewest),
-                  ),
-                  ButtonSegment(
-                    value: 'duration',
-                    label: Text(l.tracesSlowest),
-                  ),
-                ],
-                selected: {c.sort},
-                onSelectionChanged: (s) {
-                  setState(() => c.sort = s.first);
-                  c.refresh();
-                },
-              ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton(
-                  key: const Key('service-traces-apply'),
-                  onPressed: _apply,
-                  child: Text(l.tracesSearch),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FailureBanner(
-              failure: c.failure,
-              baseUrl: widget.session.baseUrl ?? '',
-            ),
-          ),
-          Expanded(
-            child: c.loadingFirst
-                ? const Center(child: CircularProgressIndicator())
-                : c.items.isEmpty
-                ? Center(
-                    child: Text(
-                      l.tracesEmpty,
-                      key: const Key('service-traces-empty'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: c.refresh,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                      itemCount: c.items.length,
-                      itemBuilder: (context, i) => _ApmTraceCard(
-                        trace: c.items[i],
-                        onShowPath: widget.onShowPath == null
-                            ? null
-                            : () => widget.onShowPath!(
-                                c.items[i].transactionName,
-                              ),
-                        onOpen: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => TraceScreen(
-                              session: widget.session,
-                              sections: widget.sections,
-                              traceId: c.items[i].traceId,
-                            ),
-                          ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        key: const Key('service-traces-min'),
+                        controller: _min,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: l.tracesMinMs,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextField(
+                        key: const Key('service-traces-max'),
+                        controller: _max,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: l.tracesMaxMs,
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  key: const Key('service-traces-attributes'),
+                  controller: _attributes,
+                  decoration: InputDecoration(
+                    labelText: l.tracesAttributes,
+                    hintText: 'http.method=POST',
+                    helperText: l.tracesAttributesHint,
+                    helperMaxLines: 2,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
                   ),
-          ),
-        ],
-      ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SwitchListTile(
+                        key: const Key('service-traces-errors'),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(
+                          l.tracesErrorsOnly,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        value: c.errorsOnly,
+                        onChanged: (v) {
+                          setState(() => c.errorsOnly = v);
+                          c.refresh();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    key: const Key('service-traces-apply'),
+                    onPressed: _apply,
+                    child: Text(l.tracesSearch),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: ListSortBar(
+                  controller: c,
+                  columns: serviceTraceSorts,
+                  label: (s) =>
+                      s == 'duration' ? l.apmSortDuration : l.apmSortStart,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FailureBanner(
+                failure: c.failure,
+                baseUrl: widget.session.baseUrl ?? '',
+              ),
+            ),
+            Expanded(
+              child: c.loadingFirst
+                  ? const Center(child: CircularProgressIndicator())
+                  : c.items.isEmpty
+                  ? Center(
+                      child: Text(
+                        l.tracesEmpty,
+                        key: const Key('service-traces-empty'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: c.refresh,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                        itemCount: c.items.length + 1,
+                        itemBuilder: (context, i) => i == c.items.length
+                            ? LoadMoreTile(controller: c)
+                            : _ApmTraceCard(
+                                trace: c.items[i],
+                                onShowPath: widget.onShowPath == null
+                                    ? null
+                                    : () => widget.onShowPath!(
+                                        c.items[i].transactionName,
+                                      ),
+                                onOpen: () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => TraceScreen(
+                                      session: widget.session,
+                                      sections: widget.sections,
+                                      traceId: c.items[i].traceId,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

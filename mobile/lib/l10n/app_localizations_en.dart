@@ -12,6 +12,726 @@ class LEn extends L {
   String get appTitle => 'openlog';
 
   @override
+  String get serverNotOffered =>
+      'This server does not offer this yet. It comes with a newer openlog on the server.';
+
+  @override
+  String get detailEditOnWeb => 'Changing this is done on the web.';
+
+  @override
+  String get infraSortName => 'Name';
+
+  @override
+  String get infraSortOs => 'Operating system';
+
+  @override
+  String get infraSortCpu => 'CPU';
+
+  @override
+  String get infraSortMemory => 'Memory';
+
+  @override
+  String get infraSortDisk => 'Disk';
+
+  @override
+  String get infraSortLoad => 'Load';
+
+  @override
+  String get infraSortAgent => 'Agent';
+
+  @override
+  String get infraSortLastSeen => 'Last seen';
+
+  @override
+  String get infraSortState => 'State';
+
+  @override
+  String get infraSortImage => 'Image';
+
+  @override
+  String get infraSortCompose => 'Compose';
+
+  @override
+  String get infraSortHost => 'Host';
+
+  @override
+  String get infraSortStatus => 'Status';
+
+  @override
+  String get infraSortRestarts => 'Restarts';
+
+  @override
+  String get infraSortWorkload => 'Workload';
+
+  @override
+  String get infraSortNode => 'Node';
+
+  @override
+  String get infraSortIp => 'IP';
+
+  @override
+  String get infraSortAge => 'Age';
+
+  @override
+  String get infraSortCluster => 'Cluster';
+
+  @override
+  String get infraSortKind => 'Kind';
+
+  @override
+  String get infraSortHealth => 'Health';
+
+  @override
+  String get infraSortReplicas => 'Replicas';
+
+  @override
+  String get infraSortKubelet => 'Kubelet';
+
+  @override
+  String get infraSortInstance => 'Instance';
+
+  @override
+  String get infraSortCost => 'Cost';
+
+  @override
+  String get infraSortIdle => 'Idle';
+
+  @override
+  String get infraSortService => 'Service';
+
+  @override
+  String get infraSortEnvironment => 'Environment';
+
+  @override
+  String get infraSortContainers => 'Containers';
+
+  @override
+  String get infraSortType => 'Type';
+
+  @override
+  String get infraSortTotal => 'Total';
+
+  @override
+  String get infraSortSamples => 'Samples';
+
+  @override
+  String get infraSortAdvisory => 'Advisory';
+
+  @override
+  String get infraSortSeverity => 'Severity';
+
+  @override
+  String get infraSortScore => 'CVSS';
+
+  @override
+  String get infraSortHosts => 'Hosts';
+
+  @override
+  String get infraSortPackage => 'Package';
+
+  @override
+  String get infraSortVersion => 'Installed → fixed';
+
+  @override
+  String get infraSortEcosystem => 'Release';
+
+  @override
+  String get sloStatusHealthy => 'Healthy';
+
+  @override
+  String get sloStatusWarning => 'Budget low';
+
+  @override
+  String get sloStatusExhausted => 'Budget exhausted';
+
+  @override
+  String get sloStatusNone => 'No data';
+
+  @override
+  String sloWindowDays(int count) {
+    return '$count d';
+  }
+
+  @override
+  String get sloSliAvailability => 'Availability';
+
+  @override
+  String get sloSliLatency => 'Latency';
+
+  @override
+  String get sloObjective => 'Target';
+
+  @override
+  String get sloRemaining => 'Budget left';
+
+  @override
+  String get sloBurnRate => 'Burn rate';
+
+  @override
+  String get sloRequests => 'Requests';
+
+  @override
+  String get sloBad => 'Bad requests';
+
+  @override
+  String get sloBudgetTitle => 'Error budget';
+
+  @override
+  String get sloSeriesEmpty => 'No requests in this window yet.';
+
+  @override
+  String get sloBudgetFull => 'Full budget';
+
+  @override
+  String get sloBudgetEmpty => 'Exhausted';
+
+  @override
+  String get sloBurnTitle => 'Burn rate windows';
+
+  @override
+  String get sloBurnHint =>
+      'A window alerts when the budget burns at least this many times too fast over both its long and its short window.';
+
+  @override
+  String get sloBurnFast => 'Fast (1 h / 5 m)';
+
+  @override
+  String get sloBurnSlow => 'Slow (6 h / 30 m)';
+
+  @override
+  String get sloBurnBreaching => 'Burning';
+
+  @override
+  String get sloBurnOk => 'Within budget';
+
+  @override
+  String get sloBurnThreshold => 'Alerts at';
+
+  @override
+  String get sloBurnLong => 'Long window';
+
+  @override
+  String get sloBurnShort => 'Short window';
+
+  @override
+  String get jobStateOk => 'OK';
+
+  @override
+  String get jobStateLate => 'Late';
+
+  @override
+  String get jobStateFailing => 'Failing';
+
+  @override
+  String get jobStateRunning => 'Running';
+
+  @override
+  String get jobStatePaused => 'Paused';
+
+  @override
+  String get jobStateUnknown => 'No data';
+
+  @override
+  String get jobRunSuccess => 'Success';
+
+  @override
+  String get jobRunFailure => 'Failed';
+
+  @override
+  String get jobRunMissed => 'Missed';
+
+  @override
+  String get jobRunOverrun => 'Overrun';
+
+  @override
+  String get jobRunRunning => 'Running';
+
+  @override
+  String jobEvery(String interval) {
+    return 'every $interval';
+  }
+
+  @override
+  String get jobRuns => 'Runs (7 d)';
+
+  @override
+  String get jobFailures => 'Failures';
+
+  @override
+  String get jobMissed => 'Missed';
+
+  @override
+  String get jobAvg => 'Average';
+
+  @override
+  String get jobMax => 'Longest';
+
+  @override
+  String get jobNextRun => 'Next due';
+
+  @override
+  String get jobPingUrl => 'Ping URL';
+
+  @override
+  String get jobLastOutput => 'Last output';
+
+  @override
+  String get jobRunsTitle => 'Runs';
+
+  @override
+  String get jobRunsEmpty => 'No run in this range yet.';
+
+  @override
+  String get jobDuration => 'Duration';
+
+  @override
+  String get jobLate => 'Late';
+
+  @override
+  String get jobExit => 'Exit';
+
+  @override
+  String get vulnSeverityCritical => 'Critical';
+
+  @override
+  String get vulnSeverityHigh => 'High';
+
+  @override
+  String get vulnSeverityMedium => 'Medium';
+
+  @override
+  String get vulnSeverityLow => 'Low';
+
+  @override
+  String get vulnSeverityNone => 'Unrated';
+
+  @override
+  String vulnFilterAll(int count) {
+    return 'All ($count)';
+  }
+
+  @override
+  String get vulnNoFindings => 'No open findings of this advisory.';
+
+  @override
+  String vulnNoFix(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count hosts run a version the advisory has no fix for yet; upgrading will not resolve it.',
+      one:
+          '$count host runs a version the advisory has no fix for yet; upgrading will not resolve it.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get vulnHostEmpty => 'No vulnerable package on this host.';
+
+  @override
+  String get vulnHostEmptyHint =>
+      'Every package of its latest inventory snapshot was compared with the advisories of its release.';
+
+  @override
+  String get hostTabMetrics => 'Metrics';
+
+  @override
+  String get hostTabInventory => 'Inventory';
+
+  @override
+  String get hostTabVulns => 'Vulnerabilities';
+
+  @override
+  String get hostChartCpu => 'CPU utilization by mode';
+
+  @override
+  String get hostChartLoad => 'Load average';
+
+  @override
+  String get hostChartMemory => 'Memory usage by state';
+
+  @override
+  String get hostChartFilesystem => 'Filesystem utilization by mountpoint';
+
+  @override
+  String get hostChartDisk => 'Disk I/O';
+
+  @override
+  String get hostChartNetwork => 'Network I/O';
+
+  @override
+  String get hostChartBusy => 'Busy';
+
+  @override
+  String get hostInvNoSnapshot =>
+      'This host has not sent a complete inventory snapshot yet.';
+
+  @override
+  String get hostInvEmpty => 'No inventory items.';
+
+  @override
+  String get hostInvAll => 'All';
+
+  @override
+  String get hostInvSearch => 'Filter by key or value…';
+
+  @override
+  String hostInvCount(int shown, int total) {
+    return '$shown of $total';
+  }
+
+  @override
+  String get hostInvNoMatch => 'No items match the filter.';
+
+  @override
+  String get costHostTitle => 'Cost';
+
+  @override
+  String costHostPerHour(String value) {
+    return '$value per hour';
+  }
+
+  @override
+  String costHostIdleShare(int percent) {
+    return '$percent% idle';
+  }
+
+  @override
+  String get costHostNotPriced =>
+      'openlog could not price this host: it reported no cloud instance type and no CPU or memory capacity.';
+
+  @override
+  String get costHostFallback => 'Estimated from vCPU and memory';
+
+  @override
+  String get costHostOversubscribed =>
+      'Its containers added up to more than the host used, so their shares were scaled down.';
+
+  @override
+  String get costHostServices => 'Services on this host';
+
+  @override
+  String get costHostContainers => 'Containers on this host';
+
+  @override
+  String costHostShare(int percent) {
+    return '$percent% of the host';
+  }
+
+  @override
+  String get workloadReplicas => 'Ready / desired';
+
+  @override
+  String get workloadAvailable => 'Available';
+
+  @override
+  String get workloadUpdated => 'Up to date';
+
+  @override
+  String get workloadSucceeded => 'Succeeded';
+
+  @override
+  String get workloadFailed => 'Failed';
+
+  @override
+  String get workloadHpa => 'Autoscaler';
+
+  @override
+  String workloadHpaValue(
+    String name,
+    String current,
+    String desired,
+    String min,
+    String max,
+  ) {
+    return '$name: $current → $desired (min $min, max $max)';
+  }
+
+  @override
+  String get workloadPods => 'Pods';
+
+  @override
+  String get workloadPodsEmpty =>
+      'No pods of this workload in this time range.';
+
+  @override
+  String get workloadAllPods => 'Open in pod list';
+
+  @override
+  String get workloadEvents => 'Events';
+
+  @override
+  String get workloadEventsEmpty =>
+      'No events of this workload in this time range.';
+
+  @override
+  String get containerServicesTitle => 'APM services';
+
+  @override
+  String get containerServicesEmpty =>
+      'No APM service reported from this container in this range.';
+
+  @override
+  String get ruleTypeMetricThreshold => 'Metric threshold';
+
+  @override
+  String get ruleTypeLogMatch => 'Log match count';
+
+  @override
+  String get ruleTypeNoData => 'No data';
+
+  @override
+  String get ruleTypeDiscovery => 'Discovery event';
+
+  @override
+  String get ruleTypeApm => 'APM';
+
+  @override
+  String get ruleTypeApmNoData => 'APM service silent';
+
+  @override
+  String get ruleTypeApmError => 'APM error group';
+
+  @override
+  String get ruleTypeOql => 'OQL query';
+
+  @override
+  String get ruleTypeSloBurn => 'SLO burn rate';
+
+  @override
+  String get ruleTypeAnomaly => 'Baseline (anomaly)';
+
+  @override
+  String get ruleLastEvaluated => 'Last evaluated';
+
+  @override
+  String get ruleNotEvaluated => 'not yet';
+
+  @override
+  String get ruleNextEvaluation => 'Next evaluation';
+
+  @override
+  String get ruleConditionTitle => 'Condition';
+
+  @override
+  String get ruleSeriesTitle => 'Series';
+
+  @override
+  String get ruleSeriesEmpty => 'It is not watching any series yet.';
+
+  @override
+  String get ruleChannels => 'Channels';
+
+  @override
+  String get ruleLabels => 'Labels';
+
+  @override
+  String get ruleRunbook => 'Runbook';
+
+  @override
+  String get ruleHistoryTitle => 'Evaluation history';
+
+  @override
+  String ruleHistoryHours(int hours) {
+    return '$hours h';
+  }
+
+  @override
+  String get ruleHistoryEmpty => 'No evaluations recorded in this range yet.';
+
+  @override
+  String ruleHistorySummary(int count, int errors, int ms) {
+    return '$count evaluations, $errors errors; the last one took $ms ms.';
+  }
+
+  @override
+  String get ruleHistoryTruncated => 'Only part of the series is shown.';
+
+  @override
+  String get muteDayMon => 'Mon';
+
+  @override
+  String get muteDayTue => 'Tue';
+
+  @override
+  String get muteDayWed => 'Wed';
+
+  @override
+  String get muteDayThu => 'Thu';
+
+  @override
+  String get muteDayFri => 'Fri';
+
+  @override
+  String get muteDaySat => 'Sat';
+
+  @override
+  String get muteDaySun => 'Sun';
+
+  @override
+  String get muteOrdinalFirst => 'First';
+
+  @override
+  String get muteOrdinalSecond => 'Second';
+
+  @override
+  String get muteOrdinalThird => 'Third';
+
+  @override
+  String get muteOrdinalFourth => 'Fourth';
+
+  @override
+  String get muteOrdinalLast => 'Last';
+
+  @override
+  String get muteOpEq => 'equals';
+
+  @override
+  String get muteOpNeq => 'not equals';
+
+  @override
+  String get muteOpContains => 'contains';
+
+  @override
+  String muteSummaryMonthday(String days) {
+    return 'Monthly on day $days';
+  }
+
+  @override
+  String muteSummaryNthDay(String ordinal, String day) {
+    return '$ordinal $day of the month';
+  }
+
+  @override
+  String muteSummaryNthWeekday(String ordinal) {
+    return '$ordinal weekday of the month';
+  }
+
+  @override
+  String muteExceptionsSummary(int dates, int calendars) {
+    return 'Exceptions: $dates dates, $calendars calendars';
+  }
+
+  @override
+  String get muteEditTitle => 'Edit mute';
+
+  @override
+  String get muteName => 'Name';
+
+  @override
+  String get muteComment => 'Comment';
+
+  @override
+  String get muteRecurringToggle => 'Repeat on selected days';
+
+  @override
+  String get muteCreate => 'Create mute';
+
+  @override
+  String get muteSave => 'Save mute';
+
+  @override
+  String muteCreatedBy(String email) {
+    return 'Created by $email';
+  }
+
+  @override
+  String get muteStarts => 'Starts';
+
+  @override
+  String get muteEnds => 'Ends';
+
+  @override
+  String get muteWeekly => 'Weekly';
+
+  @override
+  String get muteMonthly => 'Monthly';
+
+  @override
+  String get muteTimezone => 'Time zone';
+
+  @override
+  String get muteStartTime => 'From (local time)';
+
+  @override
+  String get muteEndTime => 'To (local time)';
+
+  @override
+  String get muteEndTimeHint => 'Earlier than the start = next day.';
+
+  @override
+  String get muteModeMonthday => 'Day of the month';
+
+  @override
+  String get muteModeWeekday => 'Weekday of the month';
+
+  @override
+  String get muteCustomRule => 'Custom rule';
+
+  @override
+  String get muteMonthDays => 'Days of the month';
+
+  @override
+  String get muteMonthDaysHint => 'Comma-separated, 1–31; -1 is the last day.';
+
+  @override
+  String get muteMonthDaysInvalid => 'Enter days between 1 and 31 or -1 … -31.';
+
+  @override
+  String get muteAnyWeekday => 'Weekday (Mon–Fri)';
+
+  @override
+  String get muteExceptions => 'Exceptions';
+
+  @override
+  String get muteExceptionsHint =>
+      'No occurrence starts on these local dates or on the dates of the selected holiday calendars.';
+
+  @override
+  String get muteAddException => 'Add date';
+
+  @override
+  String get muteUpcoming => 'Next occurrences';
+
+  @override
+  String get muteUpcomingInvalid =>
+      'Complete the schedule to see its next occurrences.';
+
+  @override
+  String get muteUpcomingNone => 'No further occurrences.';
+
+  @override
+  String get muteRules => 'Rules';
+
+  @override
+  String get muteRulesHint => 'None selected = all rules.';
+
+  @override
+  String get muteMatchers => 'Label matchers';
+
+  @override
+  String get muteAddMatcher => 'Add matcher';
+
+  @override
+  String get muteRemoveMatcher => 'Remove matcher';
+
+  @override
+  String get mutesEdit => 'Edit';
+
+  @override
+  String get mutesDelete => 'Delete';
+
+  @override
+  String get mutesDetailed => 'New mute, with every option';
+
+  @override
+  String get mutesStatusScheduled => 'scheduled';
+
+  @override
+  String get mutesStatusEnded => 'ended';
+
+  @override
   String get serverTitle => 'Connect to openlog';
 
   @override
@@ -417,7 +1137,8 @@ class LEn extends L {
   String get podsEmpty => 'No pod found.';
 
   @override
-  String get databasesEmpty => 'No database instance is reporting.';
+  String get databasesEmpty =>
+      'No database sends query statistics yet. Enable query monitoring on the infra agent of the database host (config.yaml) and restart it:\nintegrations.postgresql.query_stats.enabled: true';
 
   @override
   String get slosEmpty => 'No SLO defined.';
@@ -1403,7 +2124,7 @@ class LEn extends L {
   }
 
   @override
-  String get mutesRecurring => 'recurring; edited on the web';
+  String get mutesRecurring => 'recurring';
 
   @override
   String get mutesDuration30m => '30 min';
@@ -3574,6 +4295,133 @@ class LEn extends L {
   String get dbCallers => 'Calling services';
 
   @override
+  String get dbSourceApplications => 'From applications';
+
+  @override
+  String get dbSourceServers => 'From servers';
+
+  @override
+  String get dbAppHint =>
+      'These durations are what the applications measured, so they include the network and waiting for a connection. Wait events and sessions need a connection to the server: see From servers.';
+
+  @override
+  String get dbAppSearch => 'Search statements';
+
+  @override
+  String get dbAppServices => 'Services';
+
+  @override
+  String get dbAppPlan => 'Execution plan';
+
+  @override
+  String get dbAppGeneric =>
+      'Generic plan: made without the parameter values, so it can differ from what the slow call used.';
+
+  @override
+  String get dbAppNoPlan =>
+      'No plan captured. Plans come from an agent with explaining turned on, such as WithExplain in the Go pgx package.';
+
+  @override
+  String get dbAppEmpty =>
+      'No application sent a database call in this range. APM agents report them on their own, with no connection to the database.';
+
+  @override
+  String get dbServerView => 'Server view';
+
+  @override
+  String get dbNotMonitored => 'Not monitored on the database server';
+
+  @override
+  String get apmSortService => 'Service';
+
+  @override
+  String get apmSortEnvironment => 'Environment';
+
+  @override
+  String get apmSortThroughput => 'Throughput';
+
+  @override
+  String get apmSortErrorRate => 'Error rate';
+
+  @override
+  String get apmSortLastSeen => 'Last seen';
+
+  @override
+  String get apmSortTransaction => 'Transaction';
+
+  @override
+  String get apmSortStatement => 'Statement';
+
+  @override
+  String get apmSortDatabase => 'Database';
+
+  @override
+  String get apmSortInstance => 'Instance';
+
+  @override
+  String get apmSortHost => 'Host';
+
+  @override
+  String get apmSortCalls => 'Calls';
+
+  @override
+  String get apmSortAas => 'Avg active sessions';
+
+  @override
+  String get apmSortTopWait => 'Top wait';
+
+  @override
+  String get apmSortWaitType => 'Wait type';
+
+  @override
+  String get apmSortWaitEvent => 'Wait event';
+
+  @override
+  String get apmSortShare => 'Share of time';
+
+  @override
+  String get apmSortStart => 'Start';
+
+  @override
+  String get apmSortDuration => 'Duration';
+
+  @override
+  String get deploymentsWindowLabel => 'Window';
+
+  @override
+  String get deploymentsWindow15m => '15 minutes';
+
+  @override
+  String get deploymentsWindow30m => '30 minutes';
+
+  @override
+  String get deploymentsWindow1h => '1 hour';
+
+  @override
+  String get deploymentsWindow3h => '3 hours';
+
+  @override
+  String get deploymentsNoNewErrors => 'No new error groups.';
+
+  @override
+  String get txRelatedLogs => 'Related logs';
+
+  @override
+  String get txTraces => 'Traces of this transaction';
+
+  @override
+  String get txHistogram => 'Latency distribution';
+
+  @override
+  String get txLatency => 'Latency';
+
+  @override
+  String get txSlowest => 'Slowest traces';
+
+  @override
+  String get txNoTraces => 'No traces in this range.';
+
+  @override
   String get containersHost => 'Host';
 
   @override
@@ -4138,6 +4986,231 @@ class LEn extends L {
 
   @override
   String get rumTabFunnel => 'Funnel';
+
+  @override
+  String get rumTabCrashes => 'Crashes';
+
+  @override
+  String get rumTabAnalytics => 'Analytics';
+
+  @override
+  String get rumServerTooOld =>
+      'This server\'s openlog is too old for this. Update the server to see it here.';
+
+  @override
+  String get rumCrashesEmpty =>
+      'No crashes in this range. Crash capture is off by default in the SDKs.';
+
+  @override
+  String rumCrashesSummary(String sessions, String version, String when) {
+    return '$sessions sessions · last on $version · $when';
+  }
+
+  @override
+  String get rumCrashesStack => 'Stack';
+
+  @override
+  String rumCrashesMissingSymbols(String what) {
+    return 'No symbols uploaded for: $what';
+  }
+
+  @override
+  String get rumCrashKindUncaught => 'Uncaught exception';
+
+  @override
+  String get rumCrashKindSignal => 'Signal';
+
+  @override
+  String get rumCrashKindAnr => 'Not responding';
+
+  @override
+  String get rumCrashKindOom => 'Out of memory';
+
+  @override
+  String get rumSortApp => 'Application';
+
+  @override
+  String get rumSortEnvironment => 'Environment';
+
+  @override
+  String get rumSortLastSeen => 'Last seen';
+
+  @override
+  String get rumSortFirstSeen => 'First seen';
+
+  @override
+  String get rumSortVersion => 'Version';
+
+  @override
+  String get rumSortCrashFree => 'Crash-free';
+
+  @override
+  String get rumReleaseNoVersions =>
+      'No version carried sessions in this range.';
+
+  @override
+  String get rumReleaseNoDeployments => 'No deployment was seen in this range.';
+
+  @override
+  String get rumReleaseNoCrashCapture => 'This version cannot report crashes.';
+
+  @override
+  String get analyticsPeriodLabel => 'Period';
+
+  @override
+  String analyticsLastDays(int days) {
+    return 'Last $days days';
+  }
+
+  @override
+  String analyticsComparedWith(String from, String to) {
+    return 'Compared with $from to $to. Complete days, in UTC.';
+  }
+
+  @override
+  String get analyticsPreviousPartial =>
+      'This application has no data from the start of the previous period, so a rise may only mean it started reporting since.';
+
+  @override
+  String get analyticsNoChange => 'No change';
+
+  @override
+  String get analyticsFromNothing => '(new)';
+
+  @override
+  String get analyticsNewUsers => 'New users';
+
+  @override
+  String get analyticsAvgDailyUsers => 'Average daily users';
+
+  @override
+  String get analyticsPageViews => 'Page views';
+
+  @override
+  String get analyticsDau => 'DAU';
+
+  @override
+  String get analyticsWau => 'WAU';
+
+  @override
+  String get analyticsMau => 'MAU';
+
+  @override
+  String get analyticsStickiness => 'DAU / MAU';
+
+  @override
+  String get analyticsActivityChart => 'Active users';
+
+  @override
+  String get analyticsRetention => 'Retention';
+
+  @override
+  String get analyticsCohort => 'First seen';
+
+  @override
+  String get analyticsSize => 'People';
+
+  @override
+  String get analyticsGrainLabel => 'Per';
+
+  @override
+  String get analyticsGrainDay => 'Day';
+
+  @override
+  String get analyticsGrainWeek => 'Week';
+
+  @override
+  String get analyticsGrainMonth => 'Month';
+
+  @override
+  String analyticsPeriodDay(int n) {
+    return 'Day $n';
+  }
+
+  @override
+  String analyticsPeriodWeek(int n) {
+    return 'Week $n';
+  }
+
+  @override
+  String analyticsPeriodMonth(int n) {
+    return 'Month $n';
+  }
+
+  @override
+  String get analyticsEvents => 'Events';
+
+  @override
+  String get analyticsEventName => 'Event';
+
+  @override
+  String get analyticsCount => 'Count';
+
+  @override
+  String get analyticsSessions => 'Sessions';
+
+  @override
+  String get analyticsUsers => 'Users';
+
+  @override
+  String get analyticsAcquisition => 'Traffic sources';
+
+  @override
+  String get analyticsBy => 'By';
+
+  @override
+  String get analyticsAudience => 'Audience';
+
+  @override
+  String get analyticsAudienceCountry => 'Country';
+
+  @override
+  String get analyticsAudienceDevice => 'Device type';
+
+  @override
+  String get analyticsAudienceModel => 'Device model';
+
+  @override
+  String get analyticsAudienceOs => 'Operating system';
+
+  @override
+  String get analyticsAudienceBrowser => 'Browser';
+
+  @override
+  String get analyticsAudienceVersion => 'App version';
+
+  @override
+  String get analyticsUnknown => '(unknown)';
+
+  @override
+  String get analyticsNoCountry =>
+      'This server records no country yet. Set OPENLOG_RUM_GEOIP_DB or OPENLOG_RUM_GEO_HEADER: see the product analytics guide.';
+
+  @override
+  String get analyticsSourceReferrer => 'Referrer';
+
+  @override
+  String get analyticsSourceSource => 'Source';
+
+  @override
+  String get analyticsSourceMedium => 'Medium';
+
+  @override
+  String get analyticsSourceCampaign => 'Campaign';
+
+  @override
+  String get analyticsDirect => '(direct)';
+
+  @override
+  String get analyticsNoRows => 'Nothing in the last 30 days.';
+
+  @override
+  String get analyticsSamplingChanged =>
+      'The key\'s sampling rate changed in this range, so part of the drop is people leaving the sample rather than the product.';
+
+  @override
+  String get analyticsNotCollecting =>
+      'No visitors are being recognised for this application. Set Analytics to \"Visitors\" on its key under Settings → Browser keys, and use an SDK version that supports it.';
 
   @override
   String get rumPagesEmpty => 'No page views in this range.';

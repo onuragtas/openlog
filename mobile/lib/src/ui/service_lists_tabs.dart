@@ -3,33 +3,35 @@
 //
 // İşlemler is what the service spends its time on; Veritabanları is what it
 // asks the database. The web has both as tables with sortable columns; a
-// phone sorts with a chip row, because a table of eight columns on a 390
-// point screen is a table nobody reads.
+// phone sorts with a menu, because a table of eight columns on a 390 point
+// screen is a table nobody reads.
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../apm_format.dart';
+import '../list_controller.dart';
+import '../sections.dart';
 import '../services.dart';
 import '../session.dart';
+import 'app_db_queries.dart' show appDbSortLabel;
 import 'failure_text.dart';
+import 'list_paging.dart';
+import 'server_view_link.dart';
 import 'severity.dart';
-
-/// The sorts the transactions endpoint takes, in the web's order.
-const transactionSorts = <String>['time', 'throughput', 'slowest', 'errors'];
-
-/// The sorts the databases endpoint takes. `calls` where transactions have
-/// `throughput`: the server names them differently and this is not the place
-/// to invent a common word for them.
-const databaseSorts = <String>['time', 'calls', 'slowest', 'errors'];
 
 class ServiceTransactionsTab extends StatelessWidget {
   const ServiceTransactionsTab({
     super.key,
     required this.session,
     required this.controller,
+    required this.onOpen,
   });
 
   final SessionController session;
   final ServiceTransactionsController controller;
+
+  /// Opens one transaction.
+  final ValueChanged<String> onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -45,24 +47,25 @@ class ServiceTransactionsTab extends StatelessWidget {
         emptyText: l.transactionsEmpty,
         emptyKey: const Key('transactions-empty'),
         onRefresh: controller.refresh,
+        controller: controller,
         sorts: transactionSorts,
-        selected: controller.sort,
-        keyPrefix: 'transactions-sort',
         label: (s) => switch (s) {
-          'throughput' => l.sortThroughput,
-          'slowest' => l.sortSlowest,
-          'errors' => l.sortErrors,
+          'name' => l.apmSortTransaction,
+          'throughput' => l.apmSortThroughput,
+          'avg' => l.dbAvg,
+          // The server's `slowest` is the p95, which is the web's heading.
+          'slowest' => 'p95',
+          'error_rate' => l.apmSortErrorRate,
+          'apdex' => l.svcApdex,
           _ => l.sortTimeConsumed,
-        },
-        onSort: (s) {
-          controller.sort = s;
-          controller.refresh();
         },
         count: controller.items.length,
         row: (context, i) {
           final t = controller.items[i];
           return _Row(
             rowKey: Key('transaction-${t.transactionName}'),
+            onOpen: () => onOpen(t.transactionName),
+            apdex: t.apdex,
             title: t.transactionName,
             subtitle: t.transactionType,
             // The share is why this list is sorted by time consumed: one
@@ -83,10 +86,12 @@ class ServiceDatabasesTab extends StatelessWidget {
   const ServiceDatabasesTab({
     super.key,
     required this.session,
+    required this.sections,
     required this.controller,
   });
 
   final SessionController session;
+  final Sections sections;
   final ServiceDatabasesController controller;
 
   @override
@@ -103,19 +108,9 @@ class ServiceDatabasesTab extends StatelessWidget {
         emptyText: l.serviceDatabasesEmpty,
         emptyKey: const Key('service-databases-empty'),
         onRefresh: controller.refresh,
-        sorts: databaseSorts,
-        selected: controller.sort,
-        keyPrefix: 'service-databases-sort',
-        label: (s) => switch (s) {
-          'calls' => l.sortCalls,
-          'slowest' => l.sortSlowest,
-          'errors' => l.sortErrors,
-          _ => l.sortTimeConsumed,
-        },
-        onSort: (s) {
-          controller.sort = s;
-          controller.refresh();
-        },
+        controller: controller,
+        sorts: serviceDatabaseSorts,
+        label: (s) => appDbSortLabel(l, s),
         count: controller.items.length,
         row: (context, i) {
           final q = controller.items[i];
@@ -135,6 +130,15 @@ class ServiceDatabasesTab extends StatelessWidget {
             p95Ms: q.p95Ms,
             avgMs: q.avgMs,
             titleMaxLines: 3,
+            foot: ServerViewLink(
+              // A statement per row, and the link remembers what it was told
+              // about this one: a re-sort must not hand it another's answer.
+              key: ValueKey('${q.dbSystem}|${q.statement}'),
+              session: session,
+              sections: sections,
+              dbSystem: q.dbSystem,
+              statement: q.statement,
+            ),
           );
         },
       ),
@@ -142,7 +146,7 @@ class ServiceDatabasesTab extends StatelessWidget {
   }
 }
 
-/// The shape both tabs share: a sort chip row above a list.
+/// The shape both tabs share: a sort above a list, and its next page under it.
 class _SortedList extends StatelessWidget {
   const _SortedList({
     required this.baseUrl,
@@ -152,11 +156,9 @@ class _SortedList extends StatelessWidget {
     required this.emptyText,
     required this.emptyKey,
     required this.onRefresh,
+    required this.controller,
     required this.sorts,
-    required this.selected,
-    required this.keyPrefix,
     required this.label,
-    required this.onSort,
     required this.count,
     required this.row,
   });
@@ -168,11 +170,9 @@ class _SortedList extends StatelessWidget {
   final String emptyText;
   final Key emptyKey;
   final Future<void> Function() onRefresh;
+  final PagedListController<dynamic> controller;
   final List<String> sorts;
-  final String selected;
-  final String keyPrefix;
   final String Function(String) label;
-  final ValueChanged<String> onSort;
   final int count;
   final Widget Function(BuildContext, int) row;
 
@@ -181,29 +181,18 @@ class _SortedList extends StatelessWidget {
     final theme = Theme.of(context);
     return Column(
       children: [
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
-          child: Row(
-            children: [
-              for (final s in sorts)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    key: Key('$keyPrefix-$s'),
-                    label: Text(label(s)),
-                    selected: selected == s,
-                    // Sorted by the server: "by time consumed" is a product
-                    // of the calls and their durations over the whole range,
-                    // not something the rows on this page could be
-                    // rearranged into.
-                    onSelected: (_) {
-                      if (selected == s) return;
-                      onSort(s);
-                    },
-                  ),
-                ),
-            ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            // Sorted by the server: "by time consumed" is a product of the
+            // calls and their durations over the whole range, not something
+            // the rows on this page could be rearranged into.
+            child: ListSortBar(
+              controller: controller,
+              columns: sorts,
+              label: label,
+            ),
           ),
         ),
         Padding(
@@ -227,9 +216,11 @@ class _SortedList extends StatelessWidget {
                   onRefresh: onRefresh,
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
-                    itemCount: count,
+                    itemCount: count + 1,
                     separatorBuilder: (context, _) => const Divider(height: 1),
-                    itemBuilder: row,
+                    itemBuilder: (context, i) => i == count
+                        ? LoadMoreTile(controller: controller)
+                        : row(context, i),
                   ),
                 ),
         ),
@@ -249,6 +240,9 @@ class _Row extends StatelessWidget {
     required this.p95Ms,
     required this.avgMs,
     this.titleMaxLines = 2,
+    this.onOpen,
+    this.apdex,
+    this.foot,
   });
 
   final Key rowKey;
@@ -261,6 +255,13 @@ class _Row extends StatelessWidget {
   final double? avgMs;
   final int titleMaxLines;
 
+  /// What the row opens, when there is something behind it.
+  final VoidCallback? onOpen;
+  final double? apdex;
+
+  /// Anything under the numbers.
+  final Widget? foot;
+
   @override
   Widget build(BuildContext context) {
     final l = L.of(context);
@@ -269,8 +270,8 @@ class _Row extends StatelessWidget {
       color: theme.colorScheme.onSurfaceVariant,
     );
 
-    return Padding(
-      key: rowKey,
+    final body = Padding(
+      key: onOpen == null ? rowKey : null,
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,11 +311,17 @@ class _Row extends StatelessWidget {
               ),
               if (p95Ms != null) Text(l.mapP95(_showMs(p95Ms!)), style: muted),
               if (avgMs != null) Text(l.mapAvg(_showMs(avgMs!)), style: muted),
+              if (apdex != null)
+                Text('${l.svcApdex} ${formatApmApdex(apdex)}', style: muted),
             ],
           ),
+          ?foot,
         ],
       ),
     );
+    return onOpen == null
+        ? body
+        : InkWell(key: rowKey, onTap: onOpen, child: body);
   }
 }
 

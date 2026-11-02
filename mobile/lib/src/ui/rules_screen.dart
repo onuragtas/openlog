@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import '../api/schema.g.dart';
 import '../sections.dart';
 import '../session.dart';
+import 'rule_screen.dart';
 import 'sections_screen.dart';
 import 'severity.dart';
 
@@ -57,6 +58,16 @@ class RulesBody extends StatelessWidget {
           rule: rule,
           busy: c.busy == rule.id,
           onToggle: () => _confirm(context, c, rule),
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => RuleScreen(
+                session: session,
+                sections: sections,
+                id: rule.id,
+                name: rule.name,
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -112,11 +123,13 @@ class _RuleCard extends StatelessWidget {
     required this.rule,
     required this.busy,
     required this.onToggle,
+    required this.onOpen,
   });
 
   final AlertRule rule;
   final bool busy;
   final VoidCallback onToggle;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -143,49 +156,54 @@ class _RuleCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    rule.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.titleSmall,
-                  ),
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Tag(label: stateLabel, level: level),
-                      SeverityChip(severity: rule.severity),
-                      if (rule.status.openIncidents > 0)
-                        Text(
-                          l.ruleOpenIncidents(rule.status.openIncidents),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: severityTextColor(
-                              context,
-                              SeverityLevel.critical,
+              // The text opens the rule and the switch stays a switch.
+              child: InkWell(
+                key: Key('rule-open-${rule.id}'),
+                onTap: onOpen,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      rule.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Tag(label: stateLabel, level: level),
+                        SeverityChip(severity: rule.severity),
+                        if (rule.status.openIncidents > 0)
+                          Text(
+                            l.ruleOpenIncidents(rule.status.openIncidents),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: severityTextColor(
+                                context,
+                                SeverityLevel.critical,
+                              ),
                             ),
                           ),
-                        ),
-                      Text(l.ruleEvery(rule.intervalSeconds), style: muted),
-                    ],
-                  ),
-                  // An evaluation that is erroring is a rule that is not
-                  // protecting anything, however healthy it looks.
-                  if (rule.status.lastError.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        rule.status.lastError,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.error,
+                        Text(l.ruleEvery(rule.intervalSeconds), style: muted),
+                      ],
+                    ),
+                    // An evaluation that is erroring is a rule that is not
+                    // protecting anything, however healthy it looks.
+                    if (rule.status.lastError.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          rule.status.lastError,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.error,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
             busy

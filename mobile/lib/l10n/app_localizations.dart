@@ -103,6 +103,1338 @@ abstract class L {
   /// **'openlog'**
   String get appTitle;
 
+  /// No description provided for @serverNotOffered.
+  ///
+  /// In en, this message translates to:
+  /// **'This server does not offer this yet. It comes with a newer openlog on the server.'**
+  String get serverNotOffered;
+
+  /// No description provided for @detailEditOnWeb.
+  ///
+  /// In en, this message translates to:
+  /// **'Changing this is done on the web.'**
+  String get detailEditOnWeb;
+
+  /// No description provided for @infraSortName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get infraSortName;
+
+  /// No description provided for @infraSortOs.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system'**
+  String get infraSortOs;
+
+  /// No description provided for @infraSortCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get infraSortCpu;
+
+  /// No description provided for @infraSortMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory'**
+  String get infraSortMemory;
+
+  /// No description provided for @infraSortDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk'**
+  String get infraSortDisk;
+
+  /// No description provided for @infraSortLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Load'**
+  String get infraSortLoad;
+
+  /// No description provided for @infraSortAgent.
+  ///
+  /// In en, this message translates to:
+  /// **'Agent'**
+  String get infraSortAgent;
+
+  /// No description provided for @infraSortLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Last seen'**
+  String get infraSortLastSeen;
+
+  /// No description provided for @infraSortState.
+  ///
+  /// In en, this message translates to:
+  /// **'State'**
+  String get infraSortState;
+
+  /// No description provided for @infraSortImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get infraSortImage;
+
+  /// No description provided for @infraSortCompose.
+  ///
+  /// In en, this message translates to:
+  /// **'Compose'**
+  String get infraSortCompose;
+
+  /// No description provided for @infraSortHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get infraSortHost;
+
+  /// No description provided for @infraSortStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Status'**
+  String get infraSortStatus;
+
+  /// No description provided for @infraSortRestarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Restarts'**
+  String get infraSortRestarts;
+
+  /// No description provided for @infraSortWorkload.
+  ///
+  /// In en, this message translates to:
+  /// **'Workload'**
+  String get infraSortWorkload;
+
+  /// No description provided for @infraSortNode.
+  ///
+  /// In en, this message translates to:
+  /// **'Node'**
+  String get infraSortNode;
+
+  /// No description provided for @infraSortIp.
+  ///
+  /// In en, this message translates to:
+  /// **'IP'**
+  String get infraSortIp;
+
+  /// No description provided for @infraSortAge.
+  ///
+  /// In en, this message translates to:
+  /// **'Age'**
+  String get infraSortAge;
+
+  /// No description provided for @infraSortCluster.
+  ///
+  /// In en, this message translates to:
+  /// **'Cluster'**
+  String get infraSortCluster;
+
+  /// No description provided for @infraSortKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get infraSortKind;
+
+  /// No description provided for @infraSortHealth.
+  ///
+  /// In en, this message translates to:
+  /// **'Health'**
+  String get infraSortHealth;
+
+  /// No description provided for @infraSortReplicas.
+  ///
+  /// In en, this message translates to:
+  /// **'Replicas'**
+  String get infraSortReplicas;
+
+  /// No description provided for @infraSortKubelet.
+  ///
+  /// In en, this message translates to:
+  /// **'Kubelet'**
+  String get infraSortKubelet;
+
+  /// No description provided for @infraSortInstance.
+  ///
+  /// In en, this message translates to:
+  /// **'Instance'**
+  String get infraSortInstance;
+
+  /// No description provided for @infraSortCost.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get infraSortCost;
+
+  /// No description provided for @infraSortIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get infraSortIdle;
+
+  /// No description provided for @infraSortService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get infraSortService;
+
+  /// No description provided for @infraSortEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get infraSortEnvironment;
+
+  /// No description provided for @infraSortContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers'**
+  String get infraSortContainers;
+
+  /// No description provided for @infraSortType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get infraSortType;
+
+  /// No description provided for @infraSortTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get infraSortTotal;
+
+  /// No description provided for @infraSortSamples.
+  ///
+  /// In en, this message translates to:
+  /// **'Samples'**
+  String get infraSortSamples;
+
+  /// No description provided for @infraSortAdvisory.
+  ///
+  /// In en, this message translates to:
+  /// **'Advisory'**
+  String get infraSortAdvisory;
+
+  /// No description provided for @infraSortSeverity.
+  ///
+  /// In en, this message translates to:
+  /// **'Severity'**
+  String get infraSortSeverity;
+
+  /// No description provided for @infraSortScore.
+  ///
+  /// In en, this message translates to:
+  /// **'CVSS'**
+  String get infraSortScore;
+
+  /// No description provided for @infraSortHosts.
+  ///
+  /// In en, this message translates to:
+  /// **'Hosts'**
+  String get infraSortHosts;
+
+  /// No description provided for @infraSortPackage.
+  ///
+  /// In en, this message translates to:
+  /// **'Package'**
+  String get infraSortPackage;
+
+  /// No description provided for @infraSortVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed → fixed'**
+  String get infraSortVersion;
+
+  /// No description provided for @infraSortEcosystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Release'**
+  String get infraSortEcosystem;
+
+  /// No description provided for @sloStatusHealthy.
+  ///
+  /// In en, this message translates to:
+  /// **'Healthy'**
+  String get sloStatusHealthy;
+
+  /// No description provided for @sloStatusWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget low'**
+  String get sloStatusWarning;
+
+  /// No description provided for @sloStatusExhausted.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget exhausted'**
+  String get sloStatusExhausted;
+
+  /// No description provided for @sloStatusNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get sloStatusNone;
+
+  /// No description provided for @sloWindowDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} d'**
+  String sloWindowDays(int count);
+
+  /// No description provided for @sloSliAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Availability'**
+  String get sloSliAvailability;
+
+  /// No description provided for @sloSliLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency'**
+  String get sloSliLatency;
+
+  /// No description provided for @sloObjective.
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get sloObjective;
+
+  /// No description provided for @sloRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Budget left'**
+  String get sloRemaining;
+
+  /// No description provided for @sloBurnRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Burn rate'**
+  String get sloBurnRate;
+
+  /// No description provided for @sloRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'Requests'**
+  String get sloRequests;
+
+  /// No description provided for @sloBad.
+  ///
+  /// In en, this message translates to:
+  /// **'Bad requests'**
+  String get sloBad;
+
+  /// No description provided for @sloBudgetTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Error budget'**
+  String get sloBudgetTitle;
+
+  /// No description provided for @sloSeriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No requests in this window yet.'**
+  String get sloSeriesEmpty;
+
+  /// No description provided for @sloBudgetFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full budget'**
+  String get sloBudgetFull;
+
+  /// No description provided for @sloBudgetEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Exhausted'**
+  String get sloBudgetEmpty;
+
+  /// No description provided for @sloBurnTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Burn rate windows'**
+  String get sloBurnTitle;
+
+  /// No description provided for @sloBurnHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A window alerts when the budget burns at least this many times too fast over both its long and its short window.'**
+  String get sloBurnHint;
+
+  /// No description provided for @sloBurnFast.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast (1 h / 5 m)'**
+  String get sloBurnFast;
+
+  /// No description provided for @sloBurnSlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Slow (6 h / 30 m)'**
+  String get sloBurnSlow;
+
+  /// No description provided for @sloBurnBreaching.
+  ///
+  /// In en, this message translates to:
+  /// **'Burning'**
+  String get sloBurnBreaching;
+
+  /// No description provided for @sloBurnOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Within budget'**
+  String get sloBurnOk;
+
+  /// No description provided for @sloBurnThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts at'**
+  String get sloBurnThreshold;
+
+  /// No description provided for @sloBurnLong.
+  ///
+  /// In en, this message translates to:
+  /// **'Long window'**
+  String get sloBurnLong;
+
+  /// No description provided for @sloBurnShort.
+  ///
+  /// In en, this message translates to:
+  /// **'Short window'**
+  String get sloBurnShort;
+
+  /// No description provided for @jobStateOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get jobStateOk;
+
+  /// No description provided for @jobStateLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late'**
+  String get jobStateLate;
+
+  /// No description provided for @jobStateFailing.
+  ///
+  /// In en, this message translates to:
+  /// **'Failing'**
+  String get jobStateFailing;
+
+  /// No description provided for @jobStateRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get jobStateRunning;
+
+  /// No description provided for @jobStatePaused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get jobStatePaused;
+
+  /// No description provided for @jobStateUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get jobStateUnknown;
+
+  /// No description provided for @jobRunSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Success'**
+  String get jobRunSuccess;
+
+  /// No description provided for @jobRunFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get jobRunFailure;
+
+  /// No description provided for @jobRunMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get jobRunMissed;
+
+  /// No description provided for @jobRunOverrun.
+  ///
+  /// In en, this message translates to:
+  /// **'Overrun'**
+  String get jobRunOverrun;
+
+  /// No description provided for @jobRunRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get jobRunRunning;
+
+  /// No description provided for @jobEvery.
+  ///
+  /// In en, this message translates to:
+  /// **'every {interval}'**
+  String jobEvery(String interval);
+
+  /// No description provided for @jobRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs (7 d)'**
+  String get jobRuns;
+
+  /// No description provided for @jobFailures.
+  ///
+  /// In en, this message translates to:
+  /// **'Failures'**
+  String get jobFailures;
+
+  /// No description provided for @jobMissed.
+  ///
+  /// In en, this message translates to:
+  /// **'Missed'**
+  String get jobMissed;
+
+  /// No description provided for @jobAvg.
+  ///
+  /// In en, this message translates to:
+  /// **'Average'**
+  String get jobAvg;
+
+  /// No description provided for @jobMax.
+  ///
+  /// In en, this message translates to:
+  /// **'Longest'**
+  String get jobMax;
+
+  /// No description provided for @jobNextRun.
+  ///
+  /// In en, this message translates to:
+  /// **'Next due'**
+  String get jobNextRun;
+
+  /// No description provided for @jobPingUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Ping URL'**
+  String get jobPingUrl;
+
+  /// No description provided for @jobLastOutput.
+  ///
+  /// In en, this message translates to:
+  /// **'Last output'**
+  String get jobLastOutput;
+
+  /// No description provided for @jobRunsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get jobRunsTitle;
+
+  /// No description provided for @jobRunsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No run in this range yet.'**
+  String get jobRunsEmpty;
+
+  /// No description provided for @jobDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get jobDuration;
+
+  /// No description provided for @jobLate.
+  ///
+  /// In en, this message translates to:
+  /// **'Late'**
+  String get jobLate;
+
+  /// No description provided for @jobExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit'**
+  String get jobExit;
+
+  /// No description provided for @vulnSeverityCritical.
+  ///
+  /// In en, this message translates to:
+  /// **'Critical'**
+  String get vulnSeverityCritical;
+
+  /// No description provided for @vulnSeverityHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get vulnSeverityHigh;
+
+  /// No description provided for @vulnSeverityMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get vulnSeverityMedium;
+
+  /// No description provided for @vulnSeverityLow.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get vulnSeverityLow;
+
+  /// No description provided for @vulnSeverityNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Unrated'**
+  String get vulnSeverityNone;
+
+  /// No description provided for @vulnFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All ({count})'**
+  String vulnFilterAll(int count);
+
+  /// No description provided for @vulnNoFindings.
+  ///
+  /// In en, this message translates to:
+  /// **'No open findings of this advisory.'**
+  String get vulnNoFindings;
+
+  /// No description provided for @vulnNoFix.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{{count} host runs a version the advisory has no fix for yet; upgrading will not resolve it.} other{{count} hosts run a version the advisory has no fix for yet; upgrading will not resolve it.}}'**
+  String vulnNoFix(int count);
+
+  /// No description provided for @vulnHostEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No vulnerable package on this host.'**
+  String get vulnHostEmpty;
+
+  /// No description provided for @vulnHostEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Every package of its latest inventory snapshot was compared with the advisories of its release.'**
+  String get vulnHostEmptyHint;
+
+  /// No description provided for @hostTabMetrics.
+  ///
+  /// In en, this message translates to:
+  /// **'Metrics'**
+  String get hostTabMetrics;
+
+  /// No description provided for @hostTabInventory.
+  ///
+  /// In en, this message translates to:
+  /// **'Inventory'**
+  String get hostTabInventory;
+
+  /// No description provided for @hostTabVulns.
+  ///
+  /// In en, this message translates to:
+  /// **'Vulnerabilities'**
+  String get hostTabVulns;
+
+  /// No description provided for @hostChartCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU utilization by mode'**
+  String get hostChartCpu;
+
+  /// No description provided for @hostChartLoad.
+  ///
+  /// In en, this message translates to:
+  /// **'Load average'**
+  String get hostChartLoad;
+
+  /// No description provided for @hostChartMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'Memory usage by state'**
+  String get hostChartMemory;
+
+  /// No description provided for @hostChartFilesystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Filesystem utilization by mountpoint'**
+  String get hostChartFilesystem;
+
+  /// No description provided for @hostChartDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'Disk I/O'**
+  String get hostChartDisk;
+
+  /// No description provided for @hostChartNetwork.
+  ///
+  /// In en, this message translates to:
+  /// **'Network I/O'**
+  String get hostChartNetwork;
+
+  /// No description provided for @hostChartBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Busy'**
+  String get hostChartBusy;
+
+  /// No description provided for @hostInvNoSnapshot.
+  ///
+  /// In en, this message translates to:
+  /// **'This host has not sent a complete inventory snapshot yet.'**
+  String get hostInvNoSnapshot;
+
+  /// No description provided for @hostInvEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No inventory items.'**
+  String get hostInvEmpty;
+
+  /// No description provided for @hostInvAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get hostInvAll;
+
+  /// No description provided for @hostInvSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by key or value…'**
+  String get hostInvSearch;
+
+  /// No description provided for @hostInvCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{shown} of {total}'**
+  String hostInvCount(int shown, int total);
+
+  /// No description provided for @hostInvNoMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'No items match the filter.'**
+  String get hostInvNoMatch;
+
+  /// No description provided for @costHostTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cost'**
+  String get costHostTitle;
+
+  /// No description provided for @costHostPerHour.
+  ///
+  /// In en, this message translates to:
+  /// **'{value} per hour'**
+  String costHostPerHour(String value);
+
+  /// No description provided for @costHostIdleShare.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% idle'**
+  String costHostIdleShare(int percent);
+
+  /// No description provided for @costHostNotPriced.
+  ///
+  /// In en, this message translates to:
+  /// **'openlog could not price this host: it reported no cloud instance type and no CPU or memory capacity.'**
+  String get costHostNotPriced;
+
+  /// No description provided for @costHostFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated from vCPU and memory'**
+  String get costHostFallback;
+
+  /// No description provided for @costHostOversubscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'Its containers added up to more than the host used, so their shares were scaled down.'**
+  String get costHostOversubscribed;
+
+  /// No description provided for @costHostServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services on this host'**
+  String get costHostServices;
+
+  /// No description provided for @costHostContainers.
+  ///
+  /// In en, this message translates to:
+  /// **'Containers on this host'**
+  String get costHostContainers;
+
+  /// No description provided for @costHostShare.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of the host'**
+  String costHostShare(int percent);
+
+  /// No description provided for @workloadReplicas.
+  ///
+  /// In en, this message translates to:
+  /// **'Ready / desired'**
+  String get workloadReplicas;
+
+  /// No description provided for @workloadAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Available'**
+  String get workloadAvailable;
+
+  /// No description provided for @workloadUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Up to date'**
+  String get workloadUpdated;
+
+  /// No description provided for @workloadSucceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Succeeded'**
+  String get workloadSucceeded;
+
+  /// No description provided for @workloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get workloadFailed;
+
+  /// No description provided for @workloadHpa.
+  ///
+  /// In en, this message translates to:
+  /// **'Autoscaler'**
+  String get workloadHpa;
+
+  /// No description provided for @workloadHpaValue.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}: {current} → {desired} (min {min}, max {max})'**
+  String workloadHpaValue(
+    String name,
+    String current,
+    String desired,
+    String min,
+    String max,
+  );
+
+  /// No description provided for @workloadPods.
+  ///
+  /// In en, this message translates to:
+  /// **'Pods'**
+  String get workloadPods;
+
+  /// No description provided for @workloadPodsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No pods of this workload in this time range.'**
+  String get workloadPodsEmpty;
+
+  /// No description provided for @workloadAllPods.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in pod list'**
+  String get workloadAllPods;
+
+  /// No description provided for @workloadEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get workloadEvents;
+
+  /// No description provided for @workloadEventsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No events of this workload in this time range.'**
+  String get workloadEventsEmpty;
+
+  /// No description provided for @containerServicesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'APM services'**
+  String get containerServicesTitle;
+
+  /// No description provided for @containerServicesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No APM service reported from this container in this range.'**
+  String get containerServicesEmpty;
+
+  /// No description provided for @ruleTypeMetricThreshold.
+  ///
+  /// In en, this message translates to:
+  /// **'Metric threshold'**
+  String get ruleTypeMetricThreshold;
+
+  /// No description provided for @ruleTypeLogMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Log match count'**
+  String get ruleTypeLogMatch;
+
+  /// No description provided for @ruleTypeNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get ruleTypeNoData;
+
+  /// No description provided for @ruleTypeDiscovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Discovery event'**
+  String get ruleTypeDiscovery;
+
+  /// No description provided for @ruleTypeApm.
+  ///
+  /// In en, this message translates to:
+  /// **'APM'**
+  String get ruleTypeApm;
+
+  /// No description provided for @ruleTypeApmNoData.
+  ///
+  /// In en, this message translates to:
+  /// **'APM service silent'**
+  String get ruleTypeApmNoData;
+
+  /// No description provided for @ruleTypeApmError.
+  ///
+  /// In en, this message translates to:
+  /// **'APM error group'**
+  String get ruleTypeApmError;
+
+  /// No description provided for @ruleTypeOql.
+  ///
+  /// In en, this message translates to:
+  /// **'OQL query'**
+  String get ruleTypeOql;
+
+  /// No description provided for @ruleTypeSloBurn.
+  ///
+  /// In en, this message translates to:
+  /// **'SLO burn rate'**
+  String get ruleTypeSloBurn;
+
+  /// No description provided for @ruleTypeAnomaly.
+  ///
+  /// In en, this message translates to:
+  /// **'Baseline (anomaly)'**
+  String get ruleTypeAnomaly;
+
+  /// No description provided for @ruleLastEvaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last evaluated'**
+  String get ruleLastEvaluated;
+
+  /// No description provided for @ruleNotEvaluated.
+  ///
+  /// In en, this message translates to:
+  /// **'not yet'**
+  String get ruleNotEvaluated;
+
+  /// No description provided for @ruleNextEvaluation.
+  ///
+  /// In en, this message translates to:
+  /// **'Next evaluation'**
+  String get ruleNextEvaluation;
+
+  /// No description provided for @ruleConditionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Condition'**
+  String get ruleConditionTitle;
+
+  /// No description provided for @ruleSeriesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Series'**
+  String get ruleSeriesTitle;
+
+  /// No description provided for @ruleSeriesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'It is not watching any series yet.'**
+  String get ruleSeriesEmpty;
+
+  /// No description provided for @ruleChannels.
+  ///
+  /// In en, this message translates to:
+  /// **'Channels'**
+  String get ruleChannels;
+
+  /// No description provided for @ruleLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Labels'**
+  String get ruleLabels;
+
+  /// No description provided for @ruleRunbook.
+  ///
+  /// In en, this message translates to:
+  /// **'Runbook'**
+  String get ruleRunbook;
+
+  /// No description provided for @ruleHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Evaluation history'**
+  String get ruleHistoryTitle;
+
+  /// No description provided for @ruleHistoryHours.
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h'**
+  String ruleHistoryHours(int hours);
+
+  /// No description provided for @ruleHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No evaluations recorded in this range yet.'**
+  String get ruleHistoryEmpty;
+
+  /// No description provided for @ruleHistorySummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} evaluations, {errors} errors; the last one took {ms} ms.'**
+  String ruleHistorySummary(int count, int errors, int ms);
+
+  /// No description provided for @ruleHistoryTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Only part of the series is shown.'**
+  String get ruleHistoryTruncated;
+
+  /// No description provided for @muteDayMon.
+  ///
+  /// In en, this message translates to:
+  /// **'Mon'**
+  String get muteDayMon;
+
+  /// No description provided for @muteDayTue.
+  ///
+  /// In en, this message translates to:
+  /// **'Tue'**
+  String get muteDayTue;
+
+  /// No description provided for @muteDayWed.
+  ///
+  /// In en, this message translates to:
+  /// **'Wed'**
+  String get muteDayWed;
+
+  /// No description provided for @muteDayThu.
+  ///
+  /// In en, this message translates to:
+  /// **'Thu'**
+  String get muteDayThu;
+
+  /// No description provided for @muteDayFri.
+  ///
+  /// In en, this message translates to:
+  /// **'Fri'**
+  String get muteDayFri;
+
+  /// No description provided for @muteDaySat.
+  ///
+  /// In en, this message translates to:
+  /// **'Sat'**
+  String get muteDaySat;
+
+  /// No description provided for @muteDaySun.
+  ///
+  /// In en, this message translates to:
+  /// **'Sun'**
+  String get muteDaySun;
+
+  /// No description provided for @muteOrdinalFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'First'**
+  String get muteOrdinalFirst;
+
+  /// No description provided for @muteOrdinalSecond.
+  ///
+  /// In en, this message translates to:
+  /// **'Second'**
+  String get muteOrdinalSecond;
+
+  /// No description provided for @muteOrdinalThird.
+  ///
+  /// In en, this message translates to:
+  /// **'Third'**
+  String get muteOrdinalThird;
+
+  /// No description provided for @muteOrdinalFourth.
+  ///
+  /// In en, this message translates to:
+  /// **'Fourth'**
+  String get muteOrdinalFourth;
+
+  /// No description provided for @muteOrdinalLast.
+  ///
+  /// In en, this message translates to:
+  /// **'Last'**
+  String get muteOrdinalLast;
+
+  /// No description provided for @muteOpEq.
+  ///
+  /// In en, this message translates to:
+  /// **'equals'**
+  String get muteOpEq;
+
+  /// No description provided for @muteOpNeq.
+  ///
+  /// In en, this message translates to:
+  /// **'not equals'**
+  String get muteOpNeq;
+
+  /// No description provided for @muteOpContains.
+  ///
+  /// In en, this message translates to:
+  /// **'contains'**
+  String get muteOpContains;
+
+  /// No description provided for @muteSummaryMonthday.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly on day {days}'**
+  String muteSummaryMonthday(String days);
+
+  /// No description provided for @muteSummaryNthDay.
+  ///
+  /// In en, this message translates to:
+  /// **'{ordinal} {day} of the month'**
+  String muteSummaryNthDay(String ordinal, String day);
+
+  /// No description provided for @muteSummaryNthWeekday.
+  ///
+  /// In en, this message translates to:
+  /// **'{ordinal} weekday of the month'**
+  String muteSummaryNthWeekday(String ordinal);
+
+  /// No description provided for @muteExceptionsSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'Exceptions: {dates} dates, {calendars} calendars'**
+  String muteExceptionsSummary(int dates, int calendars);
+
+  /// No description provided for @muteEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit mute'**
+  String get muteEditTitle;
+
+  /// No description provided for @muteName.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get muteName;
+
+  /// No description provided for @muteComment.
+  ///
+  /// In en, this message translates to:
+  /// **'Comment'**
+  String get muteComment;
+
+  /// No description provided for @muteRecurringToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat on selected days'**
+  String get muteRecurringToggle;
+
+  /// No description provided for @muteCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'Create mute'**
+  String get muteCreate;
+
+  /// No description provided for @muteSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save mute'**
+  String get muteSave;
+
+  /// No description provided for @muteCreatedBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Created by {email}'**
+  String muteCreatedBy(String email);
+
+  /// No description provided for @muteStarts.
+  ///
+  /// In en, this message translates to:
+  /// **'Starts'**
+  String get muteStarts;
+
+  /// No description provided for @muteEnds.
+  ///
+  /// In en, this message translates to:
+  /// **'Ends'**
+  String get muteEnds;
+
+  /// No description provided for @muteWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get muteWeekly;
+
+  /// No description provided for @muteMonthly.
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get muteMonthly;
+
+  /// No description provided for @muteTimezone.
+  ///
+  /// In en, this message translates to:
+  /// **'Time zone'**
+  String get muteTimezone;
+
+  /// No description provided for @muteStartTime.
+  ///
+  /// In en, this message translates to:
+  /// **'From (local time)'**
+  String get muteStartTime;
+
+  /// No description provided for @muteEndTime.
+  ///
+  /// In en, this message translates to:
+  /// **'To (local time)'**
+  String get muteEndTime;
+
+  /// No description provided for @muteEndTimeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier than the start = next day.'**
+  String get muteEndTimeHint;
+
+  /// No description provided for @muteModeMonthday.
+  ///
+  /// In en, this message translates to:
+  /// **'Day of the month'**
+  String get muteModeMonthday;
+
+  /// No description provided for @muteModeWeekday.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekday of the month'**
+  String get muteModeWeekday;
+
+  /// No description provided for @muteCustomRule.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom rule'**
+  String get muteCustomRule;
+
+  /// No description provided for @muteMonthDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Days of the month'**
+  String get muteMonthDays;
+
+  /// No description provided for @muteMonthDaysHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated, 1–31; -1 is the last day.'**
+  String get muteMonthDaysHint;
+
+  /// No description provided for @muteMonthDaysInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter days between 1 and 31 or -1 … -31.'**
+  String get muteMonthDaysInvalid;
+
+  /// No description provided for @muteAnyWeekday.
+  ///
+  /// In en, this message translates to:
+  /// **'Weekday (Mon–Fri)'**
+  String get muteAnyWeekday;
+
+  /// No description provided for @muteExceptions.
+  ///
+  /// In en, this message translates to:
+  /// **'Exceptions'**
+  String get muteExceptions;
+
+  /// No description provided for @muteExceptionsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No occurrence starts on these local dates or on the dates of the selected holiday calendars.'**
+  String get muteExceptionsHint;
+
+  /// No description provided for @muteAddException.
+  ///
+  /// In en, this message translates to:
+  /// **'Add date'**
+  String get muteAddException;
+
+  /// No description provided for @muteUpcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Next occurrences'**
+  String get muteUpcoming;
+
+  /// No description provided for @muteUpcomingInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the schedule to see its next occurrences.'**
+  String get muteUpcomingInvalid;
+
+  /// No description provided for @muteUpcomingNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No further occurrences.'**
+  String get muteUpcomingNone;
+
+  /// No description provided for @muteRules.
+  ///
+  /// In en, this message translates to:
+  /// **'Rules'**
+  String get muteRules;
+
+  /// No description provided for @muteRulesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'None selected = all rules.'**
+  String get muteRulesHint;
+
+  /// No description provided for @muteMatchers.
+  ///
+  /// In en, this message translates to:
+  /// **'Label matchers'**
+  String get muteMatchers;
+
+  /// No description provided for @muteAddMatcher.
+  ///
+  /// In en, this message translates to:
+  /// **'Add matcher'**
+  String get muteAddMatcher;
+
+  /// No description provided for @muteRemoveMatcher.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove matcher'**
+  String get muteRemoveMatcher;
+
+  /// No description provided for @mutesEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get mutesEdit;
+
+  /// No description provided for @mutesDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get mutesDelete;
+
+  /// No description provided for @mutesDetailed.
+  ///
+  /// In en, this message translates to:
+  /// **'New mute, with every option'**
+  String get mutesDetailed;
+
+  /// No description provided for @mutesStatusScheduled.
+  ///
+  /// In en, this message translates to:
+  /// **'scheduled'**
+  String get mutesStatusScheduled;
+
+  /// No description provided for @mutesStatusEnded.
+  ///
+  /// In en, this message translates to:
+  /// **'ended'**
+  String get mutesStatusEnded;
+
   /// No description provided for @serverTitle.
   ///
   /// In en, this message translates to:
@@ -832,7 +2164,7 @@ abstract class L {
   /// No description provided for @databasesEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No database instance is reporting.'**
+  /// **'No database sends query statistics yet. Enable query monitoring on the infra agent of the database host (config.yaml) and restart it:\nintegrations.postgresql.query_stats.enabled: true'**
   String get databasesEmpty;
 
   /// No description provided for @slosEmpty.
@@ -2584,7 +3916,7 @@ abstract class L {
   /// No description provided for @mutesRecurring.
   ///
   /// In en, this message translates to:
-  /// **'recurring; edited on the web'**
+  /// **'recurring'**
   String get mutesRecurring;
 
   /// No description provided for @mutesDuration30m.
@@ -6397,6 +7729,252 @@ abstract class L {
   /// **'Calling services'**
   String get dbCallers;
 
+  /// No description provided for @dbSourceApplications.
+  ///
+  /// In en, this message translates to:
+  /// **'From applications'**
+  String get dbSourceApplications;
+
+  /// No description provided for @dbSourceServers.
+  ///
+  /// In en, this message translates to:
+  /// **'From servers'**
+  String get dbSourceServers;
+
+  /// No description provided for @dbAppHint.
+  ///
+  /// In en, this message translates to:
+  /// **'These durations are what the applications measured, so they include the network and waiting for a connection. Wait events and sessions need a connection to the server: see From servers.'**
+  String get dbAppHint;
+
+  /// No description provided for @dbAppSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search statements'**
+  String get dbAppSearch;
+
+  /// No description provided for @dbAppServices.
+  ///
+  /// In en, this message translates to:
+  /// **'Services'**
+  String get dbAppServices;
+
+  /// No description provided for @dbAppPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'Execution plan'**
+  String get dbAppPlan;
+
+  /// No description provided for @dbAppGeneric.
+  ///
+  /// In en, this message translates to:
+  /// **'Generic plan: made without the parameter values, so it can differ from what the slow call used.'**
+  String get dbAppGeneric;
+
+  /// No description provided for @dbAppNoPlan.
+  ///
+  /// In en, this message translates to:
+  /// **'No plan captured. Plans come from an agent with explaining turned on, such as WithExplain in the Go pgx package.'**
+  String get dbAppNoPlan;
+
+  /// No description provided for @dbAppEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No application sent a database call in this range. APM agents report them on their own, with no connection to the database.'**
+  String get dbAppEmpty;
+
+  /// No description provided for @dbServerView.
+  ///
+  /// In en, this message translates to:
+  /// **'Server view'**
+  String get dbServerView;
+
+  /// No description provided for @dbNotMonitored.
+  ///
+  /// In en, this message translates to:
+  /// **'Not monitored on the database server'**
+  String get dbNotMonitored;
+
+  /// No description provided for @apmSortService.
+  ///
+  /// In en, this message translates to:
+  /// **'Service'**
+  String get apmSortService;
+
+  /// No description provided for @apmSortEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get apmSortEnvironment;
+
+  /// No description provided for @apmSortThroughput.
+  ///
+  /// In en, this message translates to:
+  /// **'Throughput'**
+  String get apmSortThroughput;
+
+  /// No description provided for @apmSortErrorRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Error rate'**
+  String get apmSortErrorRate;
+
+  /// No description provided for @apmSortLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Last seen'**
+  String get apmSortLastSeen;
+
+  /// No description provided for @apmSortTransaction.
+  ///
+  /// In en, this message translates to:
+  /// **'Transaction'**
+  String get apmSortTransaction;
+
+  /// No description provided for @apmSortStatement.
+  ///
+  /// In en, this message translates to:
+  /// **'Statement'**
+  String get apmSortStatement;
+
+  /// No description provided for @apmSortDatabase.
+  ///
+  /// In en, this message translates to:
+  /// **'Database'**
+  String get apmSortDatabase;
+
+  /// No description provided for @apmSortInstance.
+  ///
+  /// In en, this message translates to:
+  /// **'Instance'**
+  String get apmSortInstance;
+
+  /// No description provided for @apmSortHost.
+  ///
+  /// In en, this message translates to:
+  /// **'Host'**
+  String get apmSortHost;
+
+  /// No description provided for @apmSortCalls.
+  ///
+  /// In en, this message translates to:
+  /// **'Calls'**
+  String get apmSortCalls;
+
+  /// No description provided for @apmSortAas.
+  ///
+  /// In en, this message translates to:
+  /// **'Avg active sessions'**
+  String get apmSortAas;
+
+  /// No description provided for @apmSortTopWait.
+  ///
+  /// In en, this message translates to:
+  /// **'Top wait'**
+  String get apmSortTopWait;
+
+  /// No description provided for @apmSortWaitType.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait type'**
+  String get apmSortWaitType;
+
+  /// No description provided for @apmSortWaitEvent.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait event'**
+  String get apmSortWaitEvent;
+
+  /// No description provided for @apmSortShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share of time'**
+  String get apmSortShare;
+
+  /// No description provided for @apmSortStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get apmSortStart;
+
+  /// No description provided for @apmSortDuration.
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get apmSortDuration;
+
+  /// No description provided for @deploymentsWindowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Window'**
+  String get deploymentsWindowLabel;
+
+  /// No description provided for @deploymentsWindow15m.
+  ///
+  /// In en, this message translates to:
+  /// **'15 minutes'**
+  String get deploymentsWindow15m;
+
+  /// No description provided for @deploymentsWindow30m.
+  ///
+  /// In en, this message translates to:
+  /// **'30 minutes'**
+  String get deploymentsWindow30m;
+
+  /// No description provided for @deploymentsWindow1h.
+  ///
+  /// In en, this message translates to:
+  /// **'1 hour'**
+  String get deploymentsWindow1h;
+
+  /// No description provided for @deploymentsWindow3h.
+  ///
+  /// In en, this message translates to:
+  /// **'3 hours'**
+  String get deploymentsWindow3h;
+
+  /// No description provided for @deploymentsNoNewErrors.
+  ///
+  /// In en, this message translates to:
+  /// **'No new error groups.'**
+  String get deploymentsNoNewErrors;
+
+  /// No description provided for @txRelatedLogs.
+  ///
+  /// In en, this message translates to:
+  /// **'Related logs'**
+  String get txRelatedLogs;
+
+  /// No description provided for @txTraces.
+  ///
+  /// In en, this message translates to:
+  /// **'Traces of this transaction'**
+  String get txTraces;
+
+  /// No description provided for @txHistogram.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency distribution'**
+  String get txHistogram;
+
+  /// No description provided for @txLatency.
+  ///
+  /// In en, this message translates to:
+  /// **'Latency'**
+  String get txLatency;
+
+  /// No description provided for @txSlowest.
+  ///
+  /// In en, this message translates to:
+  /// **'Slowest traces'**
+  String get txSlowest;
+
+  /// No description provided for @txNoTraces.
+  ///
+  /// In en, this message translates to:
+  /// **'No traces in this range.'**
+  String get txNoTraces;
+
   /// No description provided for @containersHost.
   ///
   /// In en, this message translates to:
@@ -7374,6 +8952,414 @@ abstract class L {
   /// In en, this message translates to:
   /// **'Funnel'**
   String get rumTabFunnel;
+
+  /// No description provided for @rumTabCrashes.
+  ///
+  /// In en, this message translates to:
+  /// **'Crashes'**
+  String get rumTabCrashes;
+
+  /// No description provided for @rumTabAnalytics.
+  ///
+  /// In en, this message translates to:
+  /// **'Analytics'**
+  String get rumTabAnalytics;
+
+  /// No description provided for @rumServerTooOld.
+  ///
+  /// In en, this message translates to:
+  /// **'This server\'s openlog is too old for this. Update the server to see it here.'**
+  String get rumServerTooOld;
+
+  /// No description provided for @rumCrashesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No crashes in this range. Crash capture is off by default in the SDKs.'**
+  String get rumCrashesEmpty;
+
+  /// No description provided for @rumCrashesSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{sessions} sessions · last on {version} · {when}'**
+  String rumCrashesSummary(String sessions, String version, String when);
+
+  /// No description provided for @rumCrashesStack.
+  ///
+  /// In en, this message translates to:
+  /// **'Stack'**
+  String get rumCrashesStack;
+
+  /// No description provided for @rumCrashesMissingSymbols.
+  ///
+  /// In en, this message translates to:
+  /// **'No symbols uploaded for: {what}'**
+  String rumCrashesMissingSymbols(String what);
+
+  /// No description provided for @rumCrashKindUncaught.
+  ///
+  /// In en, this message translates to:
+  /// **'Uncaught exception'**
+  String get rumCrashKindUncaught;
+
+  /// No description provided for @rumCrashKindSignal.
+  ///
+  /// In en, this message translates to:
+  /// **'Signal'**
+  String get rumCrashKindSignal;
+
+  /// No description provided for @rumCrashKindAnr.
+  ///
+  /// In en, this message translates to:
+  /// **'Not responding'**
+  String get rumCrashKindAnr;
+
+  /// No description provided for @rumCrashKindOom.
+  ///
+  /// In en, this message translates to:
+  /// **'Out of memory'**
+  String get rumCrashKindOom;
+
+  /// No description provided for @rumSortApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Application'**
+  String get rumSortApp;
+
+  /// No description provided for @rumSortEnvironment.
+  ///
+  /// In en, this message translates to:
+  /// **'Environment'**
+  String get rumSortEnvironment;
+
+  /// No description provided for @rumSortLastSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'Last seen'**
+  String get rumSortLastSeen;
+
+  /// No description provided for @rumSortFirstSeen.
+  ///
+  /// In en, this message translates to:
+  /// **'First seen'**
+  String get rumSortFirstSeen;
+
+  /// No description provided for @rumSortVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get rumSortVersion;
+
+  /// No description provided for @rumSortCrashFree.
+  ///
+  /// In en, this message translates to:
+  /// **'Crash-free'**
+  String get rumSortCrashFree;
+
+  /// No description provided for @rumReleaseNoVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'No version carried sessions in this range.'**
+  String get rumReleaseNoVersions;
+
+  /// No description provided for @rumReleaseNoDeployments.
+  ///
+  /// In en, this message translates to:
+  /// **'No deployment was seen in this range.'**
+  String get rumReleaseNoDeployments;
+
+  /// No description provided for @rumReleaseNoCrashCapture.
+  ///
+  /// In en, this message translates to:
+  /// **'This version cannot report crashes.'**
+  String get rumReleaseNoCrashCapture;
+
+  /// No description provided for @analyticsPeriodLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get analyticsPeriodLabel;
+
+  /// No description provided for @analyticsLastDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Last {days} days'**
+  String analyticsLastDays(int days);
+
+  /// No description provided for @analyticsComparedWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Compared with {from} to {to}. Complete days, in UTC.'**
+  String analyticsComparedWith(String from, String to);
+
+  /// No description provided for @analyticsPreviousPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'This application has no data from the start of the previous period, so a rise may only mean it started reporting since.'**
+  String get analyticsPreviousPartial;
+
+  /// No description provided for @analyticsNoChange.
+  ///
+  /// In en, this message translates to:
+  /// **'No change'**
+  String get analyticsNoChange;
+
+  /// No description provided for @analyticsFromNothing.
+  ///
+  /// In en, this message translates to:
+  /// **'(new)'**
+  String get analyticsFromNothing;
+
+  /// No description provided for @analyticsNewUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'New users'**
+  String get analyticsNewUsers;
+
+  /// No description provided for @analyticsAvgDailyUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Average daily users'**
+  String get analyticsAvgDailyUsers;
+
+  /// No description provided for @analyticsPageViews.
+  ///
+  /// In en, this message translates to:
+  /// **'Page views'**
+  String get analyticsPageViews;
+
+  /// No description provided for @analyticsDau.
+  ///
+  /// In en, this message translates to:
+  /// **'DAU'**
+  String get analyticsDau;
+
+  /// No description provided for @analyticsWau.
+  ///
+  /// In en, this message translates to:
+  /// **'WAU'**
+  String get analyticsWau;
+
+  /// No description provided for @analyticsMau.
+  ///
+  /// In en, this message translates to:
+  /// **'MAU'**
+  String get analyticsMau;
+
+  /// No description provided for @analyticsStickiness.
+  ///
+  /// In en, this message translates to:
+  /// **'DAU / MAU'**
+  String get analyticsStickiness;
+
+  /// No description provided for @analyticsActivityChart.
+  ///
+  /// In en, this message translates to:
+  /// **'Active users'**
+  String get analyticsActivityChart;
+
+  /// No description provided for @analyticsRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Retention'**
+  String get analyticsRetention;
+
+  /// No description provided for @analyticsCohort.
+  ///
+  /// In en, this message translates to:
+  /// **'First seen'**
+  String get analyticsCohort;
+
+  /// No description provided for @analyticsSize.
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get analyticsSize;
+
+  /// No description provided for @analyticsGrainLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Per'**
+  String get analyticsGrainLabel;
+
+  /// No description provided for @analyticsGrainDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day'**
+  String get analyticsGrainDay;
+
+  /// No description provided for @analyticsGrainWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get analyticsGrainWeek;
+
+  /// No description provided for @analyticsGrainMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get analyticsGrainMonth;
+
+  /// No description provided for @analyticsPeriodDay.
+  ///
+  /// In en, this message translates to:
+  /// **'Day {n}'**
+  String analyticsPeriodDay(int n);
+
+  /// No description provided for @analyticsPeriodWeek.
+  ///
+  /// In en, this message translates to:
+  /// **'Week {n}'**
+  String analyticsPeriodWeek(int n);
+
+  /// No description provided for @analyticsPeriodMonth.
+  ///
+  /// In en, this message translates to:
+  /// **'Month {n}'**
+  String analyticsPeriodMonth(int n);
+
+  /// No description provided for @analyticsEvents.
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get analyticsEvents;
+
+  /// No description provided for @analyticsEventName.
+  ///
+  /// In en, this message translates to:
+  /// **'Event'**
+  String get analyticsEventName;
+
+  /// No description provided for @analyticsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Count'**
+  String get analyticsCount;
+
+  /// No description provided for @analyticsSessions.
+  ///
+  /// In en, this message translates to:
+  /// **'Sessions'**
+  String get analyticsSessions;
+
+  /// No description provided for @analyticsUsers.
+  ///
+  /// In en, this message translates to:
+  /// **'Users'**
+  String get analyticsUsers;
+
+  /// No description provided for @analyticsAcquisition.
+  ///
+  /// In en, this message translates to:
+  /// **'Traffic sources'**
+  String get analyticsAcquisition;
+
+  /// No description provided for @analyticsBy.
+  ///
+  /// In en, this message translates to:
+  /// **'By'**
+  String get analyticsBy;
+
+  /// No description provided for @analyticsAudience.
+  ///
+  /// In en, this message translates to:
+  /// **'Audience'**
+  String get analyticsAudience;
+
+  /// No description provided for @analyticsAudienceCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'Country'**
+  String get analyticsAudienceCountry;
+
+  /// No description provided for @analyticsAudienceDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Device type'**
+  String get analyticsAudienceDevice;
+
+  /// No description provided for @analyticsAudienceModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Device model'**
+  String get analyticsAudienceModel;
+
+  /// No description provided for @analyticsAudienceOs.
+  ///
+  /// In en, this message translates to:
+  /// **'Operating system'**
+  String get analyticsAudienceOs;
+
+  /// No description provided for @analyticsAudienceBrowser.
+  ///
+  /// In en, this message translates to:
+  /// **'Browser'**
+  String get analyticsAudienceBrowser;
+
+  /// No description provided for @analyticsAudienceVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'App version'**
+  String get analyticsAudienceVersion;
+
+  /// No description provided for @analyticsUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'(unknown)'**
+  String get analyticsUnknown;
+
+  /// No description provided for @analyticsNoCountry.
+  ///
+  /// In en, this message translates to:
+  /// **'This server records no country yet. Set OPENLOG_RUM_GEOIP_DB or OPENLOG_RUM_GEO_HEADER: see the product analytics guide.'**
+  String get analyticsNoCountry;
+
+  /// No description provided for @analyticsSourceReferrer.
+  ///
+  /// In en, this message translates to:
+  /// **'Referrer'**
+  String get analyticsSourceReferrer;
+
+  /// No description provided for @analyticsSourceSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Source'**
+  String get analyticsSourceSource;
+
+  /// No description provided for @analyticsSourceMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get analyticsSourceMedium;
+
+  /// No description provided for @analyticsSourceCampaign.
+  ///
+  /// In en, this message translates to:
+  /// **'Campaign'**
+  String get analyticsSourceCampaign;
+
+  /// No description provided for @analyticsDirect.
+  ///
+  /// In en, this message translates to:
+  /// **'(direct)'**
+  String get analyticsDirect;
+
+  /// No description provided for @analyticsNoRows.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing in the last 30 days.'**
+  String get analyticsNoRows;
+
+  /// No description provided for @analyticsSamplingChanged.
+  ///
+  /// In en, this message translates to:
+  /// **'The key\'s sampling rate changed in this range, so part of the drop is people leaving the sample rather than the product.'**
+  String get analyticsSamplingChanged;
+
+  /// No description provided for @analyticsNotCollecting.
+  ///
+  /// In en, this message translates to:
+  /// **'No visitors are being recognised for this application. Set Analytics to \"Visitors\" on its key under Settings → Browser keys, and use an SDK version that supports it.'**
+  String get analyticsNotCollecting;
 
   /// No description provided for @rumPagesEmpty.
   ///

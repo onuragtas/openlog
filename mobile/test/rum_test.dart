@@ -3,6 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/rum.dart';
+import 'package:openlog_mobile/src/sections.dart';
 
 import 'fake_server.dart';
 
@@ -59,6 +60,9 @@ Map<String, Object?> visit(String id, {int errors = 1}) => {
   'user_id': '',
   'country': '',
 };
+
+Map<String, String> seenQuery(FakeServer server) =>
+    Uri.splitQueryString(server.requests.last.query);
 
 void main() {
   test('the routes are asked for by the chosen measure', () async {
@@ -182,9 +186,10 @@ void main() {
 
     // An empty facet is not "" on the wire: the server would read it as a
     // device whose name is the empty string and answer nothing.
-    expect(Uri.splitQueryString(server.requests.single.query), {
-      'app': 'shop-web',
-    });
+    final asked = Uri.splitQueryString(server.requests.single.query);
+    expect(asked.containsKey('device_type'), isFalse);
+    expect(asked.containsKey('browser'), isFalse);
+    expect(asked.containsKey('user_id'), isFalse);
   });
 
   test('the visits of an application, and one of them in full', () async {
@@ -295,9 +300,247 @@ void main() {
     );
 
     await c.refresh();
-    expect(c.value!.releases.first.crashFreeRate, closeTo(0.9875, 0.0001));
-    expect(c.value!.releases.last.sessions, 0);
-    expect(c.value!.deployments.single.rollback, isTrue);
+    expect(c.items.first.crashFreeRate, closeTo(0.9875, 0.0001));
+    expect(c.items.last.sessions, 0);
+    expect(c.deployments.single.rollback, isTrue);
+    expect(Uri.splitQueryString(server.requests.single.query), {
+      'app': 'shop-web',
+      'sort': 'last_seen',
+      'dir': 'desc',
+      'limit': '50',
+    });
+  });
+
+  group('the other lists sort and page as the web does', () {
+    Map<String, Object?> app(String name) => {
+      'app': name,
+      'environment': 'production',
+      'views': 10,
+      'sessions': 2,
+      'errors': 0,
+      'last_seen': '2026-10-11T09:00:00.000000000Z',
+    };
+
+    test('the applications, busiest first', () async {
+      final server = await FakeServer.start((req, seen) {
+        final q = Uri.splitQueryString(seen.query);
+        writeJson(req, 200, {
+          'apps': [app(q['offset'] == null ? 'one' : 'two')],
+          'has_more': q['offset'] == null,
+        });
+      });
+      addTearDown(server.stop);
+      final c = RumController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+      );
+
+      await c.refresh();
+      expect(Uri.splitQueryString(server.requests.last.query), {
+        'sort': 'views',
+        'dir': 'desc',
+        'limit': '50',
+      });
+      expect(c.hasMore, isTrue);
+
+      await c.loadMore();
+      expect(c.items.map((a) => a.app), ['one', 'two']);
+      expect(c.hasMore, isFalse);
+      expect(Uri.splitQueryString(server.requests.last.query)['offset'], '1');
+
+      // A name starts from A; a number from the largest.
+      await c.setSort('app');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'asc');
+      await c.setSort('environment');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'asc');
+      await c.setSort('errors');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'desc');
+    });
+
+    test('the sessions, by when they started', () async {
+      final server = await FakeServer.start((req, seen) {
+        final q = Uri.splitQueryString(seen.query);
+        writeJson(req, 200, {
+          'sessions': [
+            visit(q['offset'] == null ? 'first-one-xxx' : 'next-one-xxxx'),
+          ],
+          'has_more': q['offset'] == null,
+        });
+      });
+      addTearDown(server.stop);
+      final c = RumSessionsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      expect(Uri.splitQueryString(server.requests.last.query), {
+        'app': 'shop-web',
+        'sort': 'started',
+        'dir': 'desc',
+        'limit': '50',
+      });
+      await c.loadMore();
+      expect(c.items.length, 2);
+
+      await c.setSort('entry');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'asc');
+      await c.setSort('page_views');
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'desc');
+    });
+
+    test('the versions page while the deployments stay', () async {
+      Map<String, Object?> release(String v) => {
+        'version': v,
+        'sessions': 10,
+        'error_sessions': 1,
+        'crash_free_rate': 0.9,
+        'first_seen': '2026-10-11T09:00:00.000000000Z',
+        'last_seen': '2026-10-11T09:00:00.000000000Z',
+      };
+      Map<String, Object?> deployment(String v) => {
+        'timestamp': '2026-10-11T09:00:00.000000000Z',
+        't': 1,
+        'service_namespace': '',
+        'environment': 'production',
+        'version': v,
+        'previous_version': '',
+        'initial': true,
+        'rollback': false,
+      };
+      final server = await FakeServer.start((req, seen) {
+        final q = Uri.splitQueryString(seen.query);
+        final first = q['offset'] == null;
+        writeJson(req, 200, {
+          'releases': [release(first ? '1.2' : '1.1')],
+          'deployments': first ? [deployment('1.2')] : <Object>[],
+          'has_more': first,
+        });
+      });
+      addTearDown(server.stop);
+      final c = RumReleasesController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      await c.loadMore();
+      expect(c.items.map((r) => r.version), ['1.2', '1.1']);
+      expect(c.deployments.single.version, '1.2');
+
+      await c.setSort('crash_free');
+      expect(
+        Uri.splitQueryString(server.requests.last.query)['sort'],
+        'crash_free',
+      );
+      expect(Uri.splitQueryString(server.requests.last.query)['dir'], 'desc');
+    });
+
+    test('an older server sends no next page, and nothing breaks', () async {
+      final server = await FakeServer.start(
+        (req, seen) => writeJson(req, 200, {
+          'sessions': [visit('old-server-xxxx')],
+        }),
+      );
+      addTearDown(server.stop);
+      final c = RumSessionsController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      expect(c.hasMore, isFalse);
+      expect(c.items.length, 1);
+    });
+  });
+
+  group('the crashes', () {
+    test('are asked for by application and read the new fields', () async {
+      final server = await FakeServer.start(
+        (req, seen) => writeJson(req, 200, {
+          'crashes': [
+            {
+              'group_id': 'a1',
+              'type': 'Boom',
+              'message': 'bad',
+              'kind': 'signal',
+              'count': 3,
+              'sessions': 2,
+              'last_version': '1.0',
+              'last_seen': '2026-10-11T09:00:00.000000000Z',
+              'stack': 'x',
+              'frame': 'main',
+              'missing_symbols': ['libshop.so'],
+            },
+          ],
+        }),
+      );
+      addTearDown(server.stop);
+      final c = RumCrashesController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      expect(seenQuery(server), {'app': 'shop-web'});
+      expect(c.items.single.frame, 'main');
+      expect(c.items.single.missingSymbols, ['libshop.so']);
+      expect(c.serverTooOld, isFalse);
+    });
+
+    test(
+      'a 404 is an old server, not a failure and not an empty list',
+      () async {
+        final server = await FakeServer.start(
+          (req, seen) => writeJson(req, 404, {
+            'error': {'code': 'not_found', 'message': 'no such route'},
+          }),
+        );
+        addTearDown(server.stop);
+        final c = RumCrashesController(
+          OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+          'shop-web',
+        );
+
+        await c.refresh();
+        expect(c.serverTooOld, isTrue);
+        expect(c.failure, isNull);
+      },
+    );
+
+    test('another failure stays a failure', () async {
+      final server = await FakeServer.start(
+        (req, seen) => writeJson(req, 500, {
+          'error': {'code': 'internal', 'message': 'boom'},
+        }),
+      );
+      addTearDown(server.stop);
+      final c = RumCrashesController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      expect(c.serverTooOld, isFalse);
+      expect(c.failure?.kind, 'unexpected');
+    });
+
+    test('a missing field is a failure, not an exception', () async {
+      final server = await FakeServer.start(
+        (req, seen) => writeJson(req, 200, {
+          'crashes': [
+            {'group_id': 'a1'},
+          ],
+        }),
+      );
+      addTearDown(server.stop);
+      final c = RumCrashesController(
+        OpenlogClient(baseUrl: server.baseUrl)..token = 'olm_x',
+        'shop-web',
+      );
+
+      await c.refresh();
+      expect(c.failure?.kind, 'unexpected');
+    });
   });
 
   group('the funnel', () {
