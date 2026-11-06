@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../list_controller.dart';
 import 'failure_text.dart';
+import 'list_paging.dart';
 
 class ListScreen<T> extends StatelessWidget {
   const ListScreen({
@@ -31,7 +32,8 @@ class ListScreen<T> extends StatelessWidget {
   /// one row per item, which is every other list.
   final int? itemCount;
 
-  /// Under the last row: what fetches the next page of a long list.
+  /// Under the last row: what fetches the next page of a long list. A paged
+  /// controller gets a [LoadMoreTile] without asking.
   final Widget? footer;
 
   @override
@@ -96,7 +98,13 @@ class ListScreen<T> extends StatelessWidget {
                     return _Empty(title: emptyTitle, banner: banner);
                   }
                   final rows = itemCount ?? controller.items.length;
-                  if (i == rows + 1) return footer ?? const SizedBox.shrink();
+                  if (i == rows + 1) {
+                    final c = controller;
+                    return footer ??
+                        (c is PagedListController<T>
+                            ? LoadMoreTile(controller: c)
+                            : const SizedBox.shrink());
+                  }
                   return itemBuilder(context, i - 1);
                 },
               ),

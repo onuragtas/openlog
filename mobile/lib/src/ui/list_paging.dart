@@ -57,6 +57,11 @@ class ListSortBar extends StatelessWidget {
 }
 
 /// The foot of a list: more to fetch, or a failed attempt at it.
+///
+/// Reaching it is asking for the next page, so it fetches by itself: a list
+/// builds its last row only when the person has scrolled to it. A failed
+/// attempt waits for the button instead, or a phone without signal would
+/// ask again on every frame.
 class LoadMoreTile extends StatelessWidget {
   const LoadMoreTile({super.key, required this.controller});
 
@@ -66,6 +71,11 @@ class LoadMoreTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = L.of(context);
     if (!controller.hasMore) return const SizedBox.shrink();
+    if (!controller.loadingMore && !controller.loadMoreFailed) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => controller.loadMore(),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Center(

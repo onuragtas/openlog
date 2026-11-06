@@ -721,7 +721,7 @@ abstract class PagedSectionController<T> extends PagedListController<T>
     implements SectionController<T> {
   PagedSectionController(
     this.client, {
-    required super.sort,
+    super.sort,
     super.dir,
     super.ascendingSorts,
   });
@@ -1033,7 +1033,7 @@ class DatabasesController extends PagedListController<DbInstance> {
 }
 
 /// Entry spans: the traces section, which is a list of requests.
-class TracesController extends SectionController<SpanQueryRow> {
+class TracesController extends PagedSectionController<SpanQueryRow> {
   TracesController(super.client);
 
   /// What the filter builder added, AND-ed with the search box.
@@ -1044,12 +1044,19 @@ class TracesController extends SectionController<SpanQueryRow> {
   /// them beats the web's sort menu.
   bool slowest = false;
 
+  /// Paged by the server's cursor, which belongs to the order it was made
+  /// in: switching to slowest starts over from the first page.
   @override
-  Future<List<SpanQueryRow>> fetch() async => (await client.traces(
-    q: query.trim(),
-    slowest: slowest,
-    filters: [for (final f in filters) f.toJson()],
-  )).rows;
+  Future<ListPage<SpanQueryRow>> fetchPage(int offset) async {
+    final page = await client.traces(
+      q: query.trim(),
+      slowest: slowest,
+      filters: [for (final f in filters) f.toJson()],
+      limit: limit,
+      cursor: offset == 0 ? null : cursor,
+    );
+    return ListPage(page.rows, next: page.nextCursor);
+  }
 }
 
 /// Metric names, for the metrics explorer.
@@ -1116,7 +1123,7 @@ class InventoryController extends SectionController<InventorySearchItem> {
 /// Read-only on purpose. Changing a rollout policy is a fleet-wide action
 /// with a blast radius, and a phone in a pocket is the wrong place for the
 /// button that starts one.
-class FleetController extends SectionController<FleetHost> {
+class FleetController extends PagedSectionController<FleetHost> {
   FleetController(super.client);
 
   FleetSummary? summary;
@@ -1131,8 +1138,14 @@ class FleetController extends SectionController<FleetHost> {
   /// rather than let two pauses race.
   bool acting = false;
 
+  /// The first page brings the summary, the policy and the rollouts with
+  /// it; a next page is only more hosts.
   @override
-  Future<List<FleetHost>> fetch() async {
+  Future<ListPage<FleetHost>> fetchPage(int offset) async {
+    if (offset > 0) {
+      final page = await client.fleetHosts(q: query.trim(), cursor: cursor);
+      return ListPage(page.hosts, next: page.nextCursor);
+    }
     final answers = await Future.wait([
       client.fleetSummary(),
       client.fleetHosts(q: query.trim()),
@@ -1142,7 +1155,8 @@ class FleetController extends SectionController<FleetHost> {
     summary = answers[0] as FleetSummary;
     policy = answers[2] as FleetPolicy;
     rollouts = (answers[3] as FleetRolloutPage).rollouts;
-    return (answers[1] as FleetHostPage).hosts;
+    final hosts = answers[1] as FleetHostPage;
+    return ListPage(hosts.hosts, next: hosts.nextCursor);
   }
 
   /// Runs one rollout action and reloads: pausing a rollout changes the

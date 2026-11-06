@@ -5,7 +5,7 @@ import 'fields.dart';
 import 'list_controller.dart';
 import 'log_fields.dart';
 
-class LogsController extends ListController<LogQueryRow> {
+class LogsController extends PagedListController<LogQueryRow> {
   LogsController(
     this._client, {
     this.traceId = '',
@@ -69,8 +69,14 @@ class LogsController extends ListController<LogQueryRow> {
   @override
   String get forbiddenKind => 'logsForbidden';
 
+  /// The window the first page was read over, sent again with the next.
+  Map<String, String>? _range;
+
+  /// Paged by the server's cursor, as the browser pages it: an offset into
+  /// a stream that is still being written would repeat lines.
   @override
-  Future<List<LogQueryRow>> fetch() async {
+  Future<ListPage<LogQueryRow>> fetchPage(int offset) async {
+    if (offset == 0) _range = _client.windowQuery();
     final page = await _client.logs(
       q: query.trim(),
       filters: _conditions(),
@@ -78,8 +84,11 @@ class LogsController extends ListController<LogQueryRow> {
       oldestFirst: oldestFirst,
       transaction: transaction,
       transactionService: transactionService,
+      limit: limit,
+      cursor: offset == 0 ? null : cursor,
+      range: _range,
     );
-    return page.rows;
+    return ListPage(page.rows, next: page.nextCursor);
   }
 
   /// Everything this screen asks, as conditions.

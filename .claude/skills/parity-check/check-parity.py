@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-LIST_PARAMS = ("sort", "dir", "offset", "days", "compare")
+LIST_PARAMS = ("sort", "dir", "offset", "cursor", "days", "compare")
 
 
 def normal(path: str) -> str:

@@ -56,10 +56,15 @@ abstract class ListController<T> extends ChangeNotifier {
 
 /// One page of a list the server sorts and cuts (api.md "Lists").
 class ListPage<T> {
-  const ListPage(this.items, {this.hasMore = false});
+  const ListPage(this.items, {this.hasMore = false, this.next});
 
   final List<T> items;
   final bool hasMore;
+
+  /// Where the next page starts, for a list the server pages by cursor
+  /// rather than by offset (the logs, the traces, the incidents). Null or
+  /// empty is the end.
+  final String? next;
 }
 
 /// A list too long to fetch at once, with the same sort and pages as the web.
@@ -67,9 +72,12 @@ class ListPage<T> {
 /// A phone scrolls rather than turns pages, so a next page is added to the
 /// rows on screen. An older server ignores `offset`, but it does not send
 /// `has_more` either, so there is never a next page to fetch from it.
+///
+/// A list paged by cursor reads [cursor] in [fetchPage] instead of the
+/// offset, and has no sort of its own to pick.
 abstract class PagedListController<T> extends ListController<T> {
   PagedListController({
-    required this.sort,
+    this.sort = '',
     this.dir = 'desc',
     this.limit = 50,
     this.ascendingSorts = const {},
@@ -86,6 +94,10 @@ abstract class PagedListController<T> extends ListController<T> {
   bool hasMore = false;
   bool loadingMore = false;
 
+  /// The cursor the last page ended with, for a list paged by cursor. A
+  /// [fetchPage] of offset 0 is the first page and does not send it.
+  String? cursor;
+
   /// True when the last attempt at a next page failed. The rows already here
   /// stay, and the row at the foot of the list offers another try.
   bool loadMoreFailed = false;
@@ -101,9 +113,14 @@ abstract class PagedListController<T> extends ListController<T> {
   Future<List<T>> fetch() async {
     _generation++;
     final page = await fetchPage(0);
-    hasMore = page.hasMore;
+    _took(page);
     loadMoreFailed = false;
     return page.items;
+  }
+
+  void _took(ListPage<T> page) {
+    cursor = page.next;
+    hasMore = page.hasMore || (page.next?.isNotEmpty ?? false);
   }
 
   /// Picks a column. The column already picked turns around.
@@ -127,7 +144,7 @@ abstract class PagedListController<T> extends ListController<T> {
       final page = await fetchPage(items.length);
       if (generation != _generation) return;
       items = [...items, ...page.items];
-      hasMore = page.hasMore;
+      _took(page);
     } on ApiUnreachable {
       loadMoreFailed = true;
     } on ApiException {

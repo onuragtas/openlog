@@ -165,6 +165,11 @@ class OpenlogClient {
   /// it was picked.
   TimeRange Function()? window;
 
+  /// The window resolved now, as `from`/`to`. A list paged by cursor reads
+  /// it once and sends the same one with every page, as the browser does:
+  /// "the last hour" moved on between two pages would be a different list.
+  Map<String, String>? windowQuery() => window?.call().query(DateTime.now());
+
   Uri _uri(String path) {
     final uri = Uri.parse('$baseUrl$path');
     final range = window?.call();
@@ -270,9 +275,11 @@ class OpenlogClient {
   Future<IncidentPage> incidents({
     List<String> states = const ['open', 'acknowledged'],
     int limit = 50,
+    String? cursor,
   }) async {
     final query = <String, String>{'limit': '$limit'};
     if (states.isNotEmpty) query['state'] = states.join(',');
+    if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
     final path =
         '/api/v1/alerts/incidents?${Uri(queryParameters: query).query}';
     return IncidentPage.fromJson(await _send('GET', path));
@@ -1452,8 +1459,13 @@ class OpenlogClient {
       );
 
   /// The agents themselves, ordered by host name.
-  Future<FleetHostPage> fleetHosts({String q = '', int limit = 100}) async {
+  Future<FleetHostPage> fleetHosts({
+    String q = '',
+    int limit = 100,
+    String? cursor,
+  }) async {
     final query = <String, String>{'limit': '$limit'};
+    if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
     if (q.trim().isNotEmpty) query['q'] = q.trim();
     return FleetHostPage.fromJson(
       await _send(
@@ -1802,10 +1814,12 @@ class OpenlogClient {
     bool slowest = false,
     List<Map<String, Object?>> filters = const [],
     int limit = 50,
+    String? cursor,
   }) async {
     final body = <String, Object?>{
       'root_only': true,
       'limit': limit,
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
       if (slowest) 'sort': 'duration',
     };
     // The search box is still a contains over the service name -- it is
@@ -1843,9 +1857,12 @@ class OpenlogClient {
     int limit = 50,
     String transaction = '',
     String transactionService = '',
+    String? cursor,
+    Map<String, String>? range,
   }) async {
     final body = <String, Object?>{
       'limit': limit,
+      if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
       if (transaction.isNotEmpty) 'transaction': transaction,
       if (transactionService.isNotEmpty)
         'transaction_service': transactionService,
@@ -1864,8 +1881,7 @@ class OpenlogClient {
       if (q.isNotEmpty) 'q': q,
       if (filters.isNotEmpty) 'filters': filters,
     };
-    final range = window?.call();
-    if (range != null) body.addAll(range.query(DateTime.now()));
+    body.addAll(range ?? windowQuery() ?? const {});
     return LogsQueryResponse.fromJson(
       await _send('POST', '/api/v1/logs/query', body: body),
     );

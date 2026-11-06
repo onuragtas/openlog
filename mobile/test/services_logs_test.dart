@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openlog_mobile/src/api/client.dart';
 import 'package:openlog_mobile/src/logs.dart';
 import 'package:openlog_mobile/src/services.dart';
+import 'package:openlog_mobile/src/time_range.dart';
 
 import 'fake_server.dart';
 
@@ -58,6 +59,52 @@ List<Object?> sentFilters(Seen seen) =>
     (jsonDecode(seen.body) as Map<String, Object?>)['filters'] as List<Object?>;
 
 void main() {
+  test(
+    'scrolling on reads the next page by cursor, over the same window',
+    () async {
+      final server = await FakeServer.start((req, seen) {
+        final body = jsonDecode(seen.body) as Map<String, Object?>;
+        writeJson(
+          req,
+          200,
+          body['cursor'] == null
+              ? {
+                  'rows': [line('first')],
+                  'next_cursor': 'c1',
+                }
+              : {
+                  'rows': [line('second')],
+                  'next_cursor': null,
+                },
+        );
+      });
+      addTearDown(server.stop);
+      final c = LogsController(
+        OpenlogClient(baseUrl: server.baseUrl)
+          ..token = 'olm_x'
+          ..window = () => const TimeRange.preset('1h'),
+      );
+
+      await c.refresh();
+      expect(c.hasMore, isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await c.loadMore();
+
+      expect(c.items.map((r) => r.body), ['first', 'second']);
+      expect(c.hasMore, isFalse);
+      final sent = [
+        for (final r in server.requests)
+          jsonDecode(r.body) as Map<String, Object?>,
+      ];
+      expect(sent.first.containsKey('cursor'), isFalse);
+      expect(sent.last['cursor'], 'c1');
+      expect(sent.last['limit'], 50);
+      // A window resolved again for the second page would be a later hour.
+      expect(sent.last['from'], sent.first['from']);
+      expect(sent.last['to'], sent.first['to']);
+    },
+  );
+
   test('a request\'s logs are asked for by trace, at every level', () async {
     final server = await FakeServer.start(
       (req, _) => writeJson(req, 200, noRows),

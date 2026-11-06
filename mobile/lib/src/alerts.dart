@@ -9,7 +9,7 @@ import 'session.dart';
 /// Separate from [SessionController] because its lifetime is the screen's, not
 /// the app's: signing out should drop this, and a reload should not touch who
 /// is signed in.
-class AlertsController extends ListController<AlertIncident> {
+class AlertsController extends PagedListController<AlertIncident> {
   AlertsController(this._client);
 
   final OpenlogClient _client;
@@ -27,11 +27,16 @@ class AlertsController extends ListController<AlertIncident> {
   @override
   String get forbiddenKind => 'alertsForbidden';
 
+  /// Paged by cursor, never by offset, as on the web: an incident opening
+  /// while the list is read would move every offset by one.
   @override
-  Future<List<AlertIncident>> fetch() async {
-    final page = await _client.incidents();
-    counts = page.counts;
-    return page.incidents;
+  Future<ListPage<AlertIncident>> fetchPage(int offset) async {
+    final page = await _client.incidents(
+      limit: limit,
+      cursor: offset == 0 ? null : cursor,
+    );
+    if (offset == 0) counts = page.counts;
+    return ListPage(page.incidents, next: page.nextCursor);
   }
 
   /// Takes [id], then reloads so the row shows who took it rather than this
