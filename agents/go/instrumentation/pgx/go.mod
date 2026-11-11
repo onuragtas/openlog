@@ -4,7 +4,7 @@ go 1.26
 
 require (
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/onuragtas/openlog/agents/go v0.1.145
+	github.com/onuragtas/openlog/agents/go v0.1.146
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/sdk v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
